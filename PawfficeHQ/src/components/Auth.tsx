@@ -4,6 +4,8 @@ import { supabase } from "../lib/supabase";
 export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,6 +19,12 @@ export default function Auth() {
       const { error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+          },
+        },
       });
 
       if (error) {
@@ -54,6 +62,29 @@ export default function Auth() {
         </p>
 
         <form onSubmit={handleSubmit}>
+          {isSigningUp && (
+            <>
+              <label htmlFor="firstName">First name</label>
+              <input
+                id="firstName"
+                type="text"
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+                autoComplete="given-name"
+                required
+              />
+
+              <label htmlFor="lastName">Last name</label>
+              <input
+                id="lastName"
+                type="text"
+                value={lastName}
+                onChange={(event) => setLastName(event.target.value)}
+                autoComplete="family-name"
+                required
+              />
+            </>
+          )}
           <label htmlFor="email">Email address</label>
           <input
             id="email"
