@@ -1,4 +1,4 @@
-.counter {
+/* .counter {
   font-size: 16px;
   padding: 5px 10px;
   border-radius: 5px;
@@ -181,4 +181,25 @@
     right: 0;
     border-right-color: var(--border);
   }
+} */
+
+#root {
+  min-height: 100vh;
 }
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f3f5f4;
+}
+
+.auth-card {
+  width: min(100%, 420px);
+  padding: 32px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 10%);
+}
+
