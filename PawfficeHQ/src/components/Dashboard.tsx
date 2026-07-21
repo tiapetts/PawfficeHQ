@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import Clients from "./Clients";
 import Pets from "./Pets";
+import Services from "./Services";
 
 type DashboardProps = {
   businessId: string;
@@ -12,7 +13,7 @@ type Business = {
   business_name: string;
 };
 
-type ActivePage = "dashboard" | "clients" | "pets";
+type ActivePage = "dashboard" | "clients" | "pets" | "services";
 
 function Dashboard({ businessId, firstName }: DashboardProps) {
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
@@ -107,7 +108,14 @@ function Dashboard({ businessId, firstName }: DashboardProps) {
             Pets
           </button>
 
-          <button className="nav-button">Services</button>
+          <button
+            className={`nav-button ${
+              activePage === "services" ? "active" : ""
+            }`}
+            onClick={() => setActivePage("services")}
+          >
+            Services
+          </button>
 
           <button className="nav-button">Staff</button>
 
@@ -127,6 +135,8 @@ function Dashboard({ businessId, firstName }: DashboardProps) {
           <Clients businessId={businessId} />
         ) : activePage === "pets" ? (
           <Pets businessId={businessId} />
+        ) : activePage === "services" ? (
+          <Services businessId={businessId} />
         ) : (
           <>
             <header className="dashboard-header">
