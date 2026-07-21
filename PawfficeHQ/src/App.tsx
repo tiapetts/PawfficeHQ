@@ -6,35 +6,6 @@ import BusinessSetup from "./components/BusinessSetup";
 import Dashboard from "./components/Dashboard";
 import "./App.css";
 
-// type Business = {
-//   id: string;
-//   business_name: string;
-// };
-
-// function App() {
-//   const [businesses, setBusinesses] = useState<Business[]>([]);
-//   const [message, setMessage] = useState("Connecting to Supabase...");
-
-//   useEffect(() => {
-//     async function testConnection() {
-//       const { data, error } = await supabase
-//         .from("business")
-//         .select("id, business_name")
-//         .limit(5);
-
-//       if (error) {
-//         console.error(error);
-//         setMessage(`Connection error: ${error.message}`);
-//         return;
-//       }
-
-//       setBusinesses(data ?? []);
-//       setMessage("Pawffice HQ is connected to Supabase!");
-//     }
-
-//     testConnection();
-//   }, []);
-
 type StaffProfile = {
   id: string;
   business_id: string;
@@ -46,9 +17,12 @@ function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [staff, setStaff] = useState<StaffProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [profileError, setProfileError] = useState("");
 
   async function loadStaffProfile(userId: string) {
     setLoading(true);
+    setProfileError("");
 
     const { data, error } = await supabase
       .from("STAFF")
@@ -57,40 +31,115 @@ function App() {
       .maybeSingle();
 
     if (error) {
-      console.error(error);
+      console.error("Staff profile error:", error);
+      setStaff(null);
+      setProfileError(error.message);
+      setProfileLoaded(true);
+      setLoading(false);
+      return;
     }
 
     setStaff(data);
+    setProfileLoaded(true);
     setLoading(false);
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
+    let mounted = true;
+
+    async function initializeApp() {
+      setLoading(true);
+
+      const {
+        data: { session: refreshedSession },
+        error,
+      } = await supabase.auth.refreshSession();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (error || !refreshedSession) {
+        console.error("Session refresh error:", error);
+
+        await supabase.auth.signOut({
+          scope: "local",
+        });
+
+        setSession(null);
+        setStaff(null);
+        setProfileLoaded(false);
+        setLoading(false);
+        return;
+      }
+
+      setSession(refreshedSession);
+      await loadStaffProfile(refreshedSession.user.id);
+    }
+
+    void initializeApp();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (!mounted) {
+        return;
+      }
+
       setSession(newSession);
-      setLoading(false);
+
+      if (!newSession) {
+        setStaff(null);
+        setProfileLoaded(false);
+        setProfileError("");
+        setLoading(false);
+        return;
+      }
+
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+        void loadStaffProfile(newSession.user.id);
+      }
     });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
   if (loading) {
-    return <p>Loading Pawffice HQ...</p>;
+    return <p className="loading-message">Loading Pawffice HQ...</p>;
   }
 
   if (!session) {
     return <Auth />;
   }
 
-  if (!staff) {
+  if (profileError) {
+    return (
+      <main className="auth-page">
+        <section className="auth-card">
+          <h1>Pawffice HQ</h1>
+          <h2>We couldn’t load your profile</h2>
+          <p>{profileError}</p>
+
+          <button type="button" onClick={() => window.location.reload()}>
+            Try again
+          </button>
+
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => supabase.auth.signOut()}
+          >
+            Sign out
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (profileLoaded && !staff) {
     return (
       <BusinessSetup
         user={session.user}
@@ -99,41 +148,13 @@ function App() {
     );
   }
 
+  if (!staff) {
+    return <p className="loading-message">Loading your profile...</p>;
+  }
+
   return (
     <Dashboard businessId={staff.business_id} firstName={staff.first_name} />
   );
-  // return (
-  //   <main>
-  //     <h1>Pawffice HQ</h1>
-
-  //     <h2>
-  //       Welcome, {staff.first_name} {staff.last_name}!
-  //     </h2>
-
-  //     <p>Your business account is ready.</p>
-
-  //     <button onClick={() => supabase.auth.signOut()}>Sign out</button>
-  //   </main>
-  // );
-
-  // return (
-  //   <main>
-  //     <h1>Pawffice HQ</h1>
-  //     <p>You are signed in as: {session.user.email}</p>
-
-  //     <button onClick={() => supabase.auth.signOut()}>Sign Out</button>
-
-  //     {/* {businesses.length > 0 ? (
-  //       <ul>
-  //         {businesses.map((business) => (
-  //           <li key={business.id}>{business.business_name}</li>
-  //         ))}
-  //       </ul>
-  //     ) : (
-  //       <p>No businesses have been added yet.</p>
-  //     )} */}
-  //   </main>
-  // );
 }
 
 export default App;

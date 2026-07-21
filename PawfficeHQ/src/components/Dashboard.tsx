@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import Clients from "./Clients";
+import Pets from "./Pets";
 
 type DashboardProps = {
   businessId: string;
@@ -15,9 +16,9 @@ export default function Dashboard({ businessId, firstName }: DashboardProps) {
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
-  const [activePage, setActivePage] = useState<"dashboard" | "clients">(
-    "dashboard",
-  );
+  const [activePage, setActivePage] = useState<
+    "dashboard" | "clients" | "pets"
+  >("dashboard");
 
   useEffect(() => {
     async function loadBusiness() {
@@ -70,7 +71,12 @@ export default function Dashboard({ businessId, firstName }: DashboardProps) {
           >
             Clients
           </button>
-          <button className="nav-button">Pets</button>
+          <button
+            className={`nav-button ${activePage === "pets" ? "active" : ""}`}
+            onClick={() => setActivePage("pets")}
+          >
+            Pets
+          </button>
           <button className="nav-button">Services</button>
           <button className="nav-button">Staff</button>
           <button className="nav-button">Settings</button>
@@ -87,6 +93,8 @@ export default function Dashboard({ businessId, firstName }: DashboardProps) {
       <main className="dashboard-main">
         {activePage === "clients" ? (
           <Clients businessId={businessId} />
+        ) : activePage === "pets" ? (
+          <Pets businessId={businessId} />
         ) : (
           <>
             <header className="dashboard-header">
