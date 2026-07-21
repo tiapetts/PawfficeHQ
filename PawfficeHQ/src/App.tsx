@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import Auth from "./components/Auth";
 import BusinessSetup from "./components/BusinessSetup";
+import Dashboard from "./components/Dashboard";
 import "./App.css";
 
 // type Business = {
@@ -99,18 +100,21 @@ function App() {
   }
 
   return (
-    <main>
-      <h1>Pawffice HQ</h1>
-
-      <h2>
-        Welcome, {staff.first_name} {staff.last_name}!
-      </h2>
-
-      <p>Your business account is ready.</p>
-
-      <button onClick={() => supabase.auth.signOut()}>Sign out</button>
-    </main>
+    <Dashboard businessId={staff.business_id} firstName={staff.first_name} />
   );
+  // return (
+  //   <main>
+  //     <h1>Pawffice HQ</h1>
+
+  //     <h2>
+  //       Welcome, {staff.first_name} {staff.last_name}!
+  //     </h2>
+
+  //     <p>Your business account is ready.</p>
+
+  //     <button onClick={() => supabase.auth.signOut()}>Sign out</button>
+  //   </main>
+  // );
 
   // return (
   //   <main>
