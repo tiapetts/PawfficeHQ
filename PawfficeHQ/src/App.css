@@ -749,3 +749,62 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* calendar styling */
+
+.appointment-list {
+  display: grid;
+}
+
+.appointment-row {
+  display: grid;
+  grid-template-columns: 120px 2fr 1fr auto;
+  align-items: center;
+  gap: 22px;
+  padding: 20px 8px;
+  border-bottom: 1px solid #e1e7e5;
+}
+
+.appointment-row:last-child {
+  border-bottom: 0;
+}
+
+.appointment-time {
+  display: grid;
+  gap: 4px;
+}
+
+.appointment-time strong {
+  font-size: 1.15rem;
+}
+
+.appointment-time span,
+.appointment-summary p,
+.appointment-row p {
+  margin: 0;
+  color: #65766f;
+}
+
+.appointment-summary h3 {
+  margin: 0 0 5px;
+}
+
+.appointment-status {
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: #dcebe6;
+  color: #215b4c;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+@media (max-width: 800px) {
+  .appointment-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .appointment-status {
+    width: fit-content;
+  }
+}

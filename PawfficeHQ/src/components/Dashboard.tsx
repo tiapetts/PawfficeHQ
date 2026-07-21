@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import Clients from "./Clients";
 import Pets from "./Pets";
 import Services from "./Services";
+import Calendar from "./Calendar";
 
 type DashboardProps = {
   businessId: string;
@@ -13,7 +14,7 @@ type Business = {
   business_name: string;
 };
 
-type ActivePage = "dashboard" | "clients" | "pets" | "services";
+type ActivePage = "dashboard" | "clients" | "pets" | "services" | "calendar";
 
 function Dashboard({ businessId, firstName }: DashboardProps) {
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
@@ -92,7 +93,14 @@ function Dashboard({ businessId, firstName }: DashboardProps) {
             Dashboard
           </button>
 
-          <button className="nav-button">Calendar</button>
+          <button
+            className={`nav-button ${
+              activePage === "calendar" ? "active" : ""
+            }`}
+            onClick={() => setActivePage("calendar")}
+          >
+            Calendar
+          </button>
 
           <button
             className={`nav-button ${activePage === "clients" ? "active" : ""}`}
@@ -131,7 +139,9 @@ function Dashboard({ businessId, firstName }: DashboardProps) {
       </aside>
 
       <main className="dashboard-main">
-        {activePage === "clients" ? (
+        {activePage === "calendar" ? (
+          <Calendar businessId={businessId} />
+        ) : activePage === "clients" ? (
           <Clients businessId={businessId} />
         ) : activePage === "pets" ? (
           <Pets businessId={businessId} />
@@ -145,7 +155,12 @@ function Dashboard({ businessId, firstName }: DashboardProps) {
                 <h2>Welcome back, {firstName}!</h2>
               </div>
 
-              <button className="primary-button">+ New appointment</button>
+              <button
+                className="primary-button"
+                onClick={() => setActivePage("calendar")}
+              >
+                + New appointment
+              </button>
             </header>
 
             {errorMessage && (
