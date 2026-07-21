@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "@supabase/supabase-js": "^2.111.0"
+    "@fullcalendar/react": "^7.0.2",
+    "@supabase/supabase-js": "^2.111.0",
+    "temporal-polyfill": "^1.0.3"
   }
 }
