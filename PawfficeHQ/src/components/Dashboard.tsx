@@ -12,38 +12,64 @@ type Business = {
   business_name: string;
 };
 
-export default function Dashboard({ businessId, firstName }: DashboardProps) {
+type ActivePage = "dashboard" | "clients" | "pets";
+
+function Dashboard({ businessId, firstName }: DashboardProps) {
+  const [activePage, setActivePage] = useState<ActivePage>("dashboard");
   const [business, setBusiness] = useState<Business | null>(null);
+  const [clientCount, setClientCount] = useState(0);
+  const [petCount, setPetCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
-  const [activePage, setActivePage] = useState<
-    "dashboard" | "clients" | "pets"
-  >("dashboard");
 
   useEffect(() => {
-    async function loadBusiness() {
-      const { data, error } = await supabase
-        .from("business")
-        .select("business_name")
-        .eq("id", businessId)
-        .single();
+    async function loadDashboard() {
+      setLoading(true);
+      setErrorMessage("");
+
+      const [businessResult, clientsResult, petsResult] = await Promise.all([
+        supabase
+          .from("business")
+          .select("business_name")
+          .eq("id", businessId)
+          .single(),
+
+        supabase
+          .from("CLIENT")
+          .select("*", {
+            count: "exact",
+            head: true,
+          })
+          .eq("business_id", businessId),
+
+        supabase
+          .from("PET")
+          .select("*", {
+            count: "exact",
+            head: true,
+          })
+          .eq("business_id", businessId),
+      ]);
+
+      const error =
+        businessResult.error || clientsResult.error || petsResult.error;
 
       if (error) {
         console.error(error);
         setErrorMessage(error.message);
-      } else {
-        setBusiness(data);
       }
 
+      if (businessResult.data) {
+        setBusiness(businessResult.data);
+      }
+
+      setClientCount(clientsResult.count ?? 0);
+      setPetCount(petsResult.count ?? 0);
       setLoading(false);
     }
 
-    loadBusiness();
+    void loadDashboard();
   }, [businessId]);
-
-  if (loading) {
-    return <p className="loading-message">Loading your dashboard...</p>;
-  }
 
   return (
     <div className="dashboard">
@@ -64,21 +90,27 @@ export default function Dashboard({ businessId, firstName }: DashboardProps) {
           >
             Dashboard
           </button>
+
           <button className="nav-button">Calendar</button>
+
           <button
             className={`nav-button ${activePage === "clients" ? "active" : ""}`}
             onClick={() => setActivePage("clients")}
           >
             Clients
           </button>
+
           <button
             className={`nav-button ${activePage === "pets" ? "active" : ""}`}
             onClick={() => setActivePage("pets")}
           >
             Pets
           </button>
+
           <button className="nav-button">Services</button>
+
           <button className="nav-button">Staff</button>
+
           <button className="nav-button">Settings</button>
         </nav>
 
@@ -106,7 +138,11 @@ export default function Dashboard({ businessId, firstName }: DashboardProps) {
               <button className="primary-button">+ New appointment</button>
             </header>
 
-            {errorMessage && <p className="error-message">{errorMessage}</p>}
+            {errorMessage && (
+              <p className="error-message" role="alert">
+                {errorMessage}
+              </p>
+            )}
 
             <section className="summary-grid">
               <article className="summary-card">
@@ -115,13 +151,13 @@ export default function Dashboard({ businessId, firstName }: DashboardProps) {
               </article>
 
               <article className="summary-card">
-                <span>Pets checked in</span>
-                <strong>0</strong>
+                <span>Total pets</span>
+                <strong>{loading ? "—" : petCount}</strong>
               </article>
 
               <article className="summary-card">
                 <span>Total clients</span>
-                <strong>0</strong>
+                <strong>{loading ? "—" : clientCount}</strong>
               </article>
 
               <article className="summary-card">
@@ -149,3 +185,5 @@ export default function Dashboard({ businessId, firstName }: DashboardProps) {
     </div>
   );
 }
+
+export default Dashboard;
