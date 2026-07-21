@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import Clients from "./Clients";
 
 type DashboardProps = {
   businessId: string;
@@ -14,6 +15,9 @@ export default function Dashboard({ businessId, firstName }: DashboardProps) {
   const [business, setBusiness] = useState<Business | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [activePage, setActivePage] = useState<"dashboard" | "clients">(
+    "dashboard",
+  );
 
   useEffect(() => {
     async function loadBusiness() {
@@ -51,9 +55,21 @@ export default function Dashboard({ businessId, firstName }: DashboardProps) {
         </div>
 
         <nav>
-          <button className="nav-button active">Dashboard</button>
+          <button
+            className={`nav-button ${
+              activePage === "dashboard" ? "active" : ""
+            }`}
+            onClick={() => setActivePage("dashboard")}
+          >
+            Dashboard
+          </button>
           <button className="nav-button">Calendar</button>
-          <button className="nav-button">Clients</button>
+          <button
+            className={`nav-button ${activePage === "clients" ? "active" : ""}`}
+            onClick={() => setActivePage("clients")}
+          >
+            Clients
+          </button>
           <button className="nav-button">Pets</button>
           <button className="nav-button">Services</button>
           <button className="nav-button">Staff</button>
@@ -69,52 +85,58 @@ export default function Dashboard({ businessId, firstName }: DashboardProps) {
       </aside>
 
       <main className="dashboard-main">
-        <header className="dashboard-header">
-          <div>
-            <p className="eyebrow">Dashboard</p>
-            <h2>Welcome back, {firstName}!</h2>
-          </div>
+        {activePage === "clients" ? (
+          <Clients businessId={businessId} />
+        ) : (
+          <>
+            <header className="dashboard-header">
+              <div>
+                <p className="eyebrow">Dashboard</p>
+                <h2>Welcome back, {firstName}!</h2>
+              </div>
 
-          <button className="primary-button">+ New appointment</button>
-        </header>
+              <button className="primary-button">+ New appointment</button>
+            </header>
 
-        {errorMessage && <p className="error-message">{errorMessage}</p>}
+            {errorMessage && <p className="error-message">{errorMessage}</p>}
 
-        <section className="summary-grid">
-          <article className="summary-card">
-            <span>Today’s appointments</span>
-            <strong>0</strong>
-          </article>
+            <section className="summary-grid">
+              <article className="summary-card">
+                <span>Today’s appointments</span>
+                <strong>0</strong>
+              </article>
 
-          <article className="summary-card">
-            <span>Pets checked in</span>
-            <strong>0</strong>
-          </article>
+              <article className="summary-card">
+                <span>Pets checked in</span>
+                <strong>0</strong>
+              </article>
 
-          <article className="summary-card">
-            <span>Total clients</span>
-            <strong>0</strong>
-          </article>
+              <article className="summary-card">
+                <span>Total clients</span>
+                <strong>0</strong>
+              </article>
 
-          <article className="summary-card">
-            <span>Vaccination alerts</span>
-            <strong>0</strong>
-          </article>
-        </section>
+              <article className="summary-card">
+                <span>Vaccination alerts</span>
+                <strong>0</strong>
+              </article>
+            </section>
 
-        <section className="dashboard-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Schedule</p>
-              <h3>Today’s appointments</h3>
-            </div>
-          </div>
+            <section className="dashboard-panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Schedule</p>
+                  <h3>Today’s appointments</h3>
+                </div>
+              </div>
 
-          <div className="empty-state">
-            <h3>No appointments today</h3>
-            <p>Your scheduled appointments will appear here.</p>
-          </div>
-        </section>
+              <div className="empty-state">
+                <h3>No appointments today</h3>
+                <p>Your scheduled appointments will appear here.</p>
+              </div>
+            </section>
+          </>
+        )}
       </main>
     </div>
   );
