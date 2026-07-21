@@ -200,13 +200,13 @@ export default function Services({ businessId }: ServicesProps) {
                 required
               >
                 <option value="">Select category</option>
-                <option value="Grooming">Grooming</option>
-                <option value="Boarding">Boarding</option>
-                <option value="Daycare">Daycare</option>
-                <option value="Pet Sitting">Pet sitting</option>
-                <option value="Dog Walking">Dog walking</option>
-                <option value="Veterinary">Veterinary</option>
-                <option value="Other">Other</option>
+                <option value="grooming">Grooming</option>
+                <option value="boarding">Boarding</option>
+                <option value="daycare">Daycare</option>
+                <option value="pet sitting">Pet sitting</option>
+                <option value="dog walking">Dog walking</option>
+                <option value="veterinary">Veterinary</option>
+                <option value="other">Other</option>
               </select>
             </label>
 
