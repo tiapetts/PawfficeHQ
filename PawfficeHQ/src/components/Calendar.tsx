@@ -646,9 +646,9 @@ function Calendar({ businessId }: CalendarProps) {
                           lineHeight: 1.25,
                         }}
                       >
-                        <strong>{getPetName(appointment.id)}</strong>
+                        <strong>{petName(appointment.id)}</strong>
                         <br />
-                        {getServiceName(appointment.id)}
+                        {serviceName(appointment.id)}
                       </span>
                     ))}
                   </button>
