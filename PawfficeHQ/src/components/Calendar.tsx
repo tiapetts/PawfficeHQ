@@ -7,13 +7,13 @@ type CalendarProps = {
 
 type Client = {
   id: number;
-  first_name: string;
-  last_name: string;
+  FirstName: string;
+  LastName: string;
 };
 
 type Pet = {
   id: number;
-  name: string;
+  PetName: string;
 };
 
 type ClientPet = {
@@ -37,10 +37,9 @@ type Staff = {
 type Appointment = {
   id: string;
   client_id: number;
-  start_time: string;
-  end_time: string;
+  start_at: string;
+  end_at: string;
   status: string;
-  notes: string | null;
 };
 
 type AppointmentPet = {
@@ -91,14 +90,14 @@ function Calendar({ businessId }: CalendarProps) {
     ] = await Promise.all([
       supabase
         .from("CLIENT")
-        .select("id, first_name, last_name")
+        .select("id, FirstName, LastName")
         .eq("business_id", businessId)
-        .order("last_name"),
+        .order("LastName"),
       supabase
         .from("PET")
-        .select("id, name")
+        .select("id, PetName")
         .eq("business_id", businessId)
-        .order("name"),
+        .order("PetName"),
       supabase.from("client_pet").select("client_id, pet_id"),
       supabase
         .from("service")
@@ -113,10 +112,10 @@ function Calendar({ businessId }: CalendarProps) {
         .order("last_name"),
       supabase
         .from("appointment")
-        .select("id, client_id, start_time, end_time, status, notes")
+        .select("id, client_id, start_at, end_at, status")
         .eq("business_id", businessId)
-        .gte("start_time", new Date().toISOString())
-        .order("start_time"),
+        .gte("end_at", new Date().toISOString())
+        .order("start_at"),
     ]);
 
     const firstError = [
@@ -214,19 +213,15 @@ function Calendar({ businessId }: CalendarProps) {
     setSaving(true);
 
     const start = new Date(startTime);
-    const end = new Date(
-      start.getTime() + selectedService.duration_minutes * 60_000,
-    );
 
     const { error } = await supabase.rpc("create_appointment", {
-      p_business_id: businessId,
       p_client_id: Number(clientId),
       p_pet_id: Number(petId),
       p_service_id: serviceId,
-      p_staff_id: staffId || null,
-      p_start_time: start.toISOString(),
-      p_end_time: end.toISOString(),
-      p_notes: notes.trim() || null,
+      p_staff_id: staffId,
+      p_start_at: start.toISOString(),
+      p_client_notes: notes.trim() || null,
+      p_internal_notes: null,
     });
 
     setSaving(false);
@@ -244,16 +239,16 @@ function Calendar({ businessId }: CalendarProps) {
 
   function clientName(id: number) {
     const client = clients.find((item) => item.id === id);
-    return client
-      ? `${client.first_name} ${client.last_name}`
-      : "Unknown client";
+    return client ? `${client.FirstName} ${client.LastName}` : "Unknown client";
   }
 
   function petName(appointmentId: string) {
     const link = appointmentPets.find(
       (item) => item.appointment_id === appointmentId,
     );
-    return pets.find((pet) => pet.id === link?.pet_id)?.name ?? "Unknown pet";
+    return (
+      pets.find((pet) => pet.id === link?.pet_id)?.PetName ?? "Unknown pet"
+    );
   }
 
   function serviceName(appointmentId: string) {
@@ -322,7 +317,7 @@ function Calendar({ businessId }: CalendarProps) {
                 <option value="">Choose a client</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
-                    {client.first_name} {client.last_name}
+                    {client.FirstName} {client.LastName}
                   </option>
                 ))}
               </select>
@@ -339,7 +334,7 @@ function Calendar({ businessId }: CalendarProps) {
                 <option value="">Choose a pet</option>
                 {availablePets.map((pet) => (
                   <option key={pet.id} value={pet.id}>
-                    {pet.name}
+                    {pet.PetName}
                   </option>
                 ))}
               </select>
@@ -426,8 +421,8 @@ function Calendar({ businessId }: CalendarProps) {
         ) : (
           <div className="appointment-list">
             {appointments.map((appointment) => {
-              const start = new Date(appointment.start_time);
-              const end = new Date(appointment.end_time);
+              const start = new Date(appointment.start_at);
+              const end = new Date(appointment.end_at);
 
               return (
                 <article className="appointment-card" key={appointment.id}>
