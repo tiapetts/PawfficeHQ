@@ -1,13 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
-import FullCalendar, { type DateClickInfo } from "@fullcalendar/react";
-import themePlugin from "@fullcalendar/react/themes/classic";
-import timeGridPlugin from "@fullcalendar/react/timegrid";
-import interactionPlugin from "@fullcalendar/react/interaction";
-
-import "@fullcalendar/react/skeleton.css";
-import "@fullcalendar/react/themes/classic/theme.css";
-import "@fullcalendar/react/themes/classic/palette.css";
 
 type CalendarProps = {
   businessId: string;
@@ -15,13 +7,13 @@ type CalendarProps = {
 
 type Client = {
   id: number;
-  FirstName: string;
-  LastName: string;
+  first_name: string;
+  last_name: string;
 };
 
 type Pet = {
   id: number;
-  PetName: string;
+  name: string;
 };
 
 type ClientPet = {
@@ -34,7 +26,6 @@ type Service = {
   name: string;
   duration_minutes: number;
   base_price: number;
-  is_active: boolean;
 };
 
 type Staff = {
@@ -46,9 +37,10 @@ type Staff = {
 type Appointment = {
   id: string;
   client_id: number;
-  start_at: string;
-  end_at: string;
+  start_time: string;
+  end_time: string;
   status: string;
+  notes: string | null;
 };
 
 type AppointmentPet = {
@@ -59,24 +51,10 @@ type AppointmentPet = {
 type AppointmentService = {
   appointment_id: string;
   service_id: string;
-  staff_id: string;
-  price_at_booking: number;
+  staff_id: string | null;
 };
 
-const emptyForm = {
-  clientId: "",
-  petId: "",
-  serviceId: "",
-  staffId: "",
-  date: "",
-  time: "",
-  clientNotes: "",
-  internalNotes: "",
-};
-
-type AppointmentForm = typeof emptyForm;
-
-export default function Calendar({ businessId }: CalendarProps) {
+function Calendar({ businessId }: CalendarProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [clientPets, setClientPets] = useState<ClientPet[]>([]);
@@ -88,8 +66,13 @@ export default function Calendar({ businessId }: CalendarProps) {
     AppointmentService[]
   >([]);
 
-  const [form, setForm] = useState<AppointmentForm>(emptyForm);
   const [showForm, setShowForm] = useState(false);
+  const [clientId, setClientId] = useState("");
+  const [petId, setPetId] = useState("");
+  const [serviceId, setServiceId] = useState("");
+  const [staffId, setStaffId] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -105,76 +88,92 @@ export default function Calendar({ businessId }: CalendarProps) {
       servicesResult,
       staffResult,
       appointmentsResult,
-      appointmentPetsResult,
-      appointmentServicesResult,
     ] = await Promise.all([
       supabase
         .from("CLIENT")
-        .select("id, FirstName, LastName")
+        .select("id, first_name, last_name")
         .eq("business_id", businessId)
-        .order("LastName"),
-
+        .order("last_name"),
       supabase
         .from("PET")
-        .select("id, PetName")
-        .eq("business_id", businessId)
-        .order("PetName"),
-
-      supabase.from("client_pet").select("client_id, pet_id"),
-
-      supabase
-        .from("service")
-        .select("id, name, duration_minutes, base_price, is_active")
+        .select("id, name")
         .eq("business_id", businessId)
         .order("name"),
-
+      supabase.from("client_pet").select("client_id, pet_id"),
+      supabase
+        .from("service")
+        .select("id, name, duration_minutes, base_price")
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .order("name"),
       supabase
         .from("STAFF")
         .select("id, first_name, last_name")
         .eq("business_id", businessId)
-        .eq("is_active", true)
         .order("last_name"),
-
       supabase
         .from("appointment")
-        .select("id, client_id, start_at, end_at, status")
+        .select("id, client_id, start_time, end_time, status, notes")
         .eq("business_id", businessId)
-        .order("start_at"),
-
-      supabase.from("appointment_pet").select("appointment_id, pet_id"),
-
-      supabase.from("appointment_service").select(`
-          appointment_id,
-          service_id,
-          staff_id,
-          price_at_booking
-        `),
+        .gte("start_time", new Date().toISOString())
+        .order("start_time"),
     ]);
 
-    const error =
-      clientsResult.error ||
-      petsResult.error ||
-      clientPetsResult.error ||
-      servicesResult.error ||
-      staffResult.error ||
-      appointmentsResult.error ||
-      appointmentPetsResult.error ||
-      appointmentServicesResult.error;
+    const firstError = [
+      clientsResult.error,
+      petsResult.error,
+      clientPetsResult.error,
+      servicesResult.error,
+      staffResult.error,
+      appointmentsResult.error,
+    ].find(Boolean);
 
-    if (error) {
-      console.error(error);
-      setMessage(error.message);
-    } else {
-      setClients(clientsResult.data ?? []);
-      setPets(petsResult.data ?? []);
-      setClientPets(clientPetsResult.data ?? []);
-      setServices(servicesResult.data ?? []);
-      setStaff(staffResult.data ?? []);
-      setAppointments(appointmentsResult.data ?? []);
-      setAppointmentPets(appointmentPetsResult.data ?? []);
-      setAppointmentServices(appointmentServicesResult.data ?? []);
+    if (firstError) {
+      console.error(firstError);
+      setMessage(firstError.message);
+      setLoading(false);
+      return;
     }
 
+    const loadedAppointments = appointmentsResult.data ?? [];
+    const appointmentIds = loadedAppointments.map(
+      (appointment) => appointment.id,
+    );
+
+    let loadedAppointmentPets: AppointmentPet[] = [];
+    let loadedAppointmentServices: AppointmentService[] = [];
+
+    if (appointmentIds.length > 0) {
+      const [petsLinkResult, servicesLinkResult] = await Promise.all([
+        supabase
+          .from("appointment_pet")
+          .select("appointment_id, pet_id")
+          .in("appointment_id", appointmentIds),
+        supabase
+          .from("appointment_service")
+          .select("appointment_id, service_id, staff_id")
+          .in("appointment_id", appointmentIds),
+      ]);
+
+      const linkError = petsLinkResult.error || servicesLinkResult.error;
+
+      if (linkError) {
+        console.error(linkError);
+        setMessage(linkError.message);
+      } else {
+        loadedAppointmentPets = petsLinkResult.data ?? [];
+        loadedAppointmentServices = servicesLinkResult.data ?? [];
+      }
+    }
+
+    setClients(clientsResult.data ?? []);
+    setPets(petsResult.data ?? []);
+    setClientPets(clientPetsResult.data ?? []);
+    setServices(servicesResult.data ?? []);
+    setStaff(staffResult.data ?? []);
+    setAppointments(loadedAppointments);
+    setAppointmentPets(loadedAppointmentPets);
+    setAppointmentServices(loadedAppointmentServices);
     setLoading(false);
   }
 
@@ -183,168 +182,102 @@ export default function Calendar({ businessId }: CalendarProps) {
   }, [businessId]);
 
   const availablePets = useMemo(() => {
-    if (!form.clientId) {
-      return [];
-    }
+    if (!clientId) return [];
 
     const petIds = clientPets
-      .filter(
-        (relationship) => relationship.client_id === Number(form.clientId),
-      )
-      .map((relationship) => relationship.pet_id);
+      .filter((link) => String(link.client_id) === clientId)
+      .map((link) => link.pet_id);
 
     return pets.filter((pet) => petIds.includes(pet.id));
-  }, [clientPets, form.clientId, pets]);
+  }, [clientId, clientPets, pets]);
 
-  function updateField(field: keyof AppointmentForm, value: string) {
-    setForm((currentForm) => ({
-      ...currentForm,
-      [field]: value,
-      ...(field === "clientId" ? { petId: "" } : {}),
-    }));
-  }
+  const selectedService = services.find((service) => service.id === serviceId);
 
-  function getClientName(clientId: number) {
-    const client = clients.find((item) => item.id === clientId);
-
-    return client ? `${client.FirstName} ${client.LastName}` : "Unknown client";
-  }
-
-  function getPetName(appointmentId: string) {
-    const link = appointmentPets.find(
-      (item) => item.appointment_id === appointmentId,
-    );
-
-    const pet = pets.find((item) => item.id === link?.pet_id);
-    return pet?.PetName ?? "Unknown pet";
-  }
-
-  function getServiceName(appointmentId: string) {
-    const link = appointmentServices.find(
-      (item) => item.appointment_id === appointmentId,
-    );
-
-    const service = services.find((item) => item.id === link?.service_id);
-
-    return service?.name ?? "Unknown service";
-  }
-
-  function getStaffName(appointmentId: string) {
-    const link = appointmentServices.find(
-      (item) => item.appointment_id === appointmentId,
-    );
-
-    const staffMember = staff.find((item) => item.id === link?.staff_id);
-
-    return staffMember
-      ? `${staffMember.first_name} ${staffMember.last_name}`
-      : "Unassigned";
-  }
-
-  function formatStatus(status: string) {
-    return status
-      .replaceAll("_", " ")
-      .replace(/\b\w/g, (letter) => letter.toUpperCase());
-  }
-
-  const calendarEvents = useMemo(() => {
-    return appointments
-      .filter(
-        (appointment) =>
-          appointment.status !== "cancelled" && appointment.status !== "void",
-      )
-      .map((appointment) => ({
-        id: appointment.id,
-        title: `${getPetName(appointment.id)} — ${getServiceName(
-          appointment.id,
-        )}`,
-        start: appointment.start_at,
-        end: appointment.end_at,
-        backgroundColor: "#315f55",
-        borderColor: "#264b43",
-        textColor: "#ffffff",
-      }));
-  }, [appointments, appointmentPets, appointmentServices, pets, services]);
-
-  const upcomingAppointments = useMemo(() => {
-    const now = new Date();
-
-    return appointments
-      .filter(
-        (appointment) =>
-          new Date(appointment.end_at) >= now &&
-          appointment.status !== "cancelled" &&
-          appointment.status !== "void",
-      )
-      .sort(
-        (first, second) =>
-          new Date(first.start_at).getTime() -
-          new Date(second.start_at).getTime(),
-      );
-  }, [appointments]);
-
-  function handleCalendarClick(info: DateClickInfo) {
-    const clickedDate = info.date;
-
-    const year = clickedDate.getFullYear();
-    const month = String(clickedDate.getMonth() + 1).padStart(2, "0");
-    const day = String(clickedDate.getDate()).padStart(2, "0");
-    const hour = String(clickedDate.getHours()).padStart(2, "0");
-    const minute = String(clickedDate.getMinutes()).padStart(2, "0");
-
-    setForm((currentForm) => ({
-      ...currentForm,
-      date: `${year}-${month}-${day}`,
-      time: `${hour}:${minute}`,
-    }));
-
-    setMessage("");
-    setShowForm(true);
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+  function resetForm() {
+    setClientId("");
+    setPetId("");
+    setServiceId("");
+    setStaffId("");
+    setStartTime("");
+    setNotes("");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSaving(true);
     setMessage("");
 
-    const localStart = new Date(`${form.date}T${form.time}`);
-
-    if (Number.isNaN(localStart.getTime())) {
-      setMessage("Please select a valid date and time.");
-      setSaving(false);
+    if (!clientId || !petId || !serviceId || !startTime || !selectedService) {
+      setMessage("Please complete the client, pet, service, and start time.");
       return;
     }
 
+    setSaving(true);
+
+    const start = new Date(startTime);
+    const end = new Date(
+      start.getTime() + selectedService.duration_minutes * 60_000,
+    );
+
     const { error } = await supabase.rpc("create_appointment", {
-      p_client_id: Number(form.clientId),
-      p_pet_id: Number(form.petId),
-      p_service_id: form.serviceId,
-      p_staff_id: form.staffId,
-      p_start_at: localStart.toISOString(),
-      p_client_notes: form.clientNotes || null,
-      p_internal_notes: form.internalNotes || null,
+      p_business_id: businessId,
+      p_client_id: Number(clientId),
+      p_pet_id: Number(petId),
+      p_service_id: serviceId,
+      p_staff_id: staffId || null,
+      p_start_time: start.toISOString(),
+      p_end_time: end.toISOString(),
+      p_notes: notes.trim() || null,
     });
+
+    setSaving(false);
 
     if (error) {
       console.error(error);
       setMessage(error.message);
-      setSaving(false);
       return;
     }
 
-    setForm(emptyForm);
+    resetForm();
     setShowForm(false);
-    setSaving(false);
     await loadCalendar();
   }
 
+  function clientName(id: number) {
+    const client = clients.find((item) => item.id === id);
+    return client
+      ? `${client.first_name} ${client.last_name}`
+      : "Unknown client";
+  }
+
+  function petName(appointmentId: string) {
+    const link = appointmentPets.find(
+      (item) => item.appointment_id === appointmentId,
+    );
+    return pets.find((pet) => pet.id === link?.pet_id)?.name ?? "Unknown pet";
+  }
+
+  function serviceName(appointmentId: string) {
+    const link = appointmentServices.find(
+      (item) => item.appointment_id === appointmentId,
+    );
+    return (
+      services.find((service) => service.id === link?.service_id)?.name ??
+      "Unknown service"
+    );
+  }
+
+  function staffName(appointmentId: string) {
+    const link = appointmentServices.find(
+      (item) => item.appointment_id === appointmentId,
+    );
+    const employee = staff.find((item) => item.id === link?.staff_id);
+    return employee
+      ? `${employee.first_name} ${employee.last_name}`
+      : "Unassigned";
+  }
+
   return (
-    <>
+    <div>
       <header className="dashboard-header">
         <div>
           <p className="eyebrow">Schedule</p>
@@ -353,10 +286,8 @@ export default function Calendar({ businessId }: CalendarProps) {
 
         <button
           className="primary-button"
-          onClick={() => {
-            setShowForm(!showForm);
-            setMessage("");
-          }}
+          type="button"
+          onClick={() => setShowForm((current) => !current)}
         >
           {showForm ? "Cancel" : "+ New appointment"}
         </button>
@@ -369,24 +300,29 @@ export default function Calendar({ businessId }: CalendarProps) {
       )}
 
       {showForm && (
-        <section className="dashboard-panel client-form-panel">
-          <h3>New appointment</h3>
+        <section className="dashboard-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Booking</p>
+              <h3>New appointment</h3>
+            </div>
+          </div>
 
-          <form className="client-form" onSubmit={handleSubmit}>
+          <form className="appointment-form" onSubmit={handleSubmit}>
             <label>
               Client
               <select
-                value={form.clientId}
-                onChange={(event) =>
-                  updateField("clientId", event.target.value)
-                }
+                value={clientId}
+                onChange={(event) => {
+                  setClientId(event.target.value);
+                  setPetId("");
+                }}
                 required
               >
-                <option value="">Select client</option>
-
+                <option value="">Choose a client</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
-                    {client.FirstName} {client.LastName}
+                    {client.first_name} {client.last_name}
                   </option>
                 ))}
               </select>
@@ -395,16 +331,15 @@ export default function Calendar({ businessId }: CalendarProps) {
             <label>
               Pet
               <select
-                value={form.petId}
-                onChange={(event) => updateField("petId", event.target.value)}
-                disabled={!form.clientId}
+                value={petId}
+                onChange={(event) => setPetId(event.target.value)}
+                disabled={!clientId}
                 required
               >
-                <option value="">Select pet</option>
-
+                <option value="">Choose a pet</option>
                 {availablePets.map((pet) => (
                   <option key={pet.id} value={pet.id}>
-                    {pet.PetName}
+                    {pet.name}
                   </option>
                 ))}
               </select>
@@ -413,190 +348,126 @@ export default function Calendar({ businessId }: CalendarProps) {
             <label>
               Service
               <select
-                value={form.serviceId}
-                onChange={(event) =>
-                  updateField("serviceId", event.target.value)
-                }
+                value={serviceId}
+                onChange={(event) => setServiceId(event.target.value)}
                 required
               >
-                <option value="">Select service</option>
-
-                {services
-                  .filter((service) => service.is_active)
-                  .map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.name} — ${Number(service.base_price).toFixed(2)}
-                    </option>
-                  ))}
-              </select>
-            </label>
-
-            <label>
-              Assigned staff
-              <select
-                value={form.staffId}
-                onChange={(event) => updateField("staffId", event.target.value)}
-                required
-              >
-                <option value="">Select staff member</option>
-
-                {staff.map((staffMember) => (
-                  <option key={staffMember.id} value={staffMember.id}>
-                    {staffMember.first_name} {staffMember.last_name}
+                <option value="">Choose a service</option>
+                {services.map((service) => (
+                  <option key={service.id} value={service.id}>
+                    {service.name} — {service.duration_minutes} minutes
                   </option>
                 ))}
               </select>
             </label>
 
             <label>
-              Date
-              <input
-                type="date"
-                value={form.date}
-                onChange={(event) => updateField("date", event.target.value)}
-                required
-              />
+              Staff member
+              <select
+                value={staffId}
+                onChange={(event) => setStaffId(event.target.value)}
+              >
+                <option value="">Unassigned</option>
+                {staff.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.first_name} {employee.last_name}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label>
               Start time
               <input
-                type="time"
-                value={form.time}
-                onChange={(event) => updateField("time", event.target.value)}
+                type="datetime-local"
+                value={startTime}
+                onChange={(event) => setStartTime(event.target.value)}
                 required
               />
             </label>
 
             <label className="full-width">
-              Client notes
+              Notes
               <textarea
-                value={form.clientNotes}
-                onChange={(event) =>
-                  updateField("clientNotes", event.target.value)
-                }
-                placeholder="Information provided by the client."
-                rows={3}
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                rows={4}
               />
             </label>
 
-            <label className="full-width">
-              Internal notes
-              <textarea
-                value={form.internalNotes}
-                onChange={(event) =>
-                  updateField("internalNotes", event.target.value)
-                }
-                placeholder="Private notes for staff."
-                rows={3}
-              />
-            </label>
-
-            <div className="full-width form-actions">
+            <div className="form-actions full-width">
               <button
                 className="primary-button"
                 type="submit"
                 disabled={saving}
               >
-                {saving ? "Creating appointment..." : "Create appointment"}
+                {saving ? "Saving..." : "Save appointment"}
               </button>
             </div>
           </form>
         </section>
       )}
 
-      {loading ? (
-        <p>Loading appointments...</p>
-      ) : (
-        <>
-          <section className="calendar-panel">
-            <FullCalendar
-              plugins={[themePlugin, timeGridPlugin, interactionPlugin]}
-              initialView="timeGridWeek"
-              headerToolbar={{
-                left: "prev,next today",
-                center: "title",
-                right: "timeGridWeek,timeGridDay",
-              }}
-              buttonText={{
-                today: "Today",
-                week: "Week",
-                day: "Day",
-              }}
-              events={calendarEvents}
-              dateClick={handleCalendarClick}
-              selectable
-              nowIndicator
-              allDaySlot={false}
-              slotDuration="00:30:00"
-              slotLabelInterval="01:00"
-              slotMinTime="06:00:00"
-              slotMaxTime="20:00:00"
-              scrollTime="08:00:00"
-              height="auto"
-            />
-          </section>
+      <section className="dashboard-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Schedule</p>
+            <h3>Upcoming appointments</h3>
+          </div>
+        </div>
 
-          <section className="dashboard-panel upcoming-panel">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Coming up</p>
-                <h3>Upcoming appointments</h3>
-              </div>
+        {loading ? (
+          <p>Loading appointments...</p>
+        ) : appointments.length === 0 ? (
+          <div className="empty-state">
+            <h3>No upcoming appointments</h3>
+            <p>Your scheduled appointments will appear here.</p>
+          </div>
+        ) : (
+          <div className="appointment-list">
+            {appointments.map((appointment) => {
+              const start = new Date(appointment.start_time);
+              const end = new Date(appointment.end_time);
 
-              <strong>{upcomingAppointments.length}</strong>
-            </div>
+              return (
+                <article className="appointment-card" key={appointment.id}>
+                  <div>
+                    <p className="eyebrow">
+                      {start.toLocaleDateString(undefined, {
+                        weekday: "long",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </p>
+                    <h3>
+                      {petName(appointment.id)} — {serviceName(appointment.id)}
+                    </h3>
+                    <p>{clientName(appointment.client_id)}</p>
+                  </div>
 
-            {upcomingAppointments.length === 0 ? (
-              <div className="empty-state">
-                <h3>No upcoming appointments</h3>
-                <p>Click an available calendar time to schedule one.</p>
-              </div>
-            ) : (
-              <div className="appointment-list">
-                {upcomingAppointments.map((appointment) => (
-                  <article className="appointment-row" key={appointment.id}>
-                    <div className="appointment-time">
-                      <strong>
-                        {new Date(appointment.start_at).toLocaleTimeString([], {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                      </strong>
-
-                      <span>
-                        {new Date(appointment.start_at).toLocaleDateString([], {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </span>
-                    </div>
-
-                    <div className="appointment-summary">
-                      <h3>
-                        {getPetName(appointment.id)} —{" "}
-                        {getServiceName(appointment.id)}
-                      </h3>
-
-                      <p>{getClientName(appointment.client_id)}</p>
-                    </div>
-
-                    <div>
-                      <span className="client-detail-label">Assigned to</span>
-                      <p>{getStaffName(appointment.id)}</p>
-                    </div>
-
-                    <span className="appointment-status">
-                      {formatStatus(appointment.status)}
-                    </span>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
-        </>
-      )}
-    </>
+                  <div>
+                    <strong>
+                      {start.toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                      {" – "}
+                      {end.toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </strong>
+                    <p>{staffName(appointment.id)}</p>
+                    <span className="status-badge">{appointment.status}</span>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
+
+export default Calendar;
