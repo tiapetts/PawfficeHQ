@@ -247,6 +247,66 @@ export default function Calendar({ businessId }: CalendarProps) {
       .replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
+  const calendarEvents = useMemo(() => {
+    return appointments
+      .filter(
+        (appointment) =>
+          appointment.status !== "cancelled" && appointment.status !== "void",
+      )
+      .map((appointment) => ({
+        id: appointment.id,
+        title: `${getPetName(appointment.id)} — ${getServiceName(
+          appointment.id,
+        )}`,
+        start: appointment.start_at,
+        end: appointment.end_at,
+        backgroundColor: "#315f55",
+        borderColor: "#264b43",
+        textColor: "#ffffff",
+      }));
+  }, [appointments, appointmentPets, appointmentServices, pets, services]);
+
+  const upcomingAppointments = useMemo(() => {
+    const now = new Date();
+
+    return appointments
+      .filter(
+        (appointment) =>
+          new Date(appointment.end_at) >= now &&
+          appointment.status !== "cancelled" &&
+          appointment.status !== "void",
+      )
+      .sort(
+        (first, second) =>
+          new Date(first.start_at).getTime() -
+          new Date(second.start_at).getTime(),
+      );
+  }, [appointments]);
+
+  function handleCalendarClick(info: DateClickInfo) {
+    const clickedDate = info.date;
+
+    const year = clickedDate.getFullYear();
+    const month = String(clickedDate.getMonth() + 1).padStart(2, "0");
+    const day = String(clickedDate.getDate()).padStart(2, "0");
+    const hour = String(clickedDate.getHours()).padStart(2, "0");
+    const minute = String(clickedDate.getMinutes()).padStart(2, "0");
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      date: `${year}-${month}-${day}`,
+      time: `${hour}:${minute}`,
+    }));
+
+    setMessage("");
+    setShowForm(true);
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -310,7 +370,109 @@ export default function Calendar({ businessId }: CalendarProps) {
 
       {showForm && (
         <section className="dashboard-panel client-form-panel">
-          <h3>New appointment</h3>
+          {loading ? (
+            <p>Loading appointments...</p>
+          ) : (
+            <>
+              <section className="calendar-panel">
+                <FullCalendar
+                  plugins={[themePlugin, timeGridPlugin, interactionPlugin]}
+                  initialView="timeGridWeek"
+                  headerToolbar={{
+                    left: "prev,next today",
+                    center: "title",
+                    right: "timeGridWeek,timeGridDay",
+                  }}
+                  buttonText={{
+                    today: "Today",
+                    week: "Week",
+                    day: "Day",
+                  }}
+                  events={calendarEvents}
+                  dateClick={handleCalendarClick}
+                  selectable
+                  nowIndicator
+                  allDaySlot={false}
+                  slotDuration="00:30:00"
+                  slotLabelInterval="01:00"
+                  slotMinTime="06:00:00"
+                  slotMaxTime="20:00:00"
+                  scrollTime="08:00:00"
+                  height="auto"
+                />
+              </section>
+
+              <section className="dashboard-panel upcoming-panel">
+                <div className="panel-heading">
+                  <div>
+                    <p className="eyebrow">Coming up</p>
+                    <h3>Upcoming appointments</h3>
+                  </div>
+
+                  <strong>{upcomingAppointments.length}</strong>
+                </div>
+
+                {upcomingAppointments.length === 0 ? (
+                  <div className="empty-state">
+                    <h3>No upcoming appointments</h3>
+                    <p>
+                      Click an available time on the calendar to schedule one.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="appointment-list">
+                    {upcomingAppointments.map((appointment) => (
+                      <article className="appointment-row" key={appointment.id}>
+                        <div className="appointment-time">
+                          <strong>
+                            {new Date(appointment.start_at).toLocaleTimeString(
+                              [],
+                              {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              },
+                            )}
+                          </strong>
+
+                          <span>
+                            {new Date(appointment.start_at).toLocaleDateString(
+                              [],
+                              {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              },
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="appointment-summary">
+                          <h3>
+                            {getPetName(appointment.id)} —{" "}
+                            {getServiceName(appointment.id)}
+                          </h3>
+
+                          <p>{getClientName(appointment.client_id)}</p>
+                        </div>
+
+                        <div>
+                          <span className="client-detail-label">
+                            Assigned to
+                          </span>
+                          <p>{getStaffName(appointment.id)}</p>
+                        </div>
+
+                        <span className="appointment-status">
+                          {formatStatus(appointment.status)}
+                        </span>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </>
+          )}
+          {/* <h3>New appointment</h3>
 
           <form className="client-form" onSubmit={handleSubmit}>
             <label>
@@ -441,7 +603,7 @@ export default function Calendar({ businessId }: CalendarProps) {
                 {saving ? "Creating appointment..." : "Create appointment"}
               </button>
             </div>
-          </form>
+          </form> */}
         </section>
       )}
 

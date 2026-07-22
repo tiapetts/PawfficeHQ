@@ -808,3 +808,75 @@
     width: fit-content;
   }
 }
+
+/* calendar styling */
+
+.calendar-panel {
+  margin-bottom: 28px;
+  padding: 22px;
+  border: 1px solid #dce4e1;
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 5px 16px rgb(31 61 53 / 6%);
+}
+
+.upcoming-panel {
+  margin-top: 28px;
+}
+
+.calendar-panel .fc {
+  --fc-border-color: #dce4e1;
+  --fc-button-bg-color: #315f55;
+  --fc-button-border-color: #315f55;
+  --fc-button-hover-bg-color: #264b43;
+  --fc-button-hover-border-color: #264b43;
+  --fc-button-active-bg-color: #203c35;
+  --fc-button-active-border-color: #203c35;
+  --fc-today-bg-color: rgb(49 95 85 / 7%);
+  --fc-now-indicator-color: #bd4f4f;
+  --fc-page-bg-color: white;
+  --fc-neutral-bg-color: #f4f7f6;
+}
+
+.calendar-panel .fc-toolbar-title {
+  color: #20332e;
+  font-size: 1.25rem;
+}
+
+.calendar-panel .fc-col-header-cell-cushion,
+.calendar-panel .fc-timegrid-axis-cushion,
+.calendar-panel .fc-timegrid-slot-label-cushion {
+  color: #526a63;
+}
+
+.calendar-panel .fc-timegrid-slot {
+  cursor: pointer;
+}
+
+.calendar-panel .fc-timegrid-slot:hover {
+  background: rgb(49 95 85 / 6%);
+}
+
+.calendar-panel .fc-event {
+  padding: 3px 5px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+@media (max-width: 750px) {
+  .calendar-panel {
+    padding: 12px;
+    overflow-x: auto;
+  }
+
+  .calendar-panel .fc {
+    min-width: 700px;
+  }
+
+  .calendar-panel .fc-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+}
