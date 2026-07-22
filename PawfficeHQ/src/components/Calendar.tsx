@@ -250,23 +250,33 @@ function Calendar({ businessId }: CalendarProps) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function appointmentsInSlot(day: Date, minutesAfterMidnight: number) {
-    return appointments.filter((appointment) => {
-      if (appointment.status === "cancelled" || appointment.status === "void") {
+  function appointmentInSlot(day: Date, minutesAfterMidnight: number) {
+    const slotStart = new Date(day);
+    slotStart.setHours(
+      Math.floor(minutesAfterMidnight / 60),
+      minutesAfterMidnight % 60,
+      0,
+      0,
+    );
+    const slotEnd = new Date(slotStart.getTime() + 30 * 60_000);
+
+    const appointment = appointments.find((item) => {
+      if (item.status === "cancelled" || item.status === "void") {
         return false;
       }
 
-      const start = new Date(appointment.start_at);
-      const appointmentMinutes = start.getHours() * 60 + start.getMinutes();
-      const slotMinutes = Math.floor(appointmentMinutes / 30) * 30;
-
-      return (
-        start.getFullYear() === day.getFullYear() &&
-        start.getMonth() === day.getMonth() &&
-        start.getDate() === day.getDate() &&
-        slotMinutes === minutesAfterMidnight
-      );
+      const start = new Date(item.start_at);
+      const end = new Date(item.end_at);
+      return start < slotEnd && end > slotStart;
     });
+
+    if (!appointment) return null;
+
+    const appointmentStart = new Date(appointment.start_at);
+    return {
+      appointment,
+      isFirstSlot: appointmentStart >= slotStart && appointmentStart < slotEnd,
+    };
   }
 
   function formatSlotTime(minutesAfterMidnight: number) {
@@ -301,6 +311,33 @@ function Calendar({ businessId }: CalendarProps) {
     setSaving(true);
 
     const start = new Date(startTime);
+    const end = new Date(
+      start.getTime() + selectedService.duration_minutes * 60_000,
+    );
+
+    const { data: conflicts, error: conflictError } = await supabase
+      .from("appointment")
+      .select("id")
+      .eq("business_id", businessId)
+      .lt("start_at", end.toISOString())
+      .gt("end_at", start.toISOString())
+      .not("status", "in", "(cancelled,void)")
+      .limit(1);
+
+    if (conflictError) {
+      console.error(conflictError);
+      setMessage(conflictError.message);
+      setSaving(false);
+      return;
+    }
+
+    if (conflicts && conflicts.length > 0) {
+      setMessage(
+        "That time overlaps an existing appointment. Please choose another time.",
+      );
+      setSaving(false);
+      return;
+    }
 
     const { error } = await supabase.rpc("create_appointment", {
       p_client_id: Number(clientId),
@@ -612,45 +649,62 @@ function Calendar({ businessId }: CalendarProps) {
                 {formatSlotTime(slot)}
               </div>,
               ...weekDays.map((day) => {
-                const slotAppointments = appointmentsInSlot(day, slot);
+                const occupiedSlot = appointmentInSlot(day, slot);
                 return (
                   <button
                     key={`${day.toISOString()}-${slot}`}
                     type="button"
-                    onClick={() => selectTimeSlot(day, slot)}
+                    onClick={() => {
+                      if (!occupiedSlot) selectTimeSlot(day, slot);
+                    }}
+                    disabled={Boolean(occupiedSlot)}
                     style={{
                       minHeight: 62,
                       padding: 5,
                       border: 0,
                       borderRight: "1px solid #d7e0dd",
                       borderBottom: "1px solid #d7e0dd",
-                      background:
-                        slotAppointments.length > 0 ? "#eef6f3" : "#ffffff",
-                      cursor: "pointer",
+                      background: occupiedSlot ? "#dcece7" : "#ffffff",
+                      cursor: occupiedSlot ? "not-allowed" : "pointer",
                       textAlign: "left",
                       color: "#183b34",
+                      opacity: 1,
                     }}
-                    title="Create an appointment at this time"
+                    title={
+                      occupiedSlot
+                        ? "This time is already booked"
+                        : "Create an appointment at this time"
+                    }
                   >
-                    {slotAppointments.map((appointment) => (
+                    {occupiedSlot && (
                       <span
-                        key={appointment.id}
                         style={{
                           display: "block",
+                          height: "100%",
+                          minHeight: 44,
                           padding: "6px 7px",
-                          marginBottom: 3,
-                          borderRadius: 6,
+                          borderRadius: occupiedSlot.isFirstSlot
+                            ? "6px 6px 0 0"
+                            : 0,
                           background: "#315f55",
                           color: "white",
                           fontSize: 12,
                           lineHeight: 1.25,
                         }}
                       >
-                        <strong>{petName(appointment.id)}</strong>
-                        <br />
-                        {serviceName(appointment.id)}
+                        {occupiedSlot.isFirstSlot ? (
+                          <>
+                            <strong>
+                              {petName(occupiedSlot.appointment.id)}
+                            </strong>
+                            <br />
+                            {serviceName(occupiedSlot.appointment.id)}
+                          </>
+                        ) : (
+                          <span style={{ opacity: 0.8 }}>Continues</span>
+                        )}
                       </span>
-                    ))}
+                    )}
                   </button>
                 );
               }),
