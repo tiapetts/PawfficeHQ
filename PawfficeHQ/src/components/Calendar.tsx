@@ -72,6 +72,7 @@ function Calendar({ businessId }: CalendarProps) {
   const [staffId, setStaffId] = useState("");
   const [startTime, setStartTime] = useState("");
   const [notes, setNotes] = useState("");
+  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -114,7 +115,6 @@ function Calendar({ businessId }: CalendarProps) {
         .from("appointment")
         .select("id, client_id, start_at, end_at, status")
         .eq("business_id", businessId)
-        .gte("end_at", new Date().toISOString())
         .order("start_at"),
     ]);
 
@@ -191,6 +191,94 @@ function Calendar({ businessId }: CalendarProps) {
   }, [clientId, clientPets, pets]);
 
   const selectedService = services.find((service) => service.id === serviceId);
+
+  const weekDays = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, index) => {
+        const day = new Date(weekStart);
+        day.setDate(weekStart.getDate() + index);
+        return day;
+      }),
+    [weekStart],
+  );
+
+  const timeSlots = useMemo(
+    () => Array.from({ length: 21 }, (_, index) => 8 * 60 + index * 30),
+    [],
+  );
+
+  const upcomingAppointments = useMemo(
+    () =>
+      appointments.filter(
+        (appointment) =>
+          new Date(appointment.end_at) >= new Date() &&
+          appointment.status !== "cancelled" &&
+          appointment.status !== "void",
+      ),
+    [appointments],
+  );
+
+  function getMonday(date: Date) {
+    const monday = new Date(date);
+    const day = monday.getDay();
+    const distance = day === 0 ? -6 : 1 - day;
+    monday.setDate(monday.getDate() + distance);
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  }
+
+  function formatInputDateTime(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  function selectTimeSlot(day: Date, minutesAfterMidnight: number) {
+    const selected = new Date(day);
+    selected.setHours(
+      Math.floor(minutesAfterMidnight / 60),
+      minutesAfterMidnight % 60,
+      0,
+      0,
+    );
+    setStartTime(formatInputDateTime(selected));
+    setMessage("");
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function appointmentsInSlot(day: Date, minutesAfterMidnight: number) {
+    return appointments.filter((appointment) => {
+      if (appointment.status === "cancelled" || appointment.status === "void") {
+        return false;
+      }
+
+      const start = new Date(appointment.start_at);
+      const appointmentMinutes = start.getHours() * 60 + start.getMinutes();
+      const slotMinutes = Math.floor(appointmentMinutes / 30) * 30;
+
+      return (
+        start.getFullYear() === day.getFullYear() &&
+        start.getMonth() === day.getMonth() &&
+        start.getDate() === day.getDate() &&
+        slotMinutes === minutesAfterMidnight
+      );
+    });
+  }
+
+  function formatSlotTime(minutesAfterMidnight: number) {
+    const time = new Date();
+    time.setHours(
+      Math.floor(minutesAfterMidnight / 60),
+      minutesAfterMidnight % 60,
+      0,
+      0,
+    );
+    return time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
 
   function resetForm() {
     setClientId("");
@@ -403,6 +491,174 @@ function Calendar({ businessId }: CalendarProps) {
         </section>
       )}
 
+      <section className="dashboard-panel" style={{ overflow: "hidden" }}>
+        <div
+          className="panel-heading"
+          style={{ display: "flex", justifyContent: "space-between", gap: 16 }}
+        >
+          <div>
+            <p className="eyebrow">Weekly schedule</p>
+            <h3>
+              {weekDays[0].toLocaleDateString(undefined, {
+                month: "long",
+                day: "numeric",
+              })}
+              {" – "}
+              {weekDays[6].toLocaleDateString(undefined, {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </h3>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() =>
+                setWeekStart((current) => {
+                  const previous = new Date(current);
+                  previous.setDate(previous.getDate() - 7);
+                  return previous;
+                })
+              }
+            >
+              Previous
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setWeekStart(getMonday(new Date()))}
+            >
+              Today
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() =>
+                setWeekStart((current) => {
+                  const next = new Date(current);
+                  next.setDate(next.getDate() + 7);
+                  return next;
+                })
+              }
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
+        <p style={{ marginTop: 0, color: "#58716b" }}>
+          Click any open time to create an appointment.
+        </p>
+
+        <div style={{ overflowX: "auto", paddingBottom: 8 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "84px repeat(7, minmax(135px, 1fr))",
+              minWidth: 1030,
+              borderTop: "1px solid #d7e0dd",
+              borderLeft: "1px solid #d7e0dd",
+            }}
+          >
+            <div
+              style={{
+                padding: 12,
+                borderRight: "1px solid #d7e0dd",
+                borderBottom: "1px solid #d7e0dd",
+              }}
+            />
+            {weekDays.map((day) => {
+              const isToday = day.toDateString() === new Date().toDateString();
+              return (
+                <div
+                  key={day.toISOString()}
+                  style={{
+                    padding: 12,
+                    textAlign: "center",
+                    borderRight: "1px solid #d7e0dd",
+                    borderBottom: "1px solid #d7e0dd",
+                    background: isToday ? "#e1eeea" : "#f7faf9",
+                  }}
+                >
+                  <strong>
+                    {day.toLocaleDateString(undefined, { weekday: "short" })}
+                  </strong>
+                  <div>
+                    {day.toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            {timeSlots.flatMap((slot) => [
+              <div
+                key={`time-${slot}`}
+                style={{
+                  padding: "10px 8px",
+                  color: "#58716b",
+                  fontSize: 13,
+                  textAlign: "right",
+                  borderRight: "1px solid #d7e0dd",
+                  borderBottom: "1px solid #d7e0dd",
+                  background: "#f7faf9",
+                }}
+              >
+                {formatSlotTime(slot)}
+              </div>,
+              ...weekDays.map((day) => {
+                const slotAppointments = appointmentsInSlot(day, slot);
+                return (
+                  <button
+                    key={`${day.toISOString()}-${slot}`}
+                    type="button"
+                    onClick={() => selectTimeSlot(day, slot)}
+                    style={{
+                      minHeight: 62,
+                      padding: 5,
+                      border: 0,
+                      borderRight: "1px solid #d7e0dd",
+                      borderBottom: "1px solid #d7e0dd",
+                      background:
+                        slotAppointments.length > 0 ? "#eef6f3" : "#ffffff",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      color: "#183b34",
+                    }}
+                    title="Create an appointment at this time"
+                  >
+                    {slotAppointments.map((appointment) => (
+                      <span
+                        key={appointment.id}
+                        style={{
+                          display: "block",
+                          padding: "6px 7px",
+                          marginBottom: 3,
+                          borderRadius: 6,
+                          background: "#315f55",
+                          color: "white",
+                          fontSize: 12,
+                          lineHeight: 1.25,
+                        }}
+                      >
+                        <strong>{getPetName(appointment.id)}</strong>
+                        <br />
+                        {getServiceName(appointment.id)}
+                      </span>
+                    ))}
+                  </button>
+                );
+              }),
+            ])}
+          </div>
+        </div>
+      </section>
+
       <section className="dashboard-panel">
         <div className="panel-heading">
           <div>
@@ -413,14 +669,14 @@ function Calendar({ businessId }: CalendarProps) {
 
         {loading ? (
           <p>Loading appointments...</p>
-        ) : appointments.length === 0 ? (
+        ) : upcomingAppointments.length === 0 ? (
           <div className="empty-state">
             <h3>No upcoming appointments</h3>
             <p>Your scheduled appointments will appear here.</p>
           </div>
         ) : (
           <div className="appointment-list">
-            {appointments.map((appointment) => {
+            {upcomingAppointments.map((appointment) => {
               const start = new Date(appointment.start_at);
               const end = new Date(appointment.end_at);
 
