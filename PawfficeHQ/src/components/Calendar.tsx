@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type DragEvent,
+  type FormEvent,
+} from "react";
 import { supabase } from "../lib/supabase";
 
 type CalendarProps = {
@@ -73,6 +79,9 @@ function Calendar({ businessId }: CalendarProps) {
   const [startTime, setStartTime] = useState("");
   const [notes, setNotes] = useState("");
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
+  const [draggingAppointmentId, setDraggingAppointmentId] = useState<
+    string | null
+  >(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -288,6 +297,85 @@ function Calendar({ businessId }: CalendarProps) {
       0,
     );
     return time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+
+  async function moveAppointment(
+    event: DragEvent<HTMLButtonElement>,
+    day: Date,
+    minutesAfterMidnight: number,
+  ) {
+    event.preventDefault();
+
+    const appointmentId =
+      event.dataTransfer.getData("text/plain") || draggingAppointmentId;
+    const appointment = appointments.find((item) => item.id === appointmentId);
+
+    if (!appointment) return;
+
+    const newStart = new Date(day);
+    newStart.setHours(
+      Math.floor(minutesAfterMidnight / 60),
+      minutesAfterMidnight % 60,
+      0,
+      0,
+    );
+
+    const duration =
+      new Date(appointment.end_at).getTime() -
+      new Date(appointment.start_at).getTime();
+    const newEnd = new Date(newStart.getTime() + duration);
+
+    setMessage("");
+
+    const { data: conflicts, error: conflictError } = await supabase
+      .from("appointment")
+      .select("id")
+      .eq("business_id", businessId)
+      .neq("id", appointment.id)
+      .lt("start_at", newEnd.toISOString())
+      .gt("end_at", newStart.toISOString())
+      .not("status", "in", "(cancelled,void)")
+      .limit(1);
+
+    if (conflictError) {
+      console.error(conflictError);
+      setMessage(conflictError.message);
+      setDraggingAppointmentId(null);
+      return;
+    }
+
+    if (conflicts && conflicts.length > 0) {
+      setMessage(
+        "That move would overlap another appointment. Choose another time.",
+      );
+      setDraggingAppointmentId(null);
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from("appointment")
+      .update({
+        start_at: newStart.toISOString(),
+        end_at: newEnd.toISOString(),
+      })
+      .eq("id", appointment.id)
+      .eq("business_id", businessId);
+
+    if (updateError) {
+      console.error(updateError);
+      setMessage(updateError.message);
+      setDraggingAppointmentId(null);
+      return;
+    }
+
+    setDraggingAppointmentId(null);
+    setMessage(
+      `Appointment moved to ${newStart.toLocaleDateString()} at ${newStart.toLocaleTimeString(
+        [],
+        { hour: "numeric", minute: "2-digit" },
+      )}.`,
+    );
+    await loadCalendar();
   }
 
   function resetForm() {
@@ -587,7 +675,8 @@ function Calendar({ businessId }: CalendarProps) {
         </div>
 
         <p style={{ marginTop: 0, color: "#58716b" }}>
-          Click any open time to create an appointment.
+          Click an open time to create an appointment, or drag an appointment to
+          reschedule it.
         </p>
 
         <div style={{ overflowX: "auto", paddingBottom: 8 }}>
@@ -657,7 +746,10 @@ function Calendar({ businessId }: CalendarProps) {
                     onClick={() => {
                       if (!occupiedSlot) selectTimeSlot(day, slot);
                     }}
-                    disabled={Boolean(occupiedSlot)}
+                    onDragOver={(event) => {
+                      if (draggingAppointmentId) event.preventDefault();
+                    }}
+                    onDrop={(event) => void moveAppointment(event, day, slot)}
                     style={{
                       minHeight: 62,
                       padding: 5,
@@ -665,19 +757,31 @@ function Calendar({ businessId }: CalendarProps) {
                       borderRight: "1px solid #d7e0dd",
                       borderBottom: "1px solid #d7e0dd",
                       background: occupiedSlot ? "#dcece7" : "#ffffff",
-                      cursor: occupiedSlot ? "not-allowed" : "pointer",
+                      cursor: occupiedSlot ? "default" : "pointer",
                       textAlign: "left",
                       color: "#183b34",
                       opacity: 1,
                     }}
                     title={
                       occupiedSlot
-                        ? "This time is already booked"
+                        ? "Drag this appointment to an open time"
                         : "Create an appointment at this time"
                     }
                   >
                     {occupiedSlot && (
                       <span
+                        draggable={occupiedSlot.isFirstSlot}
+                        onDragStart={(event) => {
+                          if (!occupiedSlot.isFirstSlot) return;
+                          event.stopPropagation();
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData(
+                            "text/plain",
+                            occupiedSlot.appointment.id,
+                          );
+                          setDraggingAppointmentId(occupiedSlot.appointment.id);
+                        }}
+                        onDragEnd={() => setDraggingAppointmentId(null)}
                         style={{
                           display: "block",
                           height: "100%",
@@ -690,6 +794,7 @@ function Calendar({ businessId }: CalendarProps) {
                           color: "white",
                           fontSize: 12,
                           lineHeight: 1.25,
+                          cursor: occupiedSlot.isFirstSlot ? "grab" : "default",
                         }}
                       >
                         {occupiedSlot.isFirstSlot ? (
