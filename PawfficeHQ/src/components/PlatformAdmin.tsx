@@ -192,6 +192,7 @@ export default function PlatformAdmin({
         <Dashboard
           businessId={supportBusiness.business_id}
           firstName="Support"
+          readOnly
         />
       </div>
     );

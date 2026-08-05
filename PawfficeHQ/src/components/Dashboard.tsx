@@ -8,6 +8,7 @@ import Calendar from "./Calendar";
 type DashboardProps = {
   businessId: string;
   firstName: string;
+  readOnly?: boolean;
 };
 
 type Business = {
@@ -50,7 +51,11 @@ type AppointmentService = {
 
 type ActivePage = "dashboard" | "clients" | "pets" | "services" | "calendar";
 
-function Dashboard({ businessId, firstName }: DashboardProps) {
+function Dashboard({
+  businessId,
+  firstName,
+  readOnly = false,
+}: DashboardProps) {
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
   const [business, setBusiness] = useState<Business | null>(null);
   const [clientCount, setClientCount] = useState(0);
@@ -265,7 +270,7 @@ function Dashboard({ businessId, firstName }: DashboardProps) {
 
       <main className="dashboard-main">
         {activePage === "calendar" ? (
-          <Calendar businessId={businessId} />
+          <Calendar businessId={businessId} readOnly={readOnly} />
         ) : activePage === "clients" ? (
           <Clients businessId={businessId} />
         ) : activePage === "pets" ? (
@@ -279,12 +284,14 @@ function Dashboard({ businessId, firstName }: DashboardProps) {
                 <p className="eyebrow">Dashboard</p>
                 <h2>Welcome back, {firstName}!</h2>
               </div>
-              <button
-                className="primary-button"
-                onClick={() => setActivePage("calendar")}
-              >
-                + New appointment
-              </button>
+              {!readOnly && (
+                <button
+                  className="primary-button"
+                  onClick={() => setActivePage("calendar")}
+                >
+                  + New appointment
+                </button>
+              )}
             </header>
 
             {errorMessage && (

@@ -9,6 +9,7 @@ import { supabase } from "../lib/supabase";
 
 type CalendarProps = {
   businessId: string;
+  readOnly?: boolean;
 };
 
 type Client = {
@@ -46,6 +47,8 @@ type Appointment = {
   start_at: string;
   end_at: string;
   status: string;
+  client_notes: string | null;
+  internal_notes: string | null;
 };
 
 type AppointmentPet = {
@@ -59,7 +62,7 @@ type AppointmentService = {
   staff_id: string | null;
 };
 
-function Calendar({ businessId }: CalendarProps) {
+function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [clientPets, setClientPets] = useState<ClientPet[]>([]);
@@ -82,6 +85,9 @@ function Calendar({ businessId }: CalendarProps) {
   const [draggingAppointmentId, setDraggingAppointmentId] = useState<
     string | null
   >(null);
+  const [selectedAppointment, setSelectedAppointment] =
+    useState<Appointment | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -122,7 +128,9 @@ function Calendar({ businessId }: CalendarProps) {
         .order("last_name"),
       supabase
         .from("appointment")
-        .select("id, client_id, start_at, end_at, status")
+        .select(
+          "id, client_id, start_at, end_at, status, client_notes, internal_notes",
+        )
         .eq("business_id", businessId)
         .order("start_at"),
     ]);
@@ -246,6 +254,7 @@ function Calendar({ businessId }: CalendarProps) {
   }
 
   function selectTimeSlot(day: Date, minutesAfterMidnight: number) {
+    if (readOnly) return;
     const selected = new Date(day);
     selected.setHours(
       Math.floor(minutesAfterMidnight / 60),
@@ -305,6 +314,8 @@ function Calendar({ businessId }: CalendarProps) {
     minutesAfterMidnight: number,
   ) {
     event.preventDefault();
+
+    if (readOnly) return;
 
     const appointmentId =
       event.dataTransfer.getData("text/plain") || draggingAppointmentId;
@@ -376,6 +387,44 @@ function Calendar({ businessId }: CalendarProps) {
       )}.`,
     );
     await loadCalendar();
+  }
+
+  async function updateAppointmentStatus(status: string) {
+    if (!selectedAppointment || readOnly) return;
+
+    setUpdatingStatus(true);
+    setMessage("");
+
+    const { data, error } = await supabase
+      .from("appointment")
+      .update({ status })
+      .eq("id", selectedAppointment.id)
+      .eq("business_id", businessId)
+      .select(
+        "id, client_id, start_at, end_at, status, client_notes, internal_notes",
+      )
+      .single();
+
+    setUpdatingStatus(false);
+
+    if (error) {
+      console.error(error);
+      setMessage(error.message);
+      return;
+    }
+
+    setSelectedAppointment(data);
+    setAppointments((current) =>
+      current.map((appointment) =>
+        appointment.id === data.id ? data : appointment,
+      ),
+    );
+  }
+
+  function formatStatus(status: string) {
+    return status
+      .replaceAll("_", " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
   function resetForm() {
@@ -492,13 +541,15 @@ function Calendar({ businessId }: CalendarProps) {
           <h2>Calendar</h2>
         </div>
 
-        <button
-          className="primary-button"
-          type="button"
-          onClick={() => setShowForm((current) => !current)}
-        >
-          {showForm ? "Cancel" : "+ New appointment"}
-        </button>
+        {!readOnly && (
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => setShowForm((current) => !current)}
+          >
+            {showForm ? "Cancel" : "+ New appointment"}
+          </button>
+        )}
       </header>
 
       {message && (
@@ -675,8 +726,9 @@ function Calendar({ businessId }: CalendarProps) {
         </div>
 
         <p style={{ marginTop: 0, color: "#58716b" }}>
-          Click an open time to create an appointment, or drag an appointment to
-          reschedule it.
+          {readOnly
+            ? "Click an appointment to view its details."
+            : "Click an open time to create an appointment, or drag an appointment to reschedule it."}
         </p>
 
         <div style={{ overflowX: "auto", paddingBottom: 8 }}>
@@ -744,12 +796,19 @@ function Calendar({ businessId }: CalendarProps) {
                     key={`${day.toISOString()}-${slot}`}
                     type="button"
                     onClick={() => {
-                      if (!occupiedSlot) selectTimeSlot(day, slot);
+                      if (occupiedSlot) {
+                        setSelectedAppointment(occupiedSlot.appointment);
+                      } else {
+                        selectTimeSlot(day, slot);
+                      }
                     }}
                     onDragOver={(event) => {
-                      if (draggingAppointmentId) event.preventDefault();
+                      if (!readOnly && draggingAppointmentId)
+                        event.preventDefault();
                     }}
-                    onDrop={(event) => void moveAppointment(event, day, slot)}
+                    onDrop={(event) => {
+                      if (!readOnly) void moveAppointment(event, day, slot);
+                    }}
                     style={{
                       minHeight: 62,
                       padding: 5,
@@ -770,9 +829,9 @@ function Calendar({ businessId }: CalendarProps) {
                   >
                     {occupiedSlot && (
                       <span
-                        draggable={occupiedSlot.isFirstSlot}
+                        draggable={!readOnly && occupiedSlot.isFirstSlot}
                         onDragStart={(event) => {
-                          if (!occupiedSlot.isFirstSlot) return;
+                          if (readOnly || !occupiedSlot.isFirstSlot) return;
                           event.stopPropagation();
                           event.dataTransfer.effectAllowed = "move";
                           event.dataTransfer.setData(
@@ -794,7 +853,12 @@ function Calendar({ businessId }: CalendarProps) {
                           color: "white",
                           fontSize: 12,
                           lineHeight: 1.25,
-                          cursor: occupiedSlot.isFirstSlot ? "grab" : "default",
+                          cursor:
+                            !readOnly && occupiedSlot.isFirstSlot
+                              ? "grab"
+                              : occupiedSlot.isFirstSlot
+                                ? "pointer"
+                                : "default",
                         }}
                       >
                         {occupiedSlot.isFirstSlot ? (
@@ -876,6 +940,169 @@ function Calendar({ businessId }: CalendarProps) {
           </div>
         )}
       </section>
+
+      {selectedAppointment && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 300,
+            display: "grid",
+            placeItems: "center",
+            padding: 20,
+            background: "rgba(18, 44, 38, 0.58)",
+          }}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget)
+              setSelectedAppointment(null);
+          }}
+        >
+          <section
+            className="dashboard-panel"
+            style={{
+              width: "min(680px, 100%)",
+              margin: 0,
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 20,
+              }}
+            >
+              <div>
+                <p className="eyebrow">Appointment details</p>
+                <h2 style={{ marginTop: 5 }}>
+                  {petName(selectedAppointment.id)} —{" "}
+                  {serviceName(selectedAppointment.id)}
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setSelectedAppointment(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            {readOnly && (
+              <p
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 7,
+                  background: "#fff3c4",
+                  color: "#594710",
+                  fontWeight: 700,
+                }}
+              >
+                Read-only support view
+              </p>
+            )}
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 18,
+                margin: "24px 0",
+              }}
+            >
+              <div>
+                <p className="eyebrow">Client</p>
+                <strong>{clientName(selectedAppointment.client_id)}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Pet</p>
+                <strong>{petName(selectedAppointment.id)}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Service</p>
+                <strong>{serviceName(selectedAppointment.id)}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Staff</p>
+                <strong>{staffName(selectedAppointment.id)}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Date</p>
+                <strong>
+                  {new Date(selectedAppointment.start_at).toLocaleDateString(
+                    undefined,
+                    {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    },
+                  )}
+                </strong>
+              </div>
+              <div>
+                <p className="eyebrow">Time</p>
+                <strong>
+                  {new Date(selectedAppointment.start_at).toLocaleTimeString(
+                    [],
+                    {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    },
+                  )}
+                  {" – "}
+                  {new Date(selectedAppointment.end_at).toLocaleTimeString([], {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </strong>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 22 }}>
+              <p className="eyebrow">Client notes</p>
+              <p>{selectedAppointment.client_notes || "No client notes."}</p>
+              <p className="eyebrow">Internal notes</p>
+              <p>
+                {selectedAppointment.internal_notes || "No internal notes."}
+              </p>
+            </div>
+
+            <div>
+              <p className="eyebrow">Status</p>
+              <h3>{formatStatus(selectedAppointment.status)}</h3>
+
+              {!readOnly && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {[
+                    ["confirmed", "Confirmed"],
+                    ["checked_in", "Checked in"],
+                    ["in_progress", "In progress"],
+                    ["completed", "Completed"],
+                    ["cancelled", "Cancelled"],
+                    ["no_show", "No-show"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={
+                        selectedAppointment.status === value
+                          ? "primary-button"
+                          : "secondary-button"
+                      }
+                      disabled={updatingStatus}
+                      onClick={() => void updateAppointmentStatus(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
