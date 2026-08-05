@@ -66,7 +66,9 @@ export default function PlatformAdmin({
         console.error(error);
         setMessage(error.message);
       } else {
-        setOverview(overviewResult.data ?? emptyOverview);
+        setOverview(
+          (overviewResult.data as PlatformOverview | null) ?? emptyOverview,
+        );
         setBusinesses(businessesResult.data ?? []);
       }
 
