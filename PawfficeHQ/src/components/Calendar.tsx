@@ -427,6 +427,36 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       .replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
+  function statusColor(status: string) {
+    const colors: Record<string, string> = {
+      requested: "#7c5c2e",
+      confirmed: "#315f55",
+      checked_in: "#2f6f9f",
+      in_progress: "#b7791f",
+      completed: "#687773",
+      cancelled: "#a33f3f",
+      no_show: "#713b62",
+      void: "#5f6664",
+    };
+
+    return colors[status] ?? "#315f55";
+  }
+
+  function statusCellColor(status: string) {
+    const colors: Record<string, string> = {
+      requested: "#f4eadb",
+      confirmed: "#dcece7",
+      checked_in: "#dcecf6",
+      in_progress: "#f8ebcd",
+      completed: "#e4e8e7",
+      cancelled: "#f6dddd",
+      no_show: "#eee0ea",
+      void: "#e5e7e6",
+    };
+
+    return colors[status] ?? "#dcece7";
+  }
+
   function resetForm() {
     setClientId("");
     setPetId("");
@@ -815,7 +845,9 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                       border: 0,
                       borderRight: "1px solid #d7e0dd",
                       borderBottom: "1px solid #d7e0dd",
-                      background: occupiedSlot ? "#dcece7" : "#ffffff",
+                      background: occupiedSlot
+                        ? statusCellColor(occupiedSlot.appointment.status)
+                        : "#ffffff",
                       cursor: occupiedSlot ? "default" : "pointer",
                       textAlign: "left",
                       color: "#183b34",
@@ -849,7 +881,9 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                           borderRadius: occupiedSlot.isFirstSlot
                             ? "6px 6px 0 0"
                             : 0,
-                          background: "#315f55",
+                          background: statusColor(
+                            occupiedSlot.appointment.status,
+                          ),
                           color: "white",
                           fontSize: 12,
                           lineHeight: 1.25,
@@ -868,6 +902,10 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                             </strong>
                             <br />
                             {serviceName(occupiedSlot.appointment.id)}
+                            <br />
+                            <span style={{ opacity: 0.85 }}>
+                              {formatStatus(occupiedSlot.appointment.status)}
+                            </span>
                           </>
                         ) : (
                           <span style={{ opacity: 0.8 }}>Continues</span>
