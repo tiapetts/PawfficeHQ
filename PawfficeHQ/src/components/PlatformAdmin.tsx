@@ -30,7 +30,13 @@ const emptyOverview: PlatformOverview = {
   total_appointments: 0,
 };
 
-export default function PlatformAdmin() {
+type PlatformAdminProps = {
+  onOpenMyBusiness?: () => void;
+};
+
+export default function PlatformAdmin({
+  onOpenMyBusiness,
+}: PlatformAdminProps) {
   const [overview, setOverview] = useState<PlatformOverview>(emptyOverview);
   const [businesses, setBusinesses] = useState<PlatformBusiness[]>([]);
   const [loading, setLoading] = useState(true);
@@ -209,20 +215,39 @@ export default function PlatformAdmin() {
             Software operations and customer support
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void supabase.auth.signOut()}
-          style={{
-            border: "1px solid rgba(255,255,255,0.5)",
-            borderRadius: 7,
-            padding: "10px 16px",
-            background: "transparent",
-            color: "white",
-            cursor: "pointer",
-          }}
-        >
-          Sign out
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          {onOpenMyBusiness && (
+            <button
+              type="button"
+              onClick={onOpenMyBusiness}
+              style={{
+                border: "1px solid rgba(255,255,255,0.5)",
+                borderRadius: 7,
+                padding: "10px 16px",
+                background: "white",
+                color: "#173f36",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              My business dashboard
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => void supabase.auth.signOut()}
+            style={{
+              border: "1px solid rgba(255,255,255,0.5)",
+              borderRadius: 7,
+              padding: "10px 16px",
+              background: "transparent",
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main style={{ maxWidth: 1500, margin: "0 auto", padding: 34 }}>

@@ -18,6 +18,9 @@ function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [staff, setStaff] = useState<StaffProfile | null>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [adminView, setAdminView] = useState<"platform" | "business">(
+    "platform",
+  );
   const [loading, setLoading] = useState(true);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [profileError, setProfileError] = useState("");
@@ -62,9 +65,7 @@ function App() {
 
     if (platformAdmin === true) {
       setIsPlatformAdmin(true);
-      setStaff(null);
-      setProfileLoaded(true);
-      setLoading(false);
+      await loadStaffProfile(userId);
       return;
     }
 
@@ -93,6 +94,7 @@ function App() {
         setSession(null);
         setStaff(null);
         setIsPlatformAdmin(false);
+        setAdminView("platform");
         setProfileLoaded(false);
         setLoading(false);
         return;
@@ -114,6 +116,7 @@ function App() {
       if (!newSession) {
         setStaff(null);
         setIsPlatformAdmin(false);
+        setAdminView("platform");
         setProfileLoaded(false);
         setProfileError("");
         setLoading(false);
@@ -163,8 +166,53 @@ function App() {
     );
   }
 
-  if (isPlatformAdmin) {
-    return <PlatformAdmin />;
+  if (isPlatformAdmin && adminView === "platform") {
+    return (
+      <PlatformAdmin
+        onOpenMyBusiness={staff ? () => setAdminView("business") : undefined}
+      />
+    );
+  }
+
+  if (isPlatformAdmin && adminView === "business" && staff) {
+    return (
+      <div>
+        <div
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 100,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "10px 24px",
+            background: "#f4c95d",
+            color: "#20332e",
+          }}
+        >
+          <strong>Your business dashboard</strong>
+          <button
+            type="button"
+            onClick={() => setAdminView("platform")}
+            style={{
+              border: "1px solid #20332e",
+              borderRadius: 7,
+              padding: "8px 14px",
+              background: "white",
+              color: "#20332e",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Back to Platform Admin
+          </button>
+        </div>
+        <Dashboard
+          businessId={staff.business_id}
+          firstName={staff.first_name}
+        />
+      </div>
+    );
   }
 
   if (profileLoaded && !staff) {
