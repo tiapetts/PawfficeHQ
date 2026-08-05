@@ -4,6 +4,7 @@ import { supabase } from "./lib/supabase";
 import Auth from "./components/Auth";
 import BusinessSetup from "./components/BusinessSetup";
 import Dashboard from "./components/Dashboard";
+import PlatformAdmin from "./components/PlatformAdmin";
 import "./App.css";
 
 type StaffProfile = {
@@ -16,14 +17,12 @@ type StaffProfile = {
 function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [staff, setStaff] = useState<StaffProfile | null>(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [profileError, setProfileError] = useState("");
 
   async function loadStaffProfile(userId: string) {
-    setLoading(true);
-    setProfileError("");
-
     const { data, error } = await supabase
       .from("STAFF")
       .select("id, business_id, first_name, last_name")
@@ -44,6 +43,35 @@ function App() {
     setLoading(false);
   }
 
+  async function loadUserAccess(userId: string) {
+    setLoading(true);
+    setProfileError("");
+
+    const { data: platformAdmin, error } =
+      await supabase.rpc("is_platform_admin");
+
+    if (error) {
+      console.error("Platform access error:", error);
+      setIsPlatformAdmin(false);
+      setStaff(null);
+      setProfileError(error.message);
+      setProfileLoaded(true);
+      setLoading(false);
+      return;
+    }
+
+    if (platformAdmin === true) {
+      setIsPlatformAdmin(true);
+      setStaff(null);
+      setProfileLoaded(true);
+      setLoading(false);
+      return;
+    }
+
+    setIsPlatformAdmin(false);
+    await loadStaffProfile(userId);
+  }
+
   useEffect(() => {
     let mounted = true;
 
@@ -55,26 +83,23 @@ function App() {
         error,
       } = await supabase.auth.refreshSession();
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       if (error || !refreshedSession) {
         console.error("Session refresh error:", error);
 
-        await supabase.auth.signOut({
-          scope: "local",
-        });
+        await supabase.auth.signOut({ scope: "local" });
 
         setSession(null);
         setStaff(null);
+        setIsPlatformAdmin(false);
         setProfileLoaded(false);
         setLoading(false);
         return;
       }
 
       setSession(refreshedSession);
-      await loadStaffProfile(refreshedSession.user.id);
+      await loadUserAccess(refreshedSession.user.id);
     }
 
     void initializeApp();
@@ -82,14 +107,13 @@ function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setSession(newSession);
 
       if (!newSession) {
         setStaff(null);
+        setIsPlatformAdmin(false);
         setProfileLoaded(false);
         setProfileError("");
         setLoading(false);
@@ -97,7 +121,7 @@ function App() {
       }
 
       if (event === "SIGNED_IN" || event === "USER_UPDATED") {
-        void loadStaffProfile(newSession.user.id);
+        void loadUserAccess(newSession.user.id);
       }
     });
 
@@ -139,11 +163,15 @@ function App() {
     );
   }
 
+  if (isPlatformAdmin) {
+    return <PlatformAdmin />;
+  }
+
   if (profileLoaded && !staff) {
     return (
       <BusinessSetup
         user={session.user}
-        onComplete={() => loadStaffProfile(session.user.id)}
+        onComplete={() => loadUserAccess(session.user.id)}
       />
     );
   }
