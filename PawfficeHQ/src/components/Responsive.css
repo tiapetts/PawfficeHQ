@@ -1,0 +1,167 @@
+.mobile-menu-button,
+.mobile-menu-backdrop {
+  display: none;
+}
+
+.calendar-scroll {
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+@media (max-width: 720px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .dashboard {
+    display: block;
+    min-width: 0;
+    padding-top: 58px;
+  }
+
+  .mobile-menu-button {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 210;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 58px;
+    padding: 12px 18px;
+    border: 0;
+    background: #183f37;
+    color: white;
+    font: inherit;
+    font-size: 1.1rem;
+    font-weight: 800;
+    text-align: left;
+  }
+
+  .mobile-menu-button span {
+    font-size: 1.35rem;
+  }
+
+  .mobile-menu-backdrop {
+    position: fixed;
+    inset: 58px 0 0;
+    z-index: 190;
+    display: block;
+    width: 100%;
+    border: 0;
+    background: rgba(12, 35, 30, 0.48);
+  }
+
+  .sidebar {
+    position: fixed !important;
+    inset: 58px auto 0 0;
+    z-index: 200;
+    width: min(82vw, 300px) !important;
+    min-height: 0 !important;
+    transform: translateX(-105%);
+    transition: transform 180ms ease;
+    overflow-y: auto;
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .dashboard-main {
+    width: 100% !important;
+    min-width: 0;
+    padding: 22px 16px !important;
+  }
+
+  .dashboard-header,
+  .panel-heading {
+    align-items: stretch !important;
+    flex-direction: column;
+    gap: 14px !important;
+  }
+
+  .dashboard-header .primary-button,
+  .form-actions .primary-button {
+    width: 100%;
+  }
+
+  .dashboard-header h2 {
+    font-size: clamp(1.9rem, 9vw, 2.5rem);
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  .summary-card {
+    min-width: 0;
+    padding: 18px !important;
+  }
+
+  .dashboard-panel {
+    min-width: 0;
+    padding: 18px !important;
+    overflow: hidden;
+  }
+
+  .appointment-form {
+    grid-template-columns: 1fr !important;
+  }
+
+  .appointment-form .full-width {
+    grid-column: 1 !important;
+  }
+
+  .calendar-scroll {
+    width: 100%;
+    overflow-x: hidden;
+    padding-bottom: 0;
+  }
+
+  .calendar-grid {
+    width: 100%;
+  }
+
+  .appointment-card,
+  .client-card,
+  .clients-list > *,
+  .client-list > * {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    min-width: 0;
+  }
+
+  .client-card *,
+  .clients-list > * *,
+  .client-list > * * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .client-card a {
+    overflow-wrap: anywhere;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .summary-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .staff-card-actions {
+    grid-template-columns: 1fr;
+  }
+}
