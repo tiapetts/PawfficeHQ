@@ -1,5 +1,4 @@
-.mobile-menu-button,
-.mobile-menu-backdrop {
+.mobile-menu-button {
   display: none;
 }
 
@@ -44,16 +43,6 @@
 
   .mobile-menu-button span {
     font-size: 1.35rem;
-  }
-
-  .mobile-menu-backdrop {
-    position: fixed;
-    inset: 58px 0 0;
-    z-index: 190;
-    display: block;
-    width: 100%;
-    border: 0;
-    background: rgba(12, 35, 30, 0.48);
   }
 
   .sidebar {

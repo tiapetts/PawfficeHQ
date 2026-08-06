@@ -5,6 +5,7 @@ import Pets from "./Pets";
 import Services from "./Services";
 import Calendar from "./Calendar";
 import Staff from "./Staff";
+import "./Responsive.css";
 
 type DashboardProps = {
   businessId: string;
@@ -64,6 +65,7 @@ function Dashboard({
   readOnly = false,
 }: DashboardProps) {
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [business, setBusiness] = useState<Business | null>(null);
   const [clientCount, setClientCount] = useState(0);
   const [petCount, setPetCount] = useState(0);
@@ -222,9 +224,23 @@ function Dashboard({
     );
   }
 
+  function openPage(page: ActivePage) {
+    setActivePage(page);
+    setMobileMenuOpen(false);
+  }
+
   return (
     <div className="dashboard">
-      <aside className="sidebar">
+      <button
+        className="mobile-menu-button"
+        type="button"
+        aria-expanded={mobileMenuOpen}
+        aria-label="Open navigation"
+        onClick={() => setMobileMenuOpen((current) => !current)}
+      >
+        <span>☰</span> Pawffice HQ
+      </button>
+      <aside className={`sidebar ${mobileMenuOpen ? "mobile-open" : ""}`}>
         <div>
           <h1>Pawffice HQ</h1>
           <p className="business-label">
@@ -235,37 +251,37 @@ function Dashboard({
         <nav>
           <button
             className={`nav-button ${activePage === "dashboard" ? "active" : ""}`}
-            onClick={() => setActivePage("dashboard")}
+            onClick={() => openPage("dashboard")}
           >
             Dashboard
           </button>
           <button
             className={`nav-button ${activePage === "calendar" ? "active" : ""}`}
-            onClick={() => setActivePage("calendar")}
+            onClick={() => openPage("calendar")}
           >
             Calendar
           </button>
           <button
             className={`nav-button ${activePage === "clients" ? "active" : ""}`}
-            onClick={() => setActivePage("clients")}
+            onClick={() => openPage("clients")}
           >
             Clients
           </button>
           <button
             className={`nav-button ${activePage === "pets" ? "active" : ""}`}
-            onClick={() => setActivePage("pets")}
+            onClick={() => openPage("pets")}
           >
             Pets
           </button>
           <button
             className={`nav-button ${activePage === "services" ? "active" : ""}`}
-            onClick={() => setActivePage("services")}
+            onClick={() => openPage("services")}
           >
             Services
           </button>
           <button
             className={`nav-button ${activePage === "staff" ? "active" : ""}`}
-            onClick={() => setActivePage("staff")}
+            onClick={() => openPage("staff")}
           >
             Staff
           </button>

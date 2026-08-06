@@ -6,6 +6,7 @@ import {
   type FormEvent,
 } from "react";
 import { supabase } from "../lib/supabase";
+import "./Responsive.css";
 
 type CalendarProps = {
   businessId: string;
@@ -82,6 +83,14 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [startTime, setStartTime] = useState("");
   const [notes, setNotes] = useState("");
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
+  const [mobileDate, setMobileDate] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
+  const [isMobile, setIsMobile] = useState(
+    () => window.matchMedia("(max-width: 720px)").matches,
+  );
   const [draggingAppointmentId, setDraggingAppointmentId] = useState<
     string | null
   >(null);
@@ -197,6 +206,14 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     void loadCalendar();
   }, [businessId]);
 
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 720px)");
+    const update = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+    setIsMobile(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
   const availablePets = useMemo(() => {
     if (!clientId) return [];
 
@@ -223,6 +240,32 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     () => Array.from({ length: 21 }, (_, index) => 8 * 60 + index * 30),
     [],
   );
+
+  const visibleDays = isMobile ? [mobileDate] : weekDays;
+
+  function moveCalendar(amount: number) {
+    if (isMobile) {
+      setMobileDate((current) => {
+        const next = new Date(current);
+        next.setDate(next.getDate() + amount);
+        return next;
+      });
+      return;
+    }
+
+    setWeekStart((current) => {
+      const next = new Date(current);
+      next.setDate(next.getDate() + amount * 7);
+      return next;
+    });
+  }
+
+  function goToToday() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    setMobileDate(today);
+    setWeekStart(getMonday(today));
+  }
 
   const upcomingAppointments = useMemo(
     () =>
@@ -703,18 +746,25 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
           style={{ display: "flex", justifyContent: "space-between", gap: 16 }}
         >
           <div>
-            <p className="eyebrow">Weekly schedule</p>
+            <p className="eyebrow">
+              {isMobile ? "Daily schedule" : "Weekly schedule"}
+            </p>
             <h3>
-              {weekDays[0].toLocaleDateString(undefined, {
+              {visibleDays[0].toLocaleDateString(undefined, {
+                weekday: isMobile ? "long" : undefined,
                 month: "long",
                 day: "numeric",
               })}
-              {" – "}
-              {weekDays[6].toLocaleDateString(undefined, {
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-              })}
+              {!isMobile && (
+                <>
+                  {" – "}
+                  {weekDays[6].toLocaleDateString(undefined, {
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </>
+              )}
             </h3>
           </div>
 
@@ -722,35 +772,23 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
             <button
               className="secondary-button"
               type="button"
-              onClick={() =>
-                setWeekStart((current) => {
-                  const previous = new Date(current);
-                  previous.setDate(previous.getDate() - 7);
-                  return previous;
-                })
-              }
+              onClick={() => moveCalendar(-1)}
             >
-              Previous
+              {isMobile ? "‹" : "Previous"}
             </button>
             <button
               className="secondary-button"
               type="button"
-              onClick={() => setWeekStart(getMonday(new Date()))}
+              onClick={goToToday}
             >
               Today
             </button>
             <button
               className="secondary-button"
               type="button"
-              onClick={() =>
-                setWeekStart((current) => {
-                  const next = new Date(current);
-                  next.setDate(next.getDate() + 7);
-                  return next;
-                })
-              }
+              onClick={() => moveCalendar(1)}
             >
-              Next
+              {isMobile ? "›" : "Next"}
             </button>
           </div>
         </div>
@@ -761,12 +799,15 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
             : "Click an open time to create an appointment, or drag an appointment to reschedule it."}
         </p>
 
-        <div style={{ overflowX: "auto", paddingBottom: 8 }}>
+        <div className="calendar-scroll">
           <div
+            className="calendar-grid"
             style={{
               display: "grid",
-              gridTemplateColumns: "84px repeat(7, minmax(135px, 1fr))",
-              minWidth: 1030,
+              gridTemplateColumns: isMobile
+                ? "70px minmax(0, 1fr)"
+                : "84px repeat(7, minmax(135px, 1fr))",
+              minWidth: isMobile ? 0 : 1030,
               borderTop: "1px solid #d7e0dd",
               borderLeft: "1px solid #d7e0dd",
             }}
@@ -778,7 +819,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                 borderBottom: "1px solid #d7e0dd",
               }}
             />
-            {weekDays.map((day) => {
+            {visibleDays.map((day) => {
               const isToday = day.toDateString() === new Date().toDateString();
               return (
                 <div
@@ -819,7 +860,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
               >
                 {formatSlotTime(slot)}
               </div>,
-              ...weekDays.map((day) => {
+              ...visibleDays.map((day) => {
                 const occupiedSlot = appointmentInSlot(day, slot);
                 return (
                   <button
