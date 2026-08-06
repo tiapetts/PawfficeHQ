@@ -124,8 +124,24 @@
   font-size: 0.9rem;
 }
 
+.staff-card-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.staff-card-actions > :only-child,
 .staff-card .secondary-button {
   width: 100%;
+}
+
+.staff-success {
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: #dcebe7;
+  color: #17634f;
+  font-weight: 700;
 }
 
 @media (max-width: 720px) {

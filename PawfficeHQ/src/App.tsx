@@ -5,6 +5,7 @@ import Auth from "./components/Auth";
 import BusinessSetup from "./components/BusinessSetup";
 import Dashboard from "./components/Dashboard";
 import PlatformAdmin from "./components/PlatformAdmin";
+import SetPassword from "./components/SetPassword";
 import "./App.css";
 
 type StaffProfile = {
@@ -15,6 +16,11 @@ type StaffProfile = {
 };
 
 function App() {
+  const [needsPassword, setNeedsPassword] = useState(
+    () =>
+      new URLSearchParams(window.location.hash.slice(1)).get("type") ===
+      "invite",
+  );
   const [session, setSession] = useState<Session | null>(null);
   const [staff, setStaff] = useState<StaffProfile | null>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
@@ -140,6 +146,10 @@ function App() {
 
   if (!session) {
     return <Auth />;
+  }
+
+  if (needsPassword) {
+    return <SetPassword onComplete={() => setNeedsPassword(false)} />;
   }
 
   if (profileError) {

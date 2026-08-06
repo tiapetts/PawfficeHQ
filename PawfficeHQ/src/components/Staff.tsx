@@ -48,6 +48,8 @@ function Staff({ businessId, readOnly = false }: StaffProps) {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
   async function loadStaff() {
@@ -136,6 +138,26 @@ function Staff({ businessId, readOnly = false }: StaffProps) {
     await loadStaff();
   }
 
+  async function inviteStaff(member: StaffMember) {
+    setInvitingId(member.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const { data, error } = await supabase.functions.invoke("invite-staff", {
+      body: { staffId: member.id },
+    });
+
+    if (error || data?.error) {
+      setErrorMessage(data?.error ?? error?.message ?? "Invitation failed");
+      setInvitingId(null);
+      return;
+    }
+
+    setSuccessMessage(data?.message ?? `Invitation sent to ${member.email}`);
+    setInvitingId(null);
+    await loadStaff();
+  }
+
   return (
     <>
       <header className="dashboard-header">
@@ -153,6 +175,11 @@ function Staff({ businessId, readOnly = false }: StaffProps) {
       {errorMessage && (
         <p className="error-message" role="alert">
           {errorMessage}
+        </p>
+      )}
+      {successMessage && (
+        <p className="staff-success" role="status">
+          {successMessage}
         </p>
       )}
 
@@ -323,12 +350,25 @@ function Staff({ businessId, readOnly = false }: StaffProps) {
                     : "Profile only — no login yet"}
                 </p>
                 {!readOnly && (
-                  <button
-                    className="secondary-button"
-                    onClick={() => openEdit(member)}
-                  >
-                    Edit staff member
-                  </button>
+                  <div className="staff-card-actions">
+                    {!member.has_login && (
+                      <button
+                        className="primary-button"
+                        disabled={!member.email || invitingId === member.id}
+                        onClick={() => void inviteStaff(member)}
+                      >
+                        {invitingId === member.id
+                          ? "Sending…"
+                          : "Send invitation"}
+                      </button>
+                    )}
+                    <button
+                      className="secondary-button"
+                      onClick={() => openEdit(member)}
+                    >
+                      Edit staff member
+                    </button>
+                  </div>
                 )}
               </article>
             ))}
