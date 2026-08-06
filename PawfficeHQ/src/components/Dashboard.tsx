@@ -4,6 +4,7 @@ import Clients from "./Clients";
 import Pets from "./Pets";
 import Services from "./Services";
 import Calendar from "./Calendar";
+import Staff from "./Staff";
 
 type DashboardProps = {
   businessId: string;
@@ -49,7 +50,13 @@ type AppointmentService = {
   service_id: string;
 };
 
-type ActivePage = "dashboard" | "clients" | "pets" | "services" | "calendar";
+type ActivePage =
+  | "dashboard"
+  | "clients"
+  | "pets"
+  | "services"
+  | "calendar"
+  | "staff";
 
 function Dashboard({
   businessId,
@@ -256,7 +263,12 @@ function Dashboard({
           >
             Services
           </button>
-          <button className="nav-button">Staff</button>
+          <button
+            className={`nav-button ${activePage === "staff" ? "active" : ""}`}
+            onClick={() => setActivePage("staff")}
+          >
+            Staff
+          </button>
           <button className="nav-button">Settings</button>
         </nav>
 
@@ -277,6 +289,8 @@ function Dashboard({
           <Pets businessId={businessId} />
         ) : activePage === "services" ? (
           <Services businessId={businessId} />
+        ) : activePage === "staff" ? (
+          <Staff businessId={businessId} readOnly={readOnly} />
         ) : (
           <>
             <header className="dashboard-header">
