@@ -7,6 +7,75 @@
   padding-bottom: 8px;
 }
 
+.appointment-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 24px;
+  margin-top: 20px;
+}
+
+.appointment-form label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  color: #284b46;
+  font-weight: 700;
+}
+
+.appointment-form input,
+.appointment-form select,
+.appointment-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #b8c8c4;
+  border-radius: 9px;
+  background: #fff;
+  color: #173a35;
+  font: inherit;
+  font-weight: 400;
+}
+
+.appointment-form input,
+.appointment-form select {
+  min-height: 50px;
+  padding: 10px 13px;
+}
+
+.appointment-form textarea {
+  min-height: 112px;
+  padding: 13px;
+  resize: vertical;
+}
+
+.appointment-form input:focus,
+.appointment-form select:focus,
+.appointment-form textarea:focus {
+  border-color: #32685c;
+  outline: 3px solid rgba(50, 104, 92, 0.14);
+}
+
+.appointment-form select:disabled {
+  background: #eef2f1;
+  color: #82908d;
+  cursor: not-allowed;
+}
+
+.appointment-form .full-width {
+  grid-column: 1 / -1;
+}
+
+.appointment-form .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.appointment-form .form-actions .primary-button {
+  min-width: 190px;
+}
+
 @media (max-width: 720px) {
   html,
   body,
@@ -100,10 +169,15 @@
 
   .appointment-form {
     grid-template-columns: 1fr !important;
+    gap: 16px;
   }
 
   .appointment-form .full-width {
     grid-column: 1 !important;
+  }
+
+  .appointment-form .form-actions .primary-button {
+    width: 100%;
   }
 
   .calendar-scroll {
