@@ -7,6 +7,7 @@ import {
 } from "react";
 import { supabase } from "../lib/supabase";
 import "./Responsive.css";
+import "./Notifications.css";
 
 type CalendarProps = {
   businessId: string;
@@ -97,6 +98,11 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [selectedAppointment, setSelectedAppointment] =
     useState<Appointment | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationChannel, setNotificationChannel] = useState("email");
+  const [notificationBody, setNotificationBody] = useState("");
+  const [confirmSmsConsent, setConfirmSmsConsent] = useState(false);
+  const [sendingNotification, setSendingNotification] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -464,6 +470,44 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     );
   }
 
+  function openReadyNotification() {
+    if (!selectedAppointment) return;
+    setNotificationBody(
+      `${petName(selectedAppointment.id)} is ready for pickup! Please contact us if you have any questions.`,
+    );
+    setNotificationChannel("email");
+    setConfirmSmsConsent(false);
+    setShowNotification(true);
+  }
+
+  async function sendReadyNotification(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedAppointment) return;
+    setSendingNotification(true);
+    setMessage("");
+    const { data, error } = await supabase.functions.invoke(
+      "send-client-notification",
+      {
+        body: {
+          appointmentId: selectedAppointment.id,
+          channel: notificationChannel,
+          message: notificationBody,
+          confirmSmsConsent,
+        },
+      },
+    );
+    setSendingNotification(false);
+    if (error || data?.error) {
+      setMessage(data?.error ?? error?.message ?? "Notification failed");
+      return;
+    }
+    const results = (data?.results ?? []) as Array<{ message: string }>;
+    setMessage(results.map((result) => result.message).join(" • "));
+    setShowNotification(false);
+    setSelectedAppointment(null);
+    await loadCalendar();
+  }
+
   function formatStatus(status: string) {
     return status
       .replaceAll("_", " ")
@@ -476,6 +520,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       confirmed: "#315f55",
       checked_in: "#2f6f9f",
       in_progress: "#b7791f",
+      ready_for_pickup: "#27695a",
       completed: "#687773",
       cancelled: "#a33f3f",
       no_show: "#713b62",
@@ -491,6 +536,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       confirmed: "#dcece7",
       checked_in: "#dcecf6",
       in_progress: "#f8ebcd",
+      ready_for_pickup: "#d8eee8",
       completed: "#e4e8e7",
       cancelled: "#f6dddd",
       no_show: "#eee0ea",
@@ -1158,6 +1204,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                     ["confirmed", "Confirmed"],
                     ["checked_in", "Checked in"],
                     ["in_progress", "In progress"],
+                    ["ready_for_pickup", "Ready for pickup"],
                     ["completed", "Completed"],
                     ["cancelled", "Cancelled"],
                     ["no_show", "No-show"],
@@ -1176,9 +1223,96 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                       {label}
                     </button>
                   ))}
+                  {selectedAppointment.status !== "completed" && (
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={updatingStatus}
+                      onClick={openReadyNotification}
+                    >
+                      Notify ready for pickup
+                    </button>
+                  )}
                 </div>
               )}
             </div>
+
+            {showNotification && !readOnly && (
+              <form
+                className="notification-composer"
+                onSubmit={sendReadyNotification}
+              >
+                <div>
+                  <p className="eyebrow">Client notification</p>
+                  <h3>Ready for pickup</h3>
+                </div>
+                <label>
+                  Send by
+                  <select
+                    value={notificationChannel}
+                    onChange={(event) =>
+                      setNotificationChannel(event.target.value)
+                    }
+                  >
+                    <option value="email">Email</option>
+                    <option value="sms">Text message</option>
+                    <option value="both">Email and text</option>
+                  </select>
+                </label>
+                <label>
+                  Message
+                  <textarea
+                    rows={4}
+                    maxLength={1000}
+                    required
+                    value={notificationBody}
+                    onChange={(event) =>
+                      setNotificationBody(event.target.value)
+                    }
+                  />
+                </label>
+                {(notificationChannel === "sms" ||
+                  notificationChannel === "both") && (
+                  <label className="notification-consent">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={confirmSmsConsent}
+                      onChange={(event) =>
+                        setConfirmSmsConsent(event.target.checked)
+                      }
+                    />{" "}
+                    I confirm this client consented to receive text messages.
+                  </label>
+                )}
+                <div className="notification-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setShowNotification(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      void updateAppointmentStatus("ready_for_pickup");
+                      setShowNotification(false);
+                    }}
+                  >
+                    Mark ready without sending
+                  </button>
+                  <button
+                    type="submit"
+                    className="primary-button"
+                    disabled={sendingNotification}
+                  >
+                    {sendingNotification ? "Sending…" : "Send notification"}
+                  </button>
+                </div>
+              </form>
+            )}
           </section>
         </div>
       )}
