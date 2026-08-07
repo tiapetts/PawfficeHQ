@@ -5,6 +5,8 @@ import Pets from "./Pets";
 import Services from "./Services";
 import Calendar from "./Calendar";
 import Staff from "./Staff";
+import Settings from "./Settings";
+import { applyBusinessTheme } from "./Settings";
 import "./Responsive.css";
 
 type DashboardProps = {
@@ -57,7 +59,8 @@ type ActivePage =
   | "pets"
   | "services"
   | "calendar"
-  | "staff";
+  | "staff"
+  | "settings";
 
 function Dashboard({
   businessId,
@@ -67,6 +70,7 @@ function Dashboard({
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [business, setBusiness] = useState<Business | null>(null);
+  const [businessLogo, setBusinessLogo] = useState<string | null>(null);
   const [clientCount, setClientCount] = useState(0);
   const [petCount, setPetCount] = useState(0);
   const [todayAppointments, setTodayAppointments] = useState<
@@ -101,6 +105,7 @@ function Dashboard({
         clientsResult,
         petsResult,
         servicesResult,
+        settingsResult,
       ] = await Promise.all([
         supabase
           .from("business")
@@ -135,6 +140,7 @@ function Dashboard({
           .from("service")
           .select("id, name")
           .eq("business_id", businessId),
+        supabase.rpc("get_business_settings", { p_business_id: businessId }),
       ]);
 
       const firstError = [
@@ -145,6 +151,7 @@ function Dashboard({
         clientsResult.error,
         petsResult.error,
         servicesResult.error,
+        settingsResult.error,
       ].find(Boolean);
 
       if (firstError) {
@@ -186,6 +193,18 @@ function Dashboard({
       }
 
       if (businessResult.data) setBusiness(businessResult.data);
+      if (settingsResult.data) {
+        const loadedSettings = settingsResult.data as {
+          logo_url?: string | null;
+          primary_color?: string;
+          accent_color?: string;
+        };
+        setBusinessLogo(loadedSettings.logo_url ?? null);
+        applyBusinessTheme(
+          loadedSettings.primary_color ?? "#183f37",
+          loadedSettings.accent_color ?? "#32685c",
+        );
+      }
       setClientCount(clientsCountResult.count ?? 0);
       setPetCount(petsCountResult.count ?? 0);
       setTodayAppointments(loadedAppointments);
@@ -242,6 +261,13 @@ function Dashboard({
       </button>
       <aside className={`sidebar ${mobileMenuOpen ? "mobile-open" : ""}`}>
         <div>
+          {businessLogo && (
+            <img
+              className="business-logo"
+              src={businessLogo}
+              alt="Business logo"
+            />
+          )}
           <h1>Pawffice HQ</h1>
           <p className="business-label">
             {business?.business_name ?? "Your business"}
@@ -285,7 +311,12 @@ function Dashboard({
           >
             Staff
           </button>
-          <button className="nav-button">Settings</button>
+          <button
+            className={`nav-button ${activePage === "settings" ? "active" : ""}`}
+            onClick={() => openPage("settings")}
+          >
+            Settings
+          </button>
         </nav>
 
         <button
@@ -307,6 +338,15 @@ function Dashboard({
           <Services businessId={businessId} />
         ) : activePage === "staff" ? (
           <Staff businessId={businessId} readOnly={readOnly} />
+        ) : activePage === "settings" ? (
+          <Settings
+            businessId={businessId}
+            readOnly={readOnly}
+            onSaved={(businessName, logoUrl) => {
+              setBusiness({ business_name: businessName });
+              setBusinessLogo(logoUrl);
+            }}
+          />
         ) : (
           <>
             <header className="dashboard-header">
