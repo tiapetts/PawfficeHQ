@@ -83,7 +83,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [staffId, setStaffId] = useState("");
   const [startTime, setStartTime] = useState("");
   const [notes, setNotes] = useState("");
-  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
+  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date(), 1));
   const [mobileDate, setMobileDate] = useState(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -109,6 +109,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [appointmentInterval, setAppointmentInterval] = useState(30);
   const [calendarStart, setCalendarStart] = useState("08:00");
   const [calendarEnd, setCalendarEnd] = useState("18:00");
+  const [weekStartsOn, setWeekStartsOn] = useState(1);
 
   async function loadCalendar() {
     setLoading(true);
@@ -240,6 +241,16 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       if (typeof data?.calendar_end === "string" && data.calendar_end) {
         setCalendarEnd(data.calendar_end);
       }
+
+      const savedWeekStart = Number(data?.week_starts_on);
+
+      if ([0, 1].includes(savedWeekStart)) {
+        setWeekStartsOn(savedWeekStart);
+
+        setWeekStart((currentDate) =>
+          getWeekStart(currentDate, savedWeekStart),
+        );
+      }
     }
 
     void loadCalendarSettings();
@@ -326,7 +337,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     setMobileDate(today);
-    setWeekStart(getMonday(today));
+    setWeekStart(getWeekStart(today, weekStartsOn));
   }
 
   const upcomingAppointments = useMemo(
@@ -340,13 +351,15 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     [appointments],
   );
 
-  function getMonday(date: Date) {
-    const monday = new Date(date);
-    const day = monday.getDay();
-    const distance = day === 0 ? -6 : 1 - day;
-    monday.setDate(monday.getDate() + distance);
-    monday.setHours(0, 0, 0, 0);
-    return monday;
+  function getWeekStart(date: Date, startsOn: number) {
+    const start = new Date(date);
+    const currentDay = start.getDay();
+    const distance = (currentDay - startsOn + 7) % 7;
+
+    start.setDate(start.getDate() - distance);
+    start.setHours(0, 0, 0, 0);
+
+    return start;
   }
 
   function formatInputDateTime(date: Date) {
