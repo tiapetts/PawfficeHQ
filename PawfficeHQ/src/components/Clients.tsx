@@ -1,10 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
+import "./ClientEditing.css";
 
-type ClientsProps = {
-  businessId: string;
-};
-
+type ClientsProps = { businessId: string; readOnly?: boolean };
 type Client = {
   id: number;
   FirstName: string;
@@ -17,7 +15,6 @@ type Client = {
   ClientState: string | null;
   ClientZip: string | null;
 };
-
 const emptyForm = {
   FirstName: "",
   LastName: "",
@@ -29,112 +26,117 @@ const emptyForm = {
   ClientState: "",
   ClientZip: "",
 };
-
 type ClientForm = typeof emptyForm;
+const selection =
+  "id, FirstName, LastName, PhoneNumber, EmailAddress, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip";
 
-export default function Clients({ businessId }: ClientsProps) {
+export default function Clients({
+  businessId,
+  readOnly = false,
+}: ClientsProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [form, setForm] = useState<ClientForm>(emptyForm);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  async function loadClients() {
+    const { data, error } = await supabase
+      .from("CLIENT")
+      .select(selection)
+      .eq("business_id", businessId)
+      .order("LastName")
+      .order("FirstName");
+    if (error) {
+      console.error(error);
+      setMessage(error.message);
+      setSuccess(false);
+    } else setClients((data as Client[] | null) ?? []);
+    setLoading(false);
+  }
 
   useEffect(() => {
-    async function loadClients() {
-      const { data, error } = await supabase
-        .from("CLIENT")
-        .select(
-          `
-          id,
-          FirstName,
-          LastName,
-          PhoneNumber,
-          EmailAddress,
-          StreetAddress,
-          AptNumber,
-          ClientCity,
-          ClientState,
-          ClientZip
-        `,
-        )
-        .eq("business_id", businessId)
-        .order("LastName")
-        .order("FirstName");
-
-      if (error) {
-        console.error(error);
-        setMessage(error.message);
-      } else {
-        setClients(data ?? []);
-      }
-
-      setLoading(false);
-    }
-
-    loadClients();
+    void loadClients();
   }, [businessId]);
 
   function updateField(field: keyof ClientForm, value: string) {
-    setForm((currentForm) => ({
-      ...currentForm,
-      [field]: value,
-    }));
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function openNew() {
+    setEditingId(null);
+    setForm(emptyForm);
+    setMessage("");
+    setSuccess(false);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openEdit(client: Client) {
+    setEditingId(client.id);
+    setForm({
+      FirstName: client.FirstName,
+      LastName: client.LastName,
+      PhoneNumber: client.PhoneNumber ?? "",
+      EmailAddress: client.EmailAddress ?? "",
+      StreetAddress: client.StreetAddress ?? "",
+      AptNumber: client.AptNumber ?? "",
+      ClientCity: client.ClientCity ?? "",
+      ClientState: client.ClientState ?? "",
+      ClientZip: client.ClientZip ?? "",
+    });
+    setMessage("");
+    setSuccess(false);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setMessage("");
+    setSuccess(false);
+    const wasEditing = editingId !== null;
+    const values = {
+      business_id: businessId,
+      FirstName: form.FirstName.trim(),
+      LastName: form.LastName.trim(),
+      PhoneNumber: form.PhoneNumber.trim() || null,
+      EmailAddress: form.EmailAddress.trim() || null,
+      StreetAddress: form.StreetAddress.trim() || null,
+      AptNumber: form.AptNumber.trim() || null,
+      ClientCity: form.ClientCity.trim() || null,
+      ClientState: form.ClientState.trim().toUpperCase() || null,
+      ClientZip: form.ClientZip.trim() || null,
+    };
 
-    const { data, error } = await supabase
-      .from("CLIENT")
-      .insert({
-        business_id: businessId,
-        FirstName: form.FirstName.trim(),
-        LastName: form.LastName.trim(),
-        PhoneNumber: form.PhoneNumber.trim() || null,
-        EmailAddress: form.EmailAddress.trim() || null,
-        StreetAddress: form.StreetAddress.trim() || null,
-        AptNumber: form.AptNumber.trim() || null,
-        ClientCity: form.ClientCity.trim() || null,
-        ClientState: form.ClientState.trim().toUpperCase() || null,
-        ClientZip: form.ClientZip.trim() || null,
-      })
-      .select(
-        `
-        id,
-        FirstName,
-        LastName,
-        PhoneNumber,
-        EmailAddress,
-        StreetAddress,
-        AptNumber,
-        ClientCity,
-        ClientState,
-        ClientZip
-      `,
-      )
-      .single();
-
+    const query = editingId
+      ? supabase
+          .from("CLIENT")
+          .update(values)
+          .eq("id", editingId)
+          .eq("business_id", businessId)
+      : supabase.from("CLIENT").insert(values);
+    const { error } = await query;
+    setSaving(false);
     if (error) {
       console.error(error);
       setMessage(error.message);
-      setSaving(false);
       return;
     }
-
-    setClients((currentClients) =>
-      [...currentClients, data].sort((a, b) =>
-        `${a.LastName} ${a.FirstName}`.localeCompare(
-          `${b.LastName} ${b.FirstName}`,
-        ),
-      ),
-    );
-
-    setForm(emptyForm);
-    setShowForm(false);
-    setSaving(false);
+    closeForm();
+    await loadClients();
+    setSuccess(true);
+    setMessage(wasEditing ? "Client changes saved." : "Client added.");
   }
 
   return (
@@ -144,140 +146,122 @@ export default function Clients({ businessId }: ClientsProps) {
           <p className="eyebrow">Contacts</p>
           <h2>Clients</h2>
         </div>
-
-        <button
-          className="primary-button"
-          onClick={() => {
-            setShowForm(!showForm);
-            setMessage("");
-          }}
-        >
-          {showForm ? "Cancel" : "+ Add client"}
-        </button>
+        {!readOnly && (
+          <button
+            className="primary-button"
+            onClick={showForm ? closeForm : openNew}
+          >
+            {showForm ? "Cancel" : "+ Add client"}
+          </button>
+        )}
       </header>
-
       {message && (
-        <p className="error-message" role="alert">
+        <p
+          className={success ? "client-success" : "error-message"}
+          role="status"
+        >
           {message}
         </p>
       )}
 
-      {showForm && (
+      {showForm && !readOnly && (
         <section className="dashboard-panel client-form-panel">
-          <h3>New client</h3>
-
+          <div className="client-form-title">
+            <div>
+              <p className="eyebrow">
+                {editingId ? "Client profile" : "New contact"}
+              </p>
+              <h3>{editingId ? "Edit client" : "New client"}</h3>
+            </div>
+            {editingId && <span>Client #{editingId}</span>}
+          </div>
           <form className="client-form" onSubmit={handleSubmit}>
             <label>
               First name
               <input
-                type="text"
                 value={form.FirstName}
-                onChange={(event) =>
-                  updateField("FirstName", event.target.value)
-                }
+                onChange={(e) => updateField("FirstName", e.target.value)}
                 required
               />
             </label>
-
             <label>
               Last name
               <input
-                type="text"
                 value={form.LastName}
-                onChange={(event) =>
-                  updateField("LastName", event.target.value)
-                }
+                onChange={(e) => updateField("LastName", e.target.value)}
                 required
               />
             </label>
-
             <label>
               Phone number
               <input
                 type="tel"
                 value={form.PhoneNumber}
-                onChange={(event) =>
-                  updateField("PhoneNumber", event.target.value)
-                }
+                onChange={(e) => updateField("PhoneNumber", e.target.value)}
               />
             </label>
-
             <label>
               Email address
               <input
                 type="email"
                 value={form.EmailAddress}
-                onChange={(event) =>
-                  updateField("EmailAddress", event.target.value)
-                }
+                onChange={(e) => updateField("EmailAddress", e.target.value)}
               />
             </label>
-
             <label className="full-width">
               Street address
               <input
-                type="text"
                 value={form.StreetAddress}
-                onChange={(event) =>
-                  updateField("StreetAddress", event.target.value)
-                }
+                onChange={(e) => updateField("StreetAddress", e.target.value)}
               />
             </label>
-
             <label>
               Apartment/unit
               <input
-                type="text"
                 value={form.AptNumber}
-                onChange={(event) =>
-                  updateField("AptNumber", event.target.value)
-                }
+                onChange={(e) => updateField("AptNumber", e.target.value)}
               />
             </label>
-
             <label>
               City
               <input
-                type="text"
                 value={form.ClientCity}
-                onChange={(event) =>
-                  updateField("ClientCity", event.target.value)
-                }
+                onChange={(e) => updateField("ClientCity", e.target.value)}
               />
             </label>
-
             <label>
               State
               <input
-                type="text"
                 maxLength={2}
                 placeholder="WI"
                 value={form.ClientState}
-                onChange={(event) =>
-                  updateField("ClientState", event.target.value.toUpperCase())
+                onChange={(e) =>
+                  updateField("ClientState", e.target.value.toUpperCase())
                 }
               />
             </label>
-
             <label>
               ZIP code
               <input
-                type="text"
                 inputMode="numeric"
                 value={form.ClientZip}
-                onChange={(event) =>
-                  updateField("ClientZip", event.target.value)
-                }
+                onChange={(e) => updateField("ClientZip", e.target.value)}
               />
             </label>
-
             <div className="full-width form-actions">
               <button
-                className="primary-button"
-                type="submit"
-                disabled={saving}
+                type="button"
+                className="secondary-button"
+                onClick={closeForm}
               >
-                {saving ? "Saving client..." : "Save client"}
+                Cancel
+              </button>
+              <button className="primary-button" disabled={saving}>
+                {saving
+                  ? "Saving…"
+                  : editingId
+                    ? "Save changes"
+                    : "Save client"}
               </button>
             </div>
           </form>
@@ -300,19 +284,16 @@ export default function Clients({ businessId }: ClientsProps) {
                   {client.FirstName.charAt(0)}
                   {client.LastName.charAt(0)}
                 </div>
-
                 <div className="client-name">
                   <strong>
                     {client.FirstName} {client.LastName}
                   </strong>
                   <span>{client.EmailAddress || "No email listed"}</span>
                 </div>
-
                 <div>
                   <span className="client-detail-label">Phone</span>
                   <p>{client.PhoneNumber || "Not listed"}</p>
                 </div>
-
                 <div>
                   <span className="client-detail-label">Location</span>
                   <p>
@@ -321,6 +302,15 @@ export default function Clients({ businessId }: ClientsProps) {
                       .join(", ") || "Not listed"}
                   </p>
                 </div>
+                {!readOnly && (
+                  <button
+                    className="client-edit-button"
+                    type="button"
+                    onClick={() => openEdit(client)}
+                  >
+                    Edit
+                  </button>
+                )}
               </article>
             ))}
           </div>

@@ -1,12 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
+import "./PetEditing.css";
 
-type PetsProps = {
-  businessId: string;
-};
-
+type PetsProps = { businessId: string; readOnly?: boolean };
 type PetId = number | string;
-
 type Pet = {
   id: PetId;
   PetName: string;
@@ -15,20 +12,13 @@ type Pet = {
   PetDOB: string | null;
   PetWeight: number | null;
 };
-
-type Client = {
-  id: number;
-  FirstName: string;
-  LastName: string;
-};
-
+type Client = { id: number; FirstName: string; LastName: string };
 type ClientPet = {
   client_id: number;
   pet_id: PetId;
   relationship: string | null;
   is_primary: boolean;
 };
-
 const emptyForm = {
   ownerId: "",
   PetName: "",
@@ -37,138 +27,164 @@ const emptyForm = {
   PetDOB: "",
   PetWeight: "",
 };
-
 type PetForm = typeof emptyForm;
+const petSelection = "id, PetName, species, PetBreed, PetDOB, PetWeight";
 
-export default function Pets({ businessId }: PetsProps) {
+export default function Pets({ businessId, readOnly = false }: PetsProps) {
   const [pets, setPets] = useState<Pet[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [clientPets, setClientPets] = useState<ClientPet[]>([]);
   const [form, setForm] = useState<PetForm>(emptyForm);
+  const [editingId, setEditingId] = useState<PetId | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState(false);
 
-  useEffect(() => {
-    async function loadData() {
-      const [petsResult, clientsResult, linksResult] = await Promise.all([
-        supabase
-          .from("PET")
-          .select("id, PetName, species, PetBreed, PetDOB, PetWeight")
-          .eq("business_id", businessId)
-          .order("PetName"),
-
-        supabase
-          .from("CLIENT")
-          .select("id, FirstName, LastName")
-          .eq("business_id", businessId)
-          .order("LastName"),
-
-        supabase
-          .from("client_pet")
-          .select("client_id, pet_id, relationship, is_primary"),
-      ]);
-
-      const error =
-        petsResult.error || clientsResult.error || linksResult.error;
-
-      if (error) {
-        console.error(error);
-        setMessage(error.message);
-      } else {
-        setPets(petsResult.data ?? []);
-        setClients(clientsResult.data ?? []);
-        setClientPets(linksResult.data ?? []);
-      }
-
-      setLoading(false);
+  async function loadData() {
+    const [petsResult, clientsResult, linksResult] = await Promise.all([
+      supabase
+        .from("PET")
+        .select(petSelection)
+        .eq("business_id", businessId)
+        .order("PetName"),
+      supabase
+        .from("CLIENT")
+        .select("id, FirstName, LastName")
+        .eq("business_id", businessId)
+        .order("LastName"),
+      supabase
+        .from("client_pet")
+        .select("client_id, pet_id, relationship, is_primary"),
+    ]);
+    const error = petsResult.error || clientsResult.error || linksResult.error;
+    if (error) {
+      console.error(error);
+      setMessage(error.message);
+      setSuccess(false);
+    } else {
+      setPets((petsResult.data as Pet[] | null) ?? []);
+      setClients(clientsResult.data ?? []);
+      setClientPets((linksResult.data as ClientPet[] | null) ?? []);
     }
-
-    loadData();
-  }, [businessId]);
-
-  function updateField(field: keyof PetForm, value: string) {
-    setForm((currentForm) => ({
-      ...currentForm,
-      [field]: value,
-    }));
+    setLoading(false);
   }
 
+  useEffect(() => {
+    void loadData();
+  }, [businessId]);
+  function updateField(field: keyof PetForm, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+  }
+  function ownerLink(petId: PetId) {
+    return (
+      clientPets.find(
+        (link) => String(link.pet_id) === String(petId) && link.is_primary,
+      ) ?? clientPets.find((link) => String(link.pet_id) === String(petId))
+    );
+  }
   function getOwnerName(petId: PetId) {
-    const relationship = clientPets.find(
-      (link) => String(link.pet_id) === String(petId),
-    );
-
-    if (!relationship) {
-      return "No owner attached";
-    }
-
+    const link = ownerLink(petId);
     const owner = clients.find(
-      (client) => String(client.id) === String(relationship.client_id),
+      (client) => String(client.id) === String(link?.client_id),
     );
-
-    return owner ? `${owner.FirstName} ${owner.LastName}` : "Owner unavailable";
+    return owner ? `${owner.FirstName} ${owner.LastName}` : "No owner attached";
+  }
+  function closeForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
+  }
+  function openNew() {
+    setEditingId(null);
+    setForm(emptyForm);
+    setMessage("");
+    setSuccess(false);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function openEdit(pet: Pet) {
+    setEditingId(pet.id);
+    setForm({
+      ownerId: String(ownerLink(pet.id)?.client_id ?? ""),
+      PetName: pet.PetName,
+      species: pet.species,
+      PetBreed: pet.PetBreed ?? "",
+      PetDOB: pet.PetDOB ?? "",
+      PetWeight: pet.PetWeight === null ? "" : String(pet.PetWeight),
+    });
+    setMessage("");
+    setSuccess(false);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setMessage("");
-
-    const { data: newPet, error: petError } = await supabase
-      .from("PET")
-      .insert({
-        business_id: businessId,
-        PetName: form.PetName.trim(),
-        species: form.species,
-        PetBreed: form.PetBreed.trim() || null,
-        PetDOB: form.PetDOB || null,
-        PetWeight: form.PetWeight ? Number(form.PetWeight) : null,
-      })
-      .select("id, PetName, species, PetBreed, PetDOB, PetWeight")
-      .single();
-
-    if (petError) {
-      console.error(petError);
-      setMessage(petError.message);
+    setSuccess(false);
+    const wasEditing = editingId !== null;
+    const values = {
+      business_id: businessId,
+      PetName: form.PetName.trim(),
+      species: form.species,
+      PetBreed: form.PetBreed.trim() || null,
+      PetDOB: form.PetDOB || null,
+      PetWeight: form.PetWeight ? Number(form.PetWeight) : null,
+    };
+    const petQuery = wasEditing
+      ? supabase
+          .from("PET")
+          .update(values)
+          .eq("id", editingId)
+          .eq("business_id", businessId)
+          .select(petSelection)
+          .single()
+      : supabase.from("PET").insert(values).select(petSelection).single();
+    const { data: savedPet, error: petError } = await petQuery;
+    if (petError || !savedPet) {
+      setMessage(petError?.message ?? "Pet could not be saved");
       setSaving(false);
       return;
     }
 
-    const newRelationship = {
-      client_id: Number(form.ownerId),
-      pet_id: newPet.id,
-      relationship: "owner",
-      is_primary: true,
-    };
-
-    const { error: relationshipError } = await supabase
-      .from("client_pet")
-      .insert(newRelationship);
-
+    const existingLink = wasEditing ? ownerLink(editingId) : undefined;
+    let relationshipError: { message: string } | null = null;
+    if (existingLink) {
+      const result = await supabase
+        .from("client_pet")
+        .update({
+          client_id: Number(form.ownerId),
+          relationship: "owner",
+          is_primary: true,
+        })
+        .eq("pet_id", editingId)
+        .eq("client_id", existingLink.client_id);
+      relationshipError = result.error;
+    } else {
+      const result = await supabase.from("client_pet").insert({
+        client_id: Number(form.ownerId),
+        pet_id: savedPet.id,
+        relationship: "owner",
+        is_primary: true,
+      });
+      relationshipError = result.error;
+    }
     if (relationshipError) {
-      console.error(relationshipError);
-
-      // Remove the orphaned pet if attaching the owner fails
-      await supabase.from("PET").delete().eq("id", newPet.id);
-
+      if (!wasEditing)
+        await supabase.from("PET").delete().eq("id", savedPet.id);
       setMessage(relationshipError.message);
       setSaving(false);
       return;
     }
 
-    setPets((currentPets) =>
-      [...currentPets, newPet].sort((a, b) =>
-        a.PetName.localeCompare(b.PetName),
-      ),
-    );
-
-    setClientPets((currentLinks) => [...currentLinks, newRelationship]);
-
-    setForm(emptyForm);
-    setShowForm(false);
     setSaving(false);
+    closeForm();
+    await loadData();
+    setSuccess(true);
+    setMessage(wasEditing ? "Pet changes saved." : "Pet added.");
   }
 
   return (
@@ -178,28 +194,32 @@ export default function Pets({ businessId }: PetsProps) {
           <p className="eyebrow">Care records</p>
           <h2>Pets</h2>
         </div>
-
-        <button
-          className="primary-button"
-          onClick={() => {
-            setShowForm(!showForm);
-            setMessage("");
-          }}
-        >
-          {showForm ? "Cancel" : "+ Add pet"}
-        </button>
+        {!readOnly && (
+          <button
+            className="primary-button"
+            onClick={showForm ? closeForm : openNew}
+          >
+            {showForm ? "Cancel" : "+ Add pet"}
+          </button>
+        )}
       </header>
-
       {message && (
-        <p className="error-message" role="alert">
+        <p className={success ? "pet-success" : "error-message"} role="status">
           {message}
         </p>
       )}
 
-      {showForm && (
+      {showForm && !readOnly && (
         <section className="dashboard-panel client-form-panel">
-          <h3>New pet</h3>
-
+          <div className="pet-form-title">
+            <div>
+              <p className="eyebrow">
+                {editingId !== null ? "Pet profile" : "New care record"}
+              </p>
+              <h3>{editingId !== null ? "Edit pet" : "New pet"}</h3>
+            </div>
+            {editingId !== null && <span>Pet #{editingId}</span>}
+          </div>
           {clients.length === 0 ? (
             <p>You must add a client before adding their pet.</p>
           ) : (
@@ -208,13 +228,10 @@ export default function Pets({ businessId }: PetsProps) {
                 Pet owner
                 <select
                   value={form.ownerId}
-                  onChange={(event) =>
-                    updateField("ownerId", event.target.value)
-                  }
+                  onChange={(e) => updateField("ownerId", e.target.value)}
                   required
                 >
                   <option value="">Select a client</option>
-
                   {clients.map((client) => (
                     <option key={client.id} value={client.id}>
                       {client.FirstName} {client.LastName}
@@ -222,60 +239,44 @@ export default function Pets({ businessId }: PetsProps) {
                   ))}
                 </select>
               </label>
-
               <label>
                 Pet name
                 <input
-                  type="text"
                   value={form.PetName}
-                  onChange={(event) =>
-                    updateField("PetName", event.target.value)
-                  }
+                  onChange={(e) => updateField("PetName", e.target.value)}
                   required
                 />
               </label>
-
               <label>
                 Species
                 <select
                   value={form.species}
-                  onChange={(event) =>
-                    updateField("species", event.target.value)
-                  }
+                  onChange={(e) => updateField("species", e.target.value)}
                   required
                 >
                   <option value="">Select species</option>
-                  <option value="Dog">Dog</option>
-                  <option value="Cat">Cat</option>
-                  <option value="Bird">Bird</option>
-                  <option value="Rabbit">Rabbit</option>
-                  <option value="Reptile">Reptile</option>
-                  <option value="Other">Other</option>
+                  {["Dog", "Cat", "Bird", "Rabbit", "Reptile", "Other"].map(
+                    (species) => (
+                      <option key={species}>{species}</option>
+                    ),
+                  )}
                 </select>
               </label>
-
               <label>
                 Breed
                 <input
-                  type="text"
                   value={form.PetBreed}
-                  onChange={(event) =>
-                    updateField("PetBreed", event.target.value)
-                  }
+                  onChange={(e) => updateField("PetBreed", e.target.value)}
                 />
               </label>
-
               <label>
                 Date of birth
                 <input
                   type="date"
                   value={form.PetDOB}
-                  onChange={(event) =>
-                    updateField("PetDOB", event.target.value)
-                  }
+                  onChange={(e) => updateField("PetDOB", e.target.value)}
                 />
               </label>
-
               <label>
                 Weight
                 <input
@@ -283,20 +284,24 @@ export default function Pets({ businessId }: PetsProps) {
                   min="0"
                   step="0.1"
                   value={form.PetWeight}
-                  onChange={(event) =>
-                    updateField("PetWeight", event.target.value)
-                  }
+                  onChange={(e) => updateField("PetWeight", e.target.value)}
                   placeholder="Weight in pounds"
                 />
               </label>
-
               <div className="full-width form-actions">
                 <button
-                  className="primary-button"
-                  type="submit"
-                  disabled={saving}
+                  type="button"
+                  className="secondary-button"
+                  onClick={closeForm}
                 >
-                  {saving ? "Saving pet..." : "Save pet"}
+                  Cancel
+                </button>
+                <button className="primary-button" disabled={saving}>
+                  {saving
+                    ? "Saving…"
+                    : editingId !== null
+                      ? "Save changes"
+                      : "Save pet"}
                 </button>
               </div>
             </form>
@@ -318,30 +323,35 @@ export default function Pets({ businessId }: PetsProps) {
           {pets.map((pet) => (
             <article className="pet-card" key={pet.id}>
               <div className="pet-avatar">{pet.PetName.charAt(0)}</div>
-
               <div>
                 <h3>{pet.PetName}</h3>
                 <p>{[pet.species, pet.PetBreed].filter(Boolean).join(" · ")}</p>
               </div>
-
               <dl className="pet-details">
                 <div>
                   <dt>Owner</dt>
                   <dd>{getOwnerName(pet.id)}</dd>
                 </div>
-
                 <div>
                   <dt>Weight</dt>
                   <dd>
                     {pet.PetWeight ? `${pet.PetWeight} lbs` : "Not listed"}
                   </dd>
                 </div>
-
                 <div>
                   <dt>Date of birth</dt>
                   <dd>{pet.PetDOB || "Not listed"}</dd>
                 </div>
               </dl>
+              {!readOnly && (
+                <button
+                  className="pet-edit-button"
+                  type="button"
+                  onClick={() => openEdit(pet)}
+                >
+                  Edit pet
+                </button>
+              )}
             </article>
           ))}
         </section>
