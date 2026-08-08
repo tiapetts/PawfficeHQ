@@ -106,6 +106,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [appointmentInterval, setAppointmentInterval] = useState(30);
 
   async function loadCalendar() {
     setLoading(true);
@@ -213,6 +214,28 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   }, [businessId]);
 
   useEffect(() => {
+    async function loadCalendarSettings() {
+      const { data, error } = await supabase.rpc("get_business_settings", {
+        p_business_id: businessId,
+      });
+
+      if (error) {
+        console.error("Calendar settings error:", error);
+        setMessage(error.message);
+        return;
+      }
+
+      const savedInterval = Number(data?.appointment_interval);
+
+      if ([15, 30, 60].includes(savedInterval)) {
+        setAppointmentInterval(savedInterval);
+      }
+    }
+
+    void loadCalendarSettings();
+  }, [businessId]);
+
+  useEffect(() => {
     const query = window.matchMedia("(max-width: 720px)");
     const update = (event: MediaQueryListEvent) => setIsMobile(event.matches);
     setIsMobile(query.matches);
@@ -242,10 +265,19 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     [weekStart],
   );
 
-  const timeSlots = useMemo(
-    () => Array.from({ length: 21 }, (_, index) => 8 * 60 + index * 30),
-    [],
-  );
+  //
+  const timeSlots = useMemo(() => {
+    const calendarStart = 8 * 60;
+    const calendarEnd = 18 * 60;
+    const numberOfSlots = Math.ceil(
+      (calendarEnd - calendarStart) / appointmentInterval,
+    );
+
+    return Array.from(
+      { length: numberOfSlots },
+      (_, index) => calendarStart + index * appointmentInterval,
+    );
+  }, [appointmentInterval]);
 
   const visibleDays = isMobile ? [mobileDate] : weekDays;
 
@@ -325,7 +357,9 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       0,
       0,
     );
-    const slotEnd = new Date(slotStart.getTime() + 30 * 60_000);
+    const slotEnd = new Date(
+      slotStart.getTime() + appointmentInterval * 60_000,
+    );
 
     const appointment = appointments.find((item) => {
       if (item.status === "cancelled" || item.status === "void") {
