@@ -107,6 +107,8 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [appointmentInterval, setAppointmentInterval] = useState(30);
+  const [calendarStart, setCalendarStart] = useState("08:00");
+  const [calendarEnd, setCalendarEnd] = useState("18:00");
 
   async function loadCalendar() {
     setLoading(true);
@@ -230,6 +232,14 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       if ([15, 30, 60].includes(savedInterval)) {
         setAppointmentInterval(savedInterval);
       }
+
+      if (typeof data?.calendar_start === "string" && data.calendar_start) {
+        setCalendarStart(data.calendar_start);
+      }
+
+      if (typeof data?.calendar_end === "string" && data.calendar_end) {
+        setCalendarEnd(data.calendar_end);
+      }
     }
 
     void loadCalendarSettings();
@@ -267,18 +277,32 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
 
   //
   const timeSlots = useMemo(() => {
-    const calendarStart = 8 * 60;
-    const calendarEnd = 18 * 60;
+    const [startHour = 8, startMinute = 0] = calendarStart
+      .split(":")
+      .map(Number);
+
+    const [endHour = 18, endMinute = 0] = calendarEnd.split(":").map(Number);
+
+    const startInMinutes = startHour * 60 + startMinute;
+    const endInMinutes = endHour * 60 + endMinute;
+
+    if (
+      !Number.isFinite(startInMinutes) ||
+      !Number.isFinite(endInMinutes) ||
+      endInMinutes <= startInMinutes
+    ) {
+      return [];
+    }
+
     const numberOfSlots = Math.ceil(
-      (calendarEnd - calendarStart) / appointmentInterval,
+      (endInMinutes - startInMinutes) / appointmentInterval,
     );
 
     return Array.from(
       { length: numberOfSlots },
-      (_, index) => calendarStart + index * appointmentInterval,
+      (_, index) => startInMinutes + index * appointmentInterval,
     );
-  }, [appointmentInterval]);
-
+  }, [appointmentInterval, calendarStart, calendarEnd]);
   const visibleDays = isMobile ? [mobileDate] : weekDays;
 
   function moveCalendar(amount: number) {
