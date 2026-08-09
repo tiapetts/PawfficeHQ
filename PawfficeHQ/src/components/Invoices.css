@@ -315,6 +315,166 @@
     min-height: 210px;
 }
 
+.receipt-modal {
+    position: fixed;
+    z-index: 1000;
+    inset: 0;
+    padding: 2rem;
+    overflow-y: auto;
+    background: rgb(15 38 33 / 72%);
+}
+
+.receipt-sheet {
+    width: min(820px, 100%);
+    box-sizing: border-box;
+    margin: 0 auto;
+    padding: 2.5rem;
+    border-radius: 16px;
+    background: #fff;
+    color: #1b302b;
+    box-shadow: 0 24px 70px rgb(0 0 0 / 24%);
+}
+
+.receipt-screen-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    margin-bottom: 2rem;
+}
+
+.receipt-header {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding-bottom: 1.5rem;
+    border-bottom: 2px solid #234f45;
+}
+
+.receipt-business {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.receipt-business img {
+    width: 72px;
+    height: 72px;
+    border-radius: 12px;
+    object-fit: contain;
+}
+
+.receipt-business h1 {
+    margin: 0 0 0.4rem;
+    color: #173d36;
+    font-size: 1.55rem;
+}
+
+.receipt-business p,
+.receipt-title p,
+.receipt-title span,
+.receipt-customer p {
+    margin: 0.15rem 0;
+    color: #60736f;
+}
+
+.receipt-title {
+    flex: 0 0 auto;
+    text-align: right;
+}
+
+.receipt-title p {
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+}
+
+.receipt-title h2 {
+    margin: 0.25rem 0;
+    color: #173d36;
+    font-size: 1.25rem;
+}
+
+.receipt-customer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin: 1.5rem 0;
+    padding: 1rem 1.2rem;
+    border-radius: 10px;
+    background: #f0f6f4;
+}
+
+.receipt-customer div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.receipt-customer span {
+    color: #657873;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.receipt-items>div,
+.receipt-payment-details>div,
+.receipt-summary>div {
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid #dfe7e4;
+}
+
+.receipt-table-heading {
+    color: #60736f;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.receipt-summary {
+    width: min(360px, 100%);
+    margin: 1.5rem 0 1.5rem auto;
+}
+
+.receipt-summary .receipt-paid-total {
+    padding-top: 0.9rem;
+    border-top: 2px solid #234f45;
+    color: #173d36;
+    font-size: 1.1rem;
+}
+
+.receipt-payment-details {
+    margin-top: 1.5rem;
+}
+
+.receipt-payment-details h3 {
+    margin: 0;
+    color: #173d36;
+}
+
+.receipt-payment-details span {
+    text-transform: capitalize;
+}
+
+.receipt-footer {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid #234f45;
+    color: #173d36;
+    text-align: center;
+}
+
+.receipt-footer p {
+    margin: 0.3rem 0 0;
+    color: #60736f;
+}
+
 @media (max-width: 900px) {
     .invoice-create-panel {
         grid-template-columns: 1fr;
@@ -368,5 +528,73 @@
 
     .invoice-payment-actions {
         flex-direction: column-reverse;
+    }
+
+    .receipt-modal {
+        padding: 0;
+    }
+
+    .receipt-sheet {
+        min-height: 100%;
+        padding: 1.25rem;
+        border-radius: 0;
+    }
+
+    .receipt-header {
+        flex-direction: column;
+    }
+
+    .receipt-title {
+        text-align: left;
+    }
+
+    .receipt-customer {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .receipt-screen-actions {
+        position: sticky;
+        z-index: 1;
+        top: 0;
+        padding: 0.75rem 0;
+        background: #fff;
+    }
+}
+
+@media print {
+    body * {
+        visibility: hidden !important;
+    }
+
+    .receipt-modal,
+    .receipt-modal * {
+        visibility: visible !important;
+    }
+
+    .receipt-modal {
+        position: absolute;
+        inset: 0;
+        padding: 0;
+        overflow: visible;
+        background: #fff;
+    }
+
+    .receipt-sheet {
+        width: 100%;
+        max-width: none;
+        min-height: 0;
+        margin: 0;
+        padding: 0.35in;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .receipt-screen-actions {
+        display: none !important;
+    }
+
+    @page {
+        margin: 0.4in;
     }
 }

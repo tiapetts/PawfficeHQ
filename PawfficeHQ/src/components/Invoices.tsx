@@ -57,6 +57,25 @@ type Client = {
   id: number;
   FirstName: string;
   LastName: string;
+  EmailAddress: string | null;
+  PhoneNumber: string | null;
+  StreetAddress: string | null;
+  AptNumber: string | null;
+  ClientCity: string | null;
+  ClientState: string | null;
+  ClientZip: string | null;
+};
+
+type BusinessSettings = {
+  business_name: string;
+  phone: string;
+  email: string;
+  website: string;
+  street_address: string;
+  city: string;
+  state: string;
+  zip: string;
+  logo_url: string | null;
 };
 
 type Pet = {
@@ -104,11 +123,14 @@ export default function Invoices({
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [appointmentPets, setAppointmentPets] = useState<AppointmentPet[]>([]);
+  const [businessSettings, setBusinessSettings] =
+    useState<BusinessSettings | null>(null);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState("");
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(
     null,
   );
   const [paymentInvoiceId, setPaymentInvoiceId] = useState<string | null>(null);
+  const [receiptInvoiceId, setReceiptInvoiceId] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState(emptyPaymentForm);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [filter, setFilter] = useState<InvoiceFilter>("all");
@@ -128,6 +150,7 @@ export default function Invoices({
       clientsResult,
       petsResult,
       appointmentPetsResult,
+      settingsResult,
     ] = await Promise.all([
       supabase
         .from("invoice")
@@ -143,10 +166,13 @@ export default function Invoices({
         .order("start_at", { ascending: false }),
       supabase
         .from("CLIENT")
-        .select("id, FirstName, LastName")
+        .select(
+          "id, FirstName, LastName, EmailAddress, PhoneNumber, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip",
+        )
         .eq("business_id", businessId),
       supabase.from("PET").select("id, PetName").eq("business_id", businessId),
       supabase.from("appointment_pet").select("appointment_id, pet_id"),
+      supabase.rpc("get_business_settings", { p_business_id: businessId }),
     ]);
 
     const firstError = [
@@ -155,6 +181,7 @@ export default function Invoices({
       clientsResult.error,
       petsResult.error,
       appointmentPetsResult.error,
+      settingsResult.error,
     ].find(Boolean);
 
     if (firstError) {
@@ -206,6 +233,9 @@ export default function Invoices({
     setClients(clientsResult.data ?? []);
     setPets(petsResult.data ?? []);
     setAppointmentPets(appointmentPetsResult.data ?? []);
+    setBusinessSettings(
+      (settingsResult.data as BusinessSettings | null) ?? null,
+    );
     setLoading(false);
   }
 
@@ -397,6 +427,27 @@ export default function Invoices({
     await loadInvoices();
     setSaving(false);
   }
+
+  const receiptInvoice = invoices.find(
+    (invoice) => invoice.id === receiptInvoiceId,
+  );
+  const receiptItems = receiptInvoice
+    ? items.filter((item) => item.invoice_id === receiptInvoice.id)
+    : [];
+  const receiptPayments = receiptInvoice
+    ? payments.filter(
+        (payment) =>
+          payment.invoice_id === receiptInvoice.id &&
+          ["succeeded", "partially_refunded"].includes(payment.status),
+      )
+    : [];
+  const receiptClient = receiptInvoice
+    ? clients.find((client) => client.id === receiptInvoice.client_id)
+    : undefined;
+  const receiptTipTotal = receiptPayments.reduce(
+    (total, payment) => total + Number(payment.tip_amount),
+    0,
+  );
 
   return (
     <>
@@ -661,9 +712,18 @@ export default function Invoices({
                         </div>
                       )}
 
-                      {!readOnly && (
+                      {(invoicePayments.length > 0 || !readOnly) && (
                         <div className="invoice-actions">
-                          {invoice.status === "draft" && (
+                          {invoicePayments.length > 0 && (
+                            <button
+                              type="button"
+                              className="invoice-secondary-button"
+                              onClick={() => setReceiptInvoiceId(invoice.id)}
+                            >
+                              View receipt
+                            </button>
+                          )}
+                          {!readOnly && invoice.status === "draft" && (
                             <button
                               type="button"
                               className="primary-button"
@@ -673,9 +733,10 @@ export default function Invoices({
                               Issue invoice
                             </button>
                           )}
-                          {["open", "partially_paid", "overdue"].includes(
-                            invoice.status,
-                          ) &&
+                          {!readOnly &&
+                            ["open", "partially_paid", "overdue"].includes(
+                              invoice.status,
+                            ) &&
                             balance > 0 && (
                               <button
                                 type="button"
@@ -787,6 +848,187 @@ export default function Invoices({
           </div>
         )}
       </section>
+
+      {receiptInvoice && (
+        <div
+          className="receipt-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Receipt ${receiptInvoice.invoice_number}`}
+        >
+          <div className="receipt-sheet">
+            <div className="receipt-screen-actions">
+              <button
+                type="button"
+                className="invoice-secondary-button"
+                onClick={() => setReceiptInvoiceId(null)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => window.print()}
+              >
+                Print / Save PDF
+              </button>
+            </div>
+
+            <header className="receipt-header">
+              <div className="receipt-business">
+                {businessSettings?.logo_url && (
+                  <img
+                    src={businessSettings.logo_url}
+                    alt={`${businessSettings.business_name} logo`}
+                  />
+                )}
+                <div>
+                  <h1>{businessSettings?.business_name ?? "Pawffice HQ"}</h1>
+                  {businessSettings?.street_address && (
+                    <p>{businessSettings.street_address}</p>
+                  )}
+                  {(businessSettings?.city || businessSettings?.state) && (
+                    <p>
+                      {[businessSettings.city, businessSettings.state]
+                        .filter(Boolean)
+                        .join(", ")}{" "}
+                      {businessSettings.zip}
+                    </p>
+                  )}
+                  {businessSettings?.phone && <p>{businessSettings.phone}</p>}
+                  {businessSettings?.email && <p>{businessSettings.email}</p>}
+                </div>
+              </div>
+
+              <div className="receipt-title">
+                <p>PAYMENT RECEIPT</p>
+                <h2>{receiptInvoice.invoice_number}</h2>
+                <span>
+                  {new Date(
+                    receiptInvoice.paid_at ?? receiptInvoice.created_at,
+                  ).toLocaleDateString()}
+                </span>
+              </div>
+            </header>
+
+            <section className="receipt-customer">
+              <div>
+                <span>Receipt for</span>
+                <strong>
+                  {receiptClient
+                    ? `${receiptClient.FirstName} ${receiptClient.LastName}`
+                    : "Client"}
+                </strong>
+                {receiptClient?.EmailAddress && (
+                  <p>{receiptClient.EmailAddress}</p>
+                )}
+                {receiptClient?.PhoneNumber && (
+                  <p>{receiptClient.PhoneNumber}</p>
+                )}
+              </div>
+              <div>
+                <span>Pet</span>
+                <strong>
+                  {receiptInvoice.appointment_id
+                    ? getAppointmentPetName(receiptInvoice.appointment_id)
+                    : "Not listed"}
+                </strong>
+              </div>
+            </section>
+
+            <section className="receipt-items">
+              <div className="receipt-table-heading">
+                <span>Description</span>
+                <span>Amount</span>
+              </div>
+              {receiptItems.map((item) => (
+                <div key={item.id}>
+                  <span>
+                    {item.description}
+                    {Number(item.quantity) !== 1 ? ` × ${item.quantity}` : ""}
+                  </span>
+                  <strong>{money.format(Number(item.line_total))}</strong>
+                </div>
+              ))}
+            </section>
+
+            <section className="receipt-summary">
+              <div>
+                <span>Subtotal</span>
+                <strong>{money.format(Number(receiptInvoice.subtotal))}</strong>
+              </div>
+              {Number(receiptInvoice.discount_total) > 0 && (
+                <div>
+                  <span>Discounts</span>
+                  <strong>
+                    −{money.format(Number(receiptInvoice.discount_total))}
+                  </strong>
+                </div>
+              )}
+              {Number(receiptInvoice.tax_total) > 0 && (
+                <div>
+                  <span>Tax</span>
+                  <strong>
+                    {money.format(Number(receiptInvoice.tax_total))}
+                  </strong>
+                </div>
+              )}
+              <div>
+                <span>Invoice total</span>
+                <strong>{money.format(Number(receiptInvoice.total))}</strong>
+              </div>
+              {receiptTipTotal > 0 && (
+                <div>
+                  <span>Tip</span>
+                  <strong>{money.format(receiptTipTotal)}</strong>
+                </div>
+              )}
+              <div className="receipt-paid-total">
+                <span>Total paid</span>
+                <strong>
+                  {money.format(
+                    receiptPayments.reduce(
+                      (total, payment) =>
+                        total +
+                        Number(payment.amount) +
+                        Number(payment.tip_amount),
+                      0,
+                    ),
+                  )}
+                </strong>
+              </div>
+              <div>
+                <span>Balance</span>
+                <strong>{money.format(getBalance(receiptInvoice))}</strong>
+              </div>
+            </section>
+
+            <section className="receipt-payment-details">
+              <h3>Payment details</h3>
+              {receiptPayments.map((payment) => (
+                <div key={payment.id}>
+                  <span>
+                    {payment.method.replaceAll("_", " ")} ·{" "}
+                    {new Date(
+                      payment.paid_at ?? payment.created_at,
+                    ).toLocaleString()}
+                  </span>
+                  <strong>
+                    {money.format(
+                      Number(payment.amount) + Number(payment.tip_amount),
+                    )}
+                  </strong>
+                </div>
+              ))}
+            </section>
+
+            <footer className="receipt-footer">
+              <strong>Thank you for trusting us with your pet!</strong>
+              {businessSettings?.website && <p>{businessSettings.website}</p>}
+            </footer>
+          </div>
+        </div>
+      )}
     </>
   );
 }
