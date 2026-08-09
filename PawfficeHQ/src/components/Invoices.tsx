@@ -137,8 +137,10 @@ export default function Invoices({
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [emailingReceipt, setEmailingReceipt] = useState(false);
   const [message, setMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [receiptMessage, setReceiptMessage] = useState("");
 
   async function loadInvoices() {
     setLoading(true);
@@ -448,6 +450,40 @@ export default function Invoices({
     (total, payment) => total + Number(payment.tip_amount),
     0,
   );
+
+  async function emailReceipt() {
+    if (!receiptInvoice) return;
+
+    setEmailingReceipt(true);
+    setReceiptMessage("");
+
+    const { data, error } = await supabase.functions.invoke(
+      "send-invoice-receipt",
+      {
+        body: { invoiceId: receiptInvoice.id },
+      },
+    );
+
+    if (error) {
+      console.error(error);
+      setReceiptMessage(
+        typeof data?.error === "string"
+          ? data.error
+          : error.message || "Receipt email failed.",
+      );
+      setEmailingReceipt(false);
+      return;
+    }
+
+    if (!data?.success) {
+      setReceiptMessage(data?.error ?? "Receipt email failed.");
+      setEmailingReceipt(false);
+      return;
+    }
+
+    setReceiptMessage(data.message ?? "Receipt emailed successfully.");
+    setEmailingReceipt(false);
+  }
 
   return (
     <>
@@ -861,10 +897,32 @@ export default function Invoices({
               <button
                 type="button"
                 className="invoice-secondary-button"
-                onClick={() => setReceiptInvoiceId(null)}
+                onClick={() => {
+                  setReceiptInvoiceId(null);
+                  setReceiptMessage("");
+                }}
               >
                 Close
               </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="invoice-secondary-button"
+                  onClick={() => void emailReceipt()}
+                  disabled={emailingReceipt || !receiptClient?.EmailAddress}
+                  title={
+                    receiptClient?.EmailAddress
+                      ? `Email ${receiptClient.EmailAddress}`
+                      : "Add an email address to this client first"
+                  }
+                >
+                  {emailingReceipt
+                    ? "Emailing..."
+                    : receiptClient?.EmailAddress
+                      ? "Email receipt"
+                      : "Client email missing"}
+                </button>
+              )}
               <button
                 type="button"
                 className="primary-button"
@@ -873,6 +931,12 @@ export default function Invoices({
                 Print / Save PDF
               </button>
             </div>
+
+            {receiptMessage && (
+              <p className="receipt-email-message" role="status">
+                {receiptMessage}
+              </p>
+            )}
 
             <header className="receipt-header">
               <div className="receipt-business">

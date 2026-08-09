@@ -342,6 +342,21 @@
     margin-bottom: 2rem;
 }
 
+.receipt-screen-actions button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.receipt-email-message {
+    margin: -1rem 0 1.5rem;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid #a9d4c8;
+    border-radius: 9px;
+    background: #e4f4ef;
+    color: #195c4d;
+    font-weight: 700;
+}
+
 .receipt-header {
     display: flex;
     gap: 2rem;
@@ -559,6 +574,7 @@
         top: 0;
         padding: 0.75rem 0;
         background: #fff;
+        flex-wrap: wrap;
     }
 }
 
@@ -591,6 +607,10 @@
     }
 
     .receipt-screen-actions {
+        display: none !important;
+    }
+
+    .receipt-email-message {
         display: none !important;
     }
 
