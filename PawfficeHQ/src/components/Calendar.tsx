@@ -64,6 +64,61 @@ type AppointmentService = {
   staff_id: string | null;
 };
 
+type DayName =
+  | "sunday"
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday"
+  | "saturday";
+
+type DayHours = {
+  open: boolean;
+  start: string;
+  end: string;
+};
+
+type BusinessHours = Record<DayName, DayHours>;
+
+const defaultBusinessHours: BusinessHours = {
+  sunday: {
+    open: false,
+    start: "08:00",
+    end: "17:00",
+  },
+  monday: {
+    open: true,
+    start: "08:00",
+    end: "17:00",
+  },
+  tuesday: {
+    open: true,
+    start: "08:00",
+    end: "17:00",
+  },
+  wednesday: {
+    open: true,
+    start: "08:00",
+    end: "17:00",
+  },
+  thursday: {
+    open: true,
+    start: "08:00",
+    end: "17:00",
+  },
+  friday: {
+    open: true,
+    start: "08:00",
+    end: "17:00",
+  },
+  saturday: {
+    open: false,
+    start: "08:00",
+    end: "17:00",
+  },
+};
+
 function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
@@ -110,6 +165,8 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [calendarStart, setCalendarStart] = useState("08:00");
   const [calendarEnd, setCalendarEnd] = useState("18:00");
   const [weekStartsOn, setWeekStartsOn] = useState(1);
+  const [businessHours, setBusinessHours] =
+    useState<BusinessHours>(defaultBusinessHours);
 
   async function loadCalendar() {
     setLoading(true);
@@ -251,6 +308,13 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
           getWeekStart(currentDate, savedWeekStart),
         );
       }
+
+      if (data?.business_hours && typeof data.business_hours === "object") {
+        setBusinessHours({
+          ...defaultBusinessHours,
+          ...(data.business_hours as Partial<BusinessHours>),
+        });
+      }
     }
 
     void loadCalendarSettings();
@@ -371,8 +435,47 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   }
 
+  function timeValueToMinutes(value: string) {
+    const [hours = "0", minutes = "0"] = value.split(":");
+
+    return Number(hours) * 60 + Number(minutes);
+  }
+
+  function getDayHours(date: Date) {
+    const dayNames: DayName[] = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+
+    return businessHours[dayNames[date.getDay()]];
+  }
+
+  function isOpenTimeSlot(day: Date, minutesAfterMidnight: number) {
+    const hours = getDayHours(day);
+
+    if (!hours?.open) {
+      return false;
+    }
+
+    const openingTime = timeValueToMinutes(hours.start);
+    const closingTime = timeValueToMinutes(hours.end);
+
+    return (
+      minutesAfterMidnight >= openingTime && minutesAfterMidnight < closingTime
+    );
+  }
+
   function selectTimeSlot(day: Date, minutesAfterMidnight: number) {
     if (readOnly) return;
+    if (!isOpenTimeSlot(day, minutesAfterMidnight)) {
+      setMessage("That time is outside your saved business hours.");
+      return;
+    }
     const selected = new Date(day);
     selected.setHours(
       Math.floor(minutesAfterMidnight / 60),
@@ -436,6 +539,12 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     event.preventDefault();
 
     if (readOnly) return;
+
+    if (!isOpenTimeSlot(day, minutesAfterMidnight)) {
+      setMessage("Appointments cannot be moved outside business hours.");
+      setDraggingAppointmentId(null);
+      return;
+    }
 
     const appointmentId =
       event.dataTransfer.getData("text/plain") || draggingAppointmentId;
@@ -979,6 +1088,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
               </div>,
               ...visibleDays.map((day) => {
                 const occupiedSlot = appointmentInSlot(day, slot);
+                const openSlot = isOpenTimeSlot(day, slot);
                 return (
                   <button
                     key={`${day.toISOString()}-${slot}`}
@@ -991,8 +1101,9 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                       }
                     }}
                     onDragOver={(event) => {
-                      if (!readOnly && draggingAppointmentId)
+                      if (!readOnly && openSlot && draggingAppointmentId) {
                         event.preventDefault();
+                      }
                     }}
                     onDrop={(event) => {
                       if (!readOnly) void moveAppointment(event, day, slot);
@@ -1005,16 +1116,20 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                       borderBottom: "1px solid #d7e0dd",
                       background: occupiedSlot
                         ? statusCellColor(occupiedSlot.appointment.status)
-                        : "#ffffff",
-                      cursor: occupiedSlot ? "default" : "pointer",
+                        : openSlot
+                          ? "#ffffff"
+                          : "#eef2f1",
+                      cursor: occupiedSlot || !openSlot ? "default" : "pointer",
                       textAlign: "left",
                       color: "#183b34",
-                      opacity: 1,
+                      opacity: openSlot || occupiedSlot ? 1 : 0.7,
                     }}
                     title={
                       occupiedSlot
                         ? "Drag this appointment to an open time"
-                        : "Create an appointment at this time"
+                        : openSlot
+                          ? "Create an appointment at this time"
+                          : "Outside business hours"
                     }
                   >
                     {occupiedSlot && (
