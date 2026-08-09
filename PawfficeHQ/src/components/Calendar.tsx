@@ -494,7 +494,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function appointmentInSlot(day: Date, minutesAfterMidnight: number) {
+  function appointmentsInSlot(day: Date, minutesAfterMidnight: number) {
     const slotStart = new Date(day);
     slotStart.setHours(
       Math.floor(minutesAfterMidnight / 60),
@@ -506,23 +506,29 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       slotStart.getTime() + appointmentInterval * 60_000,
     );
 
-    const appointment = appointments.find((item) => {
-      if (item.status === "cancelled" || item.status === "void") {
-        return false;
-      }
+    return appointments
+      .filter((item) => {
+        if (item.status === "cancelled" || item.status === "void") {
+          return false;
+        }
 
-      const start = new Date(item.start_at);
-      const end = new Date(item.end_at);
-      return start < slotEnd && end > slotStart;
-    });
-
-    if (!appointment) return null;
-
-    const appointmentStart = new Date(appointment.start_at);
-    return {
-      appointment,
-      isFirstSlot: appointmentStart >= slotStart && appointmentStart < slotEnd,
-    };
+        const start = new Date(item.start_at);
+        const end = new Date(item.end_at);
+        return start < slotEnd && end > slotStart;
+      })
+      .map((appointment) => {
+        const appointmentStart = new Date(appointment.start_at);
+        return {
+          appointment,
+          isFirstSlot:
+            appointmentStart >= slotStart && appointmentStart < slotEnd,
+        };
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.appointment.start_at).getTime() -
+          new Date(b.appointment.start_at).getTime(),
+      );
   }
 
   function formatSlotTime(minutesAfterMidnight: number) {
@@ -715,22 +721,6 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     };
 
     return colors[status] ?? "#315f55";
-  }
-
-  function statusCellColor(status: string) {
-    const colors: Record<string, string> = {
-      requested: "#f4eadb",
-      confirmed: "#dcece7",
-      checked_in: "#dcecf6",
-      in_progress: "#f8ebcd",
-      ready_for_pickup: "#d8eee8",
-      completed: "#e4e8e7",
-      cancelled: "#f6dddd",
-      no_show: "#eee0ea",
-      void: "#e5e7e6",
-    };
-
-    return colors[status] ?? "#dcece7";
   }
 
   function resetForm() {
@@ -1096,16 +1086,15 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                 {formatSlotTime(slot)}
               </div>,
               ...visibleDays.map((day) => {
-                const occupiedSlot = appointmentInSlot(day, slot);
+                const occupiedSlots = appointmentsInSlot(day, slot);
+                const hasAppointments = occupiedSlots.length > 0;
                 const openSlot = isOpenTimeSlot(day, slot);
                 return (
                   <button
                     key={`${day.toISOString()}-${slot}`}
                     type="button"
                     onClick={() => {
-                      if (occupiedSlot) {
-                        setSelectedAppointment(occupiedSlot.appointment);
-                      } else {
+                      if (!hasAppointments) {
                         selectTimeSlot(day, slot);
                       }
                     }}
@@ -1123,27 +1112,32 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                       border: 0,
                       borderRight: "1px solid #d7e0dd",
                       borderBottom: "1px solid #d7e0dd",
-                      background: occupiedSlot
-                        ? statusCellColor(occupiedSlot.appointment.status)
-                        : openSlot
-                          ? "#ffffff"
-                          : "#eef2f1",
-                      cursor: occupiedSlot || !openSlot ? "default" : "pointer",
+                      background: openSlot ? "#ffffff" : "#eef2f1",
+                      cursor:
+                        hasAppointments || !openSlot ? "default" : "pointer",
                       textAlign: "left",
                       color: "#183b34",
-                      opacity: openSlot || occupiedSlot ? 1 : 0.7,
+                      opacity: openSlot || hasAppointments ? 1 : 0.7,
+                      display: "flex",
+                      alignItems: "stretch",
+                      gap: 4,
                     }}
                     title={
-                      occupiedSlot
-                        ? "Drag this appointment to an open time"
+                      hasAppointments
+                        ? `${occupiedSlots.length} appointment${occupiedSlots.length === 1 ? "" : "s"}`
                         : openSlot
                           ? "Create an appointment at this time"
                           : "Outside business hours"
                     }
                   >
-                    {occupiedSlot && (
+                    {occupiedSlots.map((occupiedSlot) => (
                       <span
+                        key={occupiedSlot.appointment.id}
                         draggable={!readOnly && occupiedSlot.isFirstSlot}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedAppointment(occupiedSlot.appointment);
+                        }}
                         onDragStart={(event) => {
                           if (readOnly || !occupiedSlot.isFirstSlot) return;
                           event.stopPropagation();
@@ -1158,6 +1152,8 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                         style={{
                           display: "block",
                           height: "100%",
+                          flex: "1 1 0",
+                          minWidth: 0,
                           minHeight: 44,
                           padding: "6px 7px",
                           borderRadius: occupiedSlot.isFirstSlot
@@ -1169,6 +1165,8 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                           color: "white",
                           fontSize: 12,
                           lineHeight: 1.25,
+                          overflow: "hidden",
+                          wordBreak: "break-word",
                           cursor:
                             !readOnly && occupiedSlot.isFirstSlot
                               ? "grab"
@@ -1193,7 +1191,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                           <span style={{ opacity: 0.8 }}>Continues</span>
                         )}
                       </span>
-                    )}
+                    ))}
                   </button>
                 );
               }),
