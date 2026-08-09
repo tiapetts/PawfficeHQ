@@ -167,6 +167,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [weekStartsOn, setWeekStartsOn] = useState(1);
   const [businessHours, setBusinessHours] =
     useState<BusinessHours>(defaultBusinessHours);
+  const [allowDoubleBooking, setAllowDoubleBooking] = useState(false);
 
   async function loadCalendar() {
     setLoading(true);
@@ -314,6 +315,10 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
           ...defaultBusinessHours,
           ...(data.business_hours as Partial<BusinessHours>),
         });
+      }
+
+      if (typeof data?.allow_double_booking === "boolean") {
+        setAllowDoubleBooking(data.allow_double_booking);
       }
     }
 
@@ -567,29 +572,31 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
 
     setMessage("");
 
-    const { data: conflicts, error: conflictError } = await supabase
-      .from("appointment")
-      .select("id")
-      .eq("business_id", businessId)
-      .neq("id", appointment.id)
-      .lt("start_at", newEnd.toISOString())
-      .gt("end_at", newStart.toISOString())
-      .not("status", "in", "(cancelled,void)")
-      .limit(1);
+    if (!allowDoubleBooking) {
+      const { data: conflicts, error: conflictError } = await supabase
+        .from("appointment")
+        .select("id")
+        .eq("business_id", businessId)
+        .neq("id", appointment.id)
+        .lt("start_at", newEnd.toISOString())
+        .gt("end_at", newStart.toISOString())
+        .not("status", "in", "(cancelled,void)")
+        .limit(1);
 
-    if (conflictError) {
-      console.error(conflictError);
-      setMessage(conflictError.message);
-      setDraggingAppointmentId(null);
-      return;
-    }
+      if (conflictError) {
+        console.error(conflictError);
+        setMessage(conflictError.message);
+        setDraggingAppointmentId(null);
+        return;
+      }
 
-    if (conflicts && conflicts.length > 0) {
-      setMessage(
-        "That move would overlap another appointment. Choose another time.",
-      );
-      setDraggingAppointmentId(null);
-      return;
+      if (conflicts && conflicts.length > 0) {
+        setMessage(
+          "That move would overlap another appointment. Choose another time.",
+        );
+        setDraggingAppointmentId(null);
+        return;
+      }
     }
 
     const { error: updateError } = await supabase
@@ -751,28 +758,30 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       start.getTime() + selectedService.duration_minutes * 60_000,
     );
 
-    const { data: conflicts, error: conflictError } = await supabase
-      .from("appointment")
-      .select("id")
-      .eq("business_id", businessId)
-      .lt("start_at", end.toISOString())
-      .gt("end_at", start.toISOString())
-      .not("status", "in", "(cancelled,void)")
-      .limit(1);
+    if (!allowDoubleBooking) {
+      const { data: conflicts, error: conflictError } = await supabase
+        .from("appointment")
+        .select("id")
+        .eq("business_id", businessId)
+        .lt("start_at", end.toISOString())
+        .gt("end_at", start.toISOString())
+        .not("status", "in", "(cancelled,void)")
+        .limit(1);
 
-    if (conflictError) {
-      console.error(conflictError);
-      setMessage(conflictError.message);
-      setSaving(false);
-      return;
-    }
+      if (conflictError) {
+        console.error(conflictError);
+        setMessage(conflictError.message);
+        setSaving(false);
+        return;
+      }
 
-    if (conflicts && conflicts.length > 0) {
-      setMessage(
-        "That time overlaps an existing appointment. Please choose another time.",
-      );
-      setSaving(false);
-      return;
+      if (conflicts && conflicts.length > 0) {
+        setMessage(
+          "That time overlaps an existing appointment. Please choose another time.",
+        );
+        setSaving(false);
+        return;
+      }
     }
 
     const { error } = await supabase.rpc("create_appointment", {
