@@ -5,6 +5,7 @@ import Pets from "./Pets";
 import Services from "./Services";
 import Calendar from "./Calendar";
 import AppointmentHistory from "./AppointmentHistory";
+import Invoices from "./Invoices";
 import Staff from "./Staff";
 import Settings from "./Settings";
 import { applyBusinessTheme } from "./Settings";
@@ -61,6 +62,7 @@ type ActivePage =
   | "services"
   | "calendar"
   | "history"
+  | "invoices"
   | "staff"
   | "settings";
 
@@ -296,6 +298,12 @@ function Dashboard({
             Appointment history
           </button>
           <button
+            className={`nav-button ${activePage === "invoices" ? "active" : ""}`}
+            onClick={() => openPage("invoices")}
+          >
+            Invoices
+          </button>
+          <button
             className={`nav-button ${activePage === "clients" ? "active" : ""}`}
             onClick={() => openPage("clients")}
           >
@@ -340,6 +348,8 @@ function Dashboard({
           <Calendar businessId={businessId} readOnly={readOnly} />
         ) : activePage === "history" ? (
           <AppointmentHistory businessId={businessId} />
+        ) : activePage === "invoices" ? (
+          <Invoices businessId={businessId} readOnly={readOnly} />
         ) : activePage === "clients" ? (
           <Clients businessId={businessId} />
         ) : activePage === "pets" ? (
