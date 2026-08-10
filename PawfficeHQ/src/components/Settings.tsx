@@ -19,6 +19,22 @@ type DayName =
   | "sunday";
 type BusinessHours = Record<DayName, DayHours>;
 
+type StripeConnectionStatus = {
+  account_status:
+    | "not_connected"
+    | "onboarding"
+    | "restricted"
+    | "active"
+    | "disabled";
+  charges_enabled: boolean;
+  payouts_enabled: boolean;
+  details_submitted: boolean;
+  requirements_currently_due: unknown[];
+  onboarding_started_at: string | null;
+  connected_at: string | null;
+  updated_at: string | null;
+};
+
 type SettingsForm = {
   business_name: string;
   phone: string;
@@ -81,6 +97,17 @@ const defaults: SettingsForm = {
   default_appointment_status: "confirmed",
 };
 
+const defaultStripeStatus: StripeConnectionStatus = {
+  account_status: "not_connected",
+  charges_enabled: false,
+  payouts_enabled: false,
+  details_submitted: false,
+  requirements_currently_due: [],
+  onboarding_started_at: null,
+  connected_at: null,
+  updated_at: null,
+};
+
 const days: Array<{ key: DayName; label: string }> = [
   { key: "monday", label: "Monday" },
   { key: "tuesday", label: "Tuesday" },
@@ -127,6 +154,10 @@ function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [stripeStatus, setStripeStatus] =
+    useState<StripeConnectionStatus>(defaultStripeStatus);
+  const [stripeLoading, setStripeLoading] = useState(true);
+  const [stripeConnecting, setStripeConnecting] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
 
@@ -151,6 +182,50 @@ function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
       setLoading(false);
     }
     void load();
+  }, [businessId]);
+
+  useEffect(() => {
+    async function loadStripeStatus() {
+      setStripeLoading(true);
+
+      const { data: syncedData, error: syncError } =
+        await supabase.functions.invoke("sync-stripe-account", {
+          body: { businessId },
+        });
+
+      if (!syncError && syncedData && !syncedData.error) {
+        setStripeStatus({
+          ...defaultStripeStatus,
+          ...(syncedData as Partial<StripeConnectionStatus>),
+        });
+        setStripeLoading(false);
+        return;
+      }
+
+      console.error(
+        "Stripe status sync error:",
+        syncError ?? syncedData?.error,
+      );
+
+      const { data: savedData, error: savedError } = await supabase.rpc(
+        "get_stripe_connection_status",
+        { p_business_id: businessId },
+      );
+
+      if (savedError) {
+        setMessage(savedError.message);
+        setIsError(true);
+      } else if (savedData) {
+        setStripeStatus({
+          ...defaultStripeStatus,
+          ...(savedData as Partial<StripeConnectionStatus>),
+        });
+      }
+
+      setStripeLoading(false);
+    }
+
+    void loadStripeStatus();
   }, [businessId]);
 
   function update<K extends keyof SettingsForm>(
@@ -268,6 +343,52 @@ function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
     applyBusinessTheme(form.primary_color, form.accent_color);
     onSaved?.(form.business_name, form.logo_url);
     setMessage("Business and scheduling settings saved.");
+  }
+
+  async function connectStripe() {
+    setStripeConnecting(true);
+    setMessage("");
+    setIsError(false);
+
+    const returnUrl = `${window.location.origin}${window.location.pathname}`;
+    const { data, error } = await supabase.functions.invoke(
+      "create-stripe-onboarding",
+      {
+        body: {
+          businessId,
+          returnUrl,
+        },
+      },
+    );
+
+    if (error) {
+      console.error("Stripe onboarding error:", error);
+      setMessage(error.message || "Stripe onboarding could not be started.");
+      setIsError(true);
+      setStripeConnecting(false);
+      return;
+    }
+
+    const onboardingUrl = String(data?.url ?? "");
+
+    if (!onboardingUrl.startsWith("https://")) {
+      setMessage(data?.error || "Stripe did not return an onboarding link.");
+      setIsError(true);
+      setStripeConnecting(false);
+      return;
+    }
+
+    window.location.assign(onboardingUrl);
+  }
+
+  function stripeStatusLabel() {
+    if (stripeLoading) return "Checking connection…";
+    if (stripeStatus.account_status === "active") return "Connected and ready";
+    if (stripeStatus.account_status === "restricted") return "Action required";
+    if (stripeStatus.account_status === "disabled") return "Payments disabled";
+    if (stripeStatus.account_status === "onboarding")
+      return "Setup in progress";
+    return "Not connected";
   }
 
   if (loading) return <p>Loading settings…</p>;
@@ -485,6 +606,58 @@ function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
 
         <section className="dashboard-panel settings-section">
           <div>
+            <p className="eyebrow">Payments</p>
+            <h3>Stripe payment processing</h3>
+            <p className="settings-help">
+              Connect this business to Stripe so client card payments can be
+              deposited into the business&apos;s own Stripe account.
+            </p>
+          </div>
+
+          <div>
+            <p>
+              <strong>Status: {stripeStatusLabel()}</strong>
+            </p>
+
+            {stripeStatus.account_status === "active" && (
+              <p className="settings-help">
+                Card payments and payouts are enabled for this business.
+              </p>
+            )}
+
+            {stripeStatus.account_status === "onboarding" && (
+              <p className="settings-help">
+                Stripe setup has been started. Continue onboarding to complete
+                the remaining business and bank-account information.
+              </p>
+            )}
+
+            {!readOnly && stripeStatus.account_status !== "active" && (
+              <button
+                type="button"
+                className="primary-button"
+                disabled={stripeLoading || stripeConnecting}
+                onClick={() => void connectStripe()}
+              >
+                {stripeConnecting
+                  ? "Opening Stripe…"
+                  : stripeStatus.account_status === "not_connected"
+                    ? "Connect Stripe"
+                    : "Continue Stripe setup"}
+              </button>
+            )}
+
+            {readOnly && (
+              <p className="settings-help">
+                Stripe connection changes are unavailable in read-only support
+                view.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="dashboard-panel settings-section">
+          <div>
             <p className="eyebrow">Scheduling</p>
             <h3>Business hours</h3>
             <p className="settings-help">
@@ -619,8 +792,8 @@ function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
               <select
                 disabled={readOnly}
                 value={form.default_appointment_status}
-                onChange={(event) =>
-                  update("default_appointment_status", event.target.value)
+                onChange={(e) =>
+                  update("default_appointment_status", e.target.value)
                 }
               >
                 <option value="confirmed">Confirmed</option>
