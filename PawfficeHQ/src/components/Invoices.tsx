@@ -137,6 +137,9 @@ export default function Invoices({
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [checkoutInvoiceId, setCheckoutInvoiceId] = useState<string | null>(
+    null,
+  );
   const [emailingReceipt, setEmailingReceipt] = useState(false);
   const [message, setMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -388,6 +391,35 @@ export default function Invoices({
     setSuccessMessage("Invoice issued and ready for payment.");
     await loadInvoices();
     setSaving(false);
+  }
+
+  async function openStripeCheckout(invoiceId: string) {
+    setCheckoutInvoiceId(invoiceId);
+    setMessage("");
+    setSuccessMessage("");
+
+    const returnUrl = `${window.location.origin}${window.location.pathname}`;
+    const { data, error } = await supabase.functions.invoke(
+      "create-stripe-checkout",
+      {
+        body: { invoiceId, returnUrl },
+      },
+    );
+
+    const checkoutData = data as { url?: string; error?: string } | null;
+
+    if (error || !checkoutData?.url) {
+      console.error("Stripe Checkout error:", error, checkoutData);
+      setMessage(
+        checkoutData?.error ??
+          error?.message ??
+          "Stripe Checkout could not be opened.",
+      );
+      setCheckoutInvoiceId(null);
+      return;
+    }
+
+    window.location.assign(checkoutData.url);
   }
 
   function openPaymentForm(invoice: Invoice) {
@@ -774,13 +806,29 @@ export default function Invoices({
                               invoice.status,
                             ) &&
                             balance > 0 && (
-                              <button
-                                type="button"
-                                className="primary-button"
-                                onClick={() => openPaymentForm(invoice)}
-                              >
-                                Record payment
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  className="primary-button"
+                                  onClick={() =>
+                                    void openStripeCheckout(invoice.id)
+                                  }
+                                  disabled={checkoutInvoiceId !== null}
+                                >
+                                  {checkoutInvoiceId === invoice.id
+                                    ? "Opening Stripe..."
+                                    : "Pay online"}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="invoice-secondary-button"
+                                  onClick={() => openPaymentForm(invoice)}
+                                  disabled={checkoutInvoiceId !== null}
+                                >
+                                  Record other payment
+                                </button>
+                              </>
                             )}
                         </div>
                       )}
