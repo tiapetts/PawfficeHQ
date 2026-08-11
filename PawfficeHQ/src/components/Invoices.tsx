@@ -776,12 +776,12 @@ export default function Invoices({
         </article>
       </section>
 
-      <section className="dashboard-panel invoic
-            <inpute-list-panel">
-        <div className="invoice-too
-            <span>Search invoices</span>
-              type="search"lbar">
+      <section className="dashboard-panel invoice-list-panel">
+        <div className="invoice-toolbar">
           <label>
+            <span>Search invoices</span>
+            <input
+              type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Invoice, client, or pet"
