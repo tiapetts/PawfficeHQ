@@ -618,3 +618,109 @@
         margin: 0.4in;
     }
 }
+
+.invoice-payment-entry {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 1rem;
+    align-items: center;
+}
+
+.invoice-refund-button {
+    padding: 0.55rem 1rem;
+    border: 1px solid #c75b4d;
+    border-radius: 999px;
+    background: #fff;
+    color: #a63c30;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.invoice-refund-button:hover {
+    background: #fff1ef;
+}
+
+.invoice-refund-history>div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #dfe7e5;
+}
+
+.invoice-refund-history strong {
+    color: #a63c30;
+}
+
+.invoice-refund-form {
+    display: grid;
+    grid-template-columns: minmax(160px, 0.4fr) minmax(260px, 1fr);
+    gap: 1rem;
+    align-items: end;
+    margin-top: 1.25rem;
+    padding: 1.25rem;
+    border: 1px solid #efd0cb;
+    border-radius: 14px;
+    background: #fff8f7;
+}
+
+.invoice-refund-form>div:first-child {
+    grid-column: 1 / -1;
+}
+
+.invoice-refund-form h4,
+.invoice-refund-form p {
+    margin: 0;
+}
+
+.invoice-refund-form p {
+    margin-top: 0.35rem;
+    color: #657873;
+}
+
+.invoice-refund-form label {
+    display: grid;
+    gap: 0.4rem;
+    font-weight: 700;
+}
+
+.invoice-refund-form input {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid #b8c8c4;
+    border-radius: 9px;
+    font: inherit;
+}
+
+.invoice-refund-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.invoice-danger-button {
+    padding: 0.7rem 1rem;
+    border: 1px solid #a63c30;
+    border-radius: 9px;
+    background: #a63c30;
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+@media (max-width: 650px) {
+
+    .invoice-payment-entry,
+    .invoice-refund-form {
+        grid-template-columns: 1fr;
+    }
+
+    .invoice-refund-actions {
+        grid-column: auto;
+        flex-direction: column-reverse;
+    }
+}
