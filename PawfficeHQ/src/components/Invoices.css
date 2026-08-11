@@ -42,6 +42,7 @@
 
 .invoice-create-form label,
 .invoice-payment-form label,
+.invoice-refund-form label,
 .invoice-toolbar label {
   display: flex;
   min-width: 0;
@@ -54,6 +55,7 @@
 .invoice-create-form select,
 .invoice-payment-form input,
 .invoice-payment-form select,
+.invoice-refund-form input,
 .invoice-toolbar input {
   width: 100%;
   min-height: 48px;
@@ -254,6 +256,7 @@
 
 .invoice-line-items > div,
 .invoice-payment-history > div,
+.invoice-refund-history > div,
 .invoice-totals > div {
   display: flex;
   gap: 1rem;
@@ -278,8 +281,10 @@
 }
 
 .invoice-payment-history,
+.invoice-refund-history,
 .invoice-actions,
-.invoice-payment-form {
+.invoice-payment-form,
+.invoice-refund-form {
   grid-column: 1 / -1;
 }
 
@@ -303,6 +308,80 @@
 .invoice-payment-note,
 .invoice-payment-actions {
   grid-column: 1 / -1;
+}
+
+.invoice-payment-entry {
+  align-items: center;
+}
+
+.invoice-refund-button {
+  min-height: 34px;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #bf6d62;
+  border-radius: 999px;
+  background: #fff;
+  color: #9a3025;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.invoice-refund-history strong {
+  color: #9a3025;
+}
+
+.invoice-refund-history span {
+  text-transform: capitalize;
+}
+
+.invoice-refund-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.35fr);
+  gap: 1rem;
+  margin-top: 0.25rem;
+  padding: 1.1rem;
+  border: 1px solid #e4b4ae;
+  border-radius: 12px;
+  background: #fff8f7;
+}
+
+.invoice-refund-form h4,
+.invoice-refund-form p {
+  margin: 0;
+}
+
+.invoice-refund-form p {
+  margin-top: 0.35rem;
+  color: #6d7774;
+}
+
+.invoice-refund-note,
+.invoice-refund-actions {
+  grid-column: 1 / -1;
+}
+
+.invoice-refund-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.invoice-danger-button {
+  min-height: 42px;
+  padding: 0.6rem 1rem;
+  border: 1px solid #a83a2f;
+  border-radius: 999px;
+  background: #a83a2f;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.invoice-danger-button:disabled,
+.invoice-refund-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .invoice-payment-actions {
@@ -535,13 +614,23 @@
     grid-template-columns: 1fr;
   }
 
+  .invoice-refund-form {
+    grid-template-columns: 1fr;
+  }
+
   .invoice-payment-form h4,
   .invoice-payment-note,
-  .invoice-payment-actions {
+  .invoice-payment-actions,
+  .invoice-refund-note,
+  .invoice-refund-actions {
     grid-column: auto;
   }
 
   .invoice-payment-actions {
+    flex-direction: column-reverse;
+  }
+
+  .invoice-refund-actions {
     flex-direction: column-reverse;
   }
 

@@ -41,8 +41,20 @@ type Payment = {
   tip_amount: number;
   method: string;
   status: string;
+  provider: string | null;
+  provider_payment_id: string | null;
   reference_note: string | null;
   paid_at: string | null;
+  created_at: string;
+};
+
+type Refund = {
+  id: string;
+  payment_id: string;
+  amount: number;
+  status: string;
+  reason: string | null;
+  refunded_at: string | null;
   created_at: string;
 };
 
@@ -112,6 +124,11 @@ const emptyPaymentForm = {
   referenceNote: "",
 };
 
+const emptyRefundForm = {
+  amount: "",
+  reason: "",
+};
+
 export default function Invoices({
   businessId,
   readOnly = false,
@@ -119,6 +136,7 @@ export default function Invoices({
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [refunds, setRefunds] = useState<Refund[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
@@ -132,6 +150,8 @@ export default function Invoices({
   const [paymentInvoiceId, setPaymentInvoiceId] = useState<string | null>(null);
   const [receiptInvoiceId, setReceiptInvoiceId] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState(emptyPaymentForm);
+  const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
+  const [refundForm, setRefundForm] = useState(emptyRefundForm);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [filter, setFilter] = useState<InvoiceFilter>("all");
   const [search, setSearch] = useState("");
@@ -175,10 +195,7 @@ export default function Invoices({
           "id, FirstName, LastName, EmailAddress, PhoneNumber, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip",
         )
         .eq("business_id", businessId),
-      supabase
-        .from("PET")
-        .select("id, PetName")
-        .eq("business_id", businessId),
+      supabase.from("PET").select("id, PetName").eq("business_id", businessId),
       supabase.from("appointment_pet").select("appointment_id, pet_id"),
       supabase.rpc("get_business_settings", { p_business_id: businessId }),
     ]);
@@ -203,6 +220,7 @@ export default function Invoices({
     const invoiceIds = loadedInvoices.map((invoice) => invoice.id);
     let loadedItems: InvoiceItem[] = [];
     let loadedPayments: Payment[] = [];
+    let loadedRefunds: Refund[] = [];
 
     if (invoiceIds.length > 0) {
       const [itemsResult, paymentsResult] = await Promise.all([
@@ -215,7 +233,7 @@ export default function Invoices({
         supabase
           .from("payment")
           .select(
-            "id, invoice_id, amount, tip_amount, method, status, reference_note, paid_at, created_at",
+            "id, invoice_id, amount, tip_amount, method, status, provider, provider_payment_id, reference_note, paid_at, created_at",
           )
           .in("invoice_id", invoiceIds)
           .order("created_at", { ascending: false }),
@@ -232,11 +250,32 @@ export default function Invoices({
 
       loadedItems = itemsResult.data ?? [];
       loadedPayments = paymentsResult.data ?? [];
+
+      const paymentIds = loadedPayments.map((payment) => payment.id);
+      if (paymentIds.length > 0) {
+        const { data: refundData, error: refundError } = await supabase
+          .from("refund")
+          .select(
+            "id, payment_id, amount, status, reason, refunded_at, created_at",
+          )
+          .in("payment_id", paymentIds)
+          .order("created_at", { ascending: false });
+
+        if (refundError) {
+          console.error(refundError);
+          setMessage(refundError.message);
+          setLoading(false);
+          return;
+        }
+
+        loadedRefunds = refundData ?? [];
+      }
     }
 
     setInvoices(loadedInvoices);
     setItems(loadedItems);
     setPayments(loadedPayments);
+    setRefunds(loadedRefunds);
     setAppointments(appointmentsResult.data ?? []);
     setClients(clientsResult.data ?? []);
     setPets(petsResult.data ?? []);
@@ -253,9 +292,7 @@ export default function Invoices({
 
   function getClientName(clientId: number) {
     const client = clients.find((item) => item.id === clientId);
-    return client
-      ? `${client.FirstName} ${client.LastName}`
-      : "Unknown client";
+    return client ? `${client.FirstName} ${client.LastName}` : "Unknown client";
   }
 
   function getAppointmentPetName(appointmentId: string) {
@@ -269,16 +306,54 @@ export default function Invoices({
   }
 
   function getPaidAmount(invoiceId: string) {
-    return payments
+    const grossPaid = payments
       .filter(
         (payment) =>
           payment.invoice_id === invoiceId &&
-          ["succeeded", "partially_refunded"].includes(payment.status),
+          ["succeeded", "partially_refunded", "refunded"].includes(
+            payment.status,
+          ),
       )
       .reduce((total, payment) => total + Number(payment.amount), 0);
+
+    const paymentIds = new Set(
+      payments
+        .filter((payment) => payment.invoice_id === invoiceId)
+        .map((payment) => payment.id),
+    );
+    const refunded = refunds
+      .filter(
+        (refund) =>
+          paymentIds.has(refund.payment_id) && refund.status === "succeeded",
+      )
+      .reduce((total, refund) => total + Number(refund.amount), 0);
+
+    return Math.max(grossPaid - refunded, 0);
+  }
+
+  function getRefundedAmount(paymentId: string, includePending = false) {
+    return refunds
+      .filter(
+        (refund) =>
+          refund.payment_id === paymentId &&
+          (refund.status === "succeeded" ||
+            (includePending && refund.status === "pending")),
+      )
+      .reduce((total, refund) => total + Number(refund.amount), 0);
+  }
+
+  function getRefundableAmount(payment: Payment) {
+    return Math.max(
+      Number(payment.amount) - getRefundedAmount(payment.id, true),
+      0,
+    );
   }
 
   function getBalance(invoice: Invoice) {
+    if (["refunded", "void"].includes(invoice.status)) {
+      return 0;
+    }
+
     return Math.max(Number(invoice.total) - getPaidAmount(invoice.id), 0);
   }
 
@@ -301,7 +376,10 @@ export default function Invoices({
     const normalizedSearch = search.trim().toLowerCase();
 
     return invoices.filter((invoice) => {
-      if (filter === "unpaid" && !["open", "partially_paid", "overdue"].includes(invoice.status)) {
+      if (
+        filter === "unpaid" &&
+        !["open", "partially_paid", "overdue"].includes(invoice.status)
+      ) {
         return false;
       }
       if (!["all", "unpaid"].includes(filter) && invoice.status !== filter) {
@@ -326,14 +404,7 @@ export default function Invoices({
 
       return true;
     });
-  }, [
-    appointmentPets,
-    clients,
-    filter,
-    invoices,
-    pets,
-    search,
-  ]);
+  }, [appointmentPets, clients, filter, invoices, pets, search]);
 
   const totals = useMemo(
     () => ({
@@ -350,7 +421,7 @@ export default function Invoices({
       ),
       drafts: invoices.filter((invoice) => invoice.status === "draft").length,
     }),
-    [invoices, payments],
+    [invoices, payments, refunds],
   );
 
   async function createInvoice(event: FormEvent<HTMLFormElement>) {
@@ -415,9 +486,7 @@ export default function Invoices({
       },
     );
 
-    const checkoutData = data as
-      | { url?: string; error?: string }
-      | null;
+    const checkoutData = data as { url?: string; error?: string } | null;
 
     if (error || !checkoutData?.url) {
       console.error("Stripe Checkout error:", error, checkoutData);
@@ -473,6 +542,73 @@ export default function Invoices({
     setSaving(false);
   }
 
+  function openRefundForm(payment: Payment) {
+    setRefundPaymentId(payment.id);
+    setRefundForm({
+      amount: getRefundableAmount(payment).toFixed(2),
+      reason: "",
+    });
+    setPaymentInvoiceId(null);
+    setMessage("");
+    setSuccessMessage("");
+  }
+
+  async function issueRefund(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!refundPaymentId) return;
+
+    const amount = Number(refundForm.amount);
+    const payment = payments.find((item) => item.id === refundPaymentId);
+    if (!payment || !Number.isFinite(amount) || amount <= 0) return;
+
+    const confirmed = window.confirm(
+      `Refund ${money.format(amount)} to the client's original card? This cannot be undone from Pawffice HQ.`,
+    );
+    if (!confirmed) return;
+
+    setSaving(true);
+    setMessage("");
+    setSuccessMessage("");
+
+    const { data, error } = await supabase.functions.invoke(
+      "create-stripe-refund",
+      {
+        body: {
+          paymentId: refundPaymentId,
+          amount,
+          reason: refundForm.reason.trim(),
+        },
+      },
+    );
+
+    const refundData = data as {
+      success?: boolean;
+      status?: string;
+      error?: string;
+    } | null;
+
+    if (error || !refundData?.success) {
+      console.error("Stripe refund error:", error, refundData);
+      setMessage(
+        refundData?.error ??
+          error?.message ??
+          "The refund could not be issued.",
+      );
+      setSaving(false);
+      return;
+    }
+
+    setRefundPaymentId(null);
+    setRefundForm(emptyRefundForm);
+    setSuccessMessage(
+      refundData.status === "succeeded"
+        ? "Stripe refund completed successfully."
+        : "Stripe refund submitted and is pending.",
+    );
+    await loadInvoices();
+    setSaving(false);
+  }
+
   const receiptInvoice = invoices.find(
     (invoice) => invoice.id === receiptInvoiceId,
   );
@@ -483,9 +619,22 @@ export default function Invoices({
     ? payments.filter(
         (payment) =>
           payment.invoice_id === receiptInvoice.id &&
-          ["succeeded", "partially_refunded"].includes(payment.status),
+          ["succeeded", "partially_refunded", "refunded"].includes(
+            payment.status,
+          ),
       )
     : [];
+  const receiptPaymentIds = new Set(
+    receiptPayments.map((payment) => payment.id),
+  );
+  const receiptRefunds = refunds.filter(
+    (refund) =>
+      receiptPaymentIds.has(refund.payment_id) && refund.status === "succeeded",
+  );
+  const receiptRefundTotal = receiptRefunds.reduce(
+    (total, refund) => total + Number(refund.amount),
+    0,
+  );
   const receiptClient = receiptInvoice
     ? clients.find((client) => client.id === receiptInvoice.client_id)
     : undefined;
@@ -627,12 +776,12 @@ export default function Invoices({
         </article>
       </section>
 
-      <section className="dashboard-panel invoice-list-panel">
-        <div className="invoice-toolbar">
-          <label>
+      <section className="dashboard-panel invoic
+            <inpute-list-panel">
+        <div className="invoice-too
             <span>Search invoices</span>
-            <input
-              type="search"
+              type="search"lbar">
+          <label>
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Invoice, client, or pet"
@@ -735,7 +884,9 @@ export default function Invoices({
                                   ? ` × ${item.quantity}`
                                   : ""}
                               </span>
-                              <strong>{money.format(Number(item.line_total))}</strong>
+                              <strong>
+                                {money.format(Number(item.line_total))}
+                              </strong>
                             </div>
                           ))
                         )}
@@ -748,7 +899,9 @@ export default function Invoices({
                         </div>
                         <div>
                           <dt>Discounts</dt>
-                          <dd>−{money.format(Number(invoice.discount_total))}</dd>
+                          <dd>
+                            −{money.format(Number(invoice.discount_total))}
+                          </dd>
                         </div>
                         <div>
                           <dt>Tax</dt>
@@ -772,16 +925,66 @@ export default function Invoices({
                         <div className="invoice-payment-history">
                           <h4>Payments</h4>
                           {invoicePayments.map((payment) => (
-                            <div key={payment.id}>
+                            <div
+                              className="invoice-payment-entry"
+                              key={payment.id}
+                            >
                               <span>
                                 {payment.method.replaceAll("_", " ")} ·{" "}
                                 {new Date(
                                   payment.paid_at ?? payment.created_at,
                                 ).toLocaleString()}
                               </span>
-                              <strong>{money.format(Number(payment.amount))}</strong>
+                              <strong>
+                                {money.format(Number(payment.amount))}
+                              </strong>
+                              {!readOnly &&
+                                Boolean(payment.provider_payment_id) &&
+                                ["succeeded", "partially_refunded"].includes(
+                                  payment.status,
+                                ) &&
+                                getRefundableAmount(payment) > 0 && (
+                                  <button
+                                    type="button"
+                                    className="invoice-refund-button"
+                                    onClick={() => openRefundForm(payment)}
+                                    disabled={saving}
+                                  >
+                                    Refund
+                                  </button>
+                                )}
                             </div>
                           ))}
+                        </div>
+                      )}
+
+                      {refunds.some((refund) =>
+                        invoicePayments.some(
+                          (payment) => payment.id === refund.payment_id,
+                        ),
+                      ) && (
+                        <div className="invoice-refund-history">
+                          <h4>Refunds</h4>
+                          {refunds
+                            .filter((refund) =>
+                              invoicePayments.some(
+                                (payment) => payment.id === refund.payment_id,
+                              ),
+                            )
+                            .map((refund) => (
+                              <div key={refund.id}>
+                                <span>
+                                  {refund.status.replaceAll("_", " ")} ·{" "}
+                                  {new Date(
+                                    refund.refunded_at ?? refund.created_at,
+                                  ).toLocaleString()}
+                                  {refund.reason ? ` · ${refund.reason}` : ""}
+                                </span>
+                                <strong>
+                                  −{money.format(Number(refund.amount))}
+                                </strong>
+                              </div>
+                            ))}
                         </div>
                       )}
 
@@ -811,30 +1014,30 @@ export default function Invoices({
                               invoice.status,
                             ) &&
                             balance > 0 && (
-                            <>
-                              <button
-                                type="button"
-                                className="primary-button"
-                                onClick={() =>
-                                  void openStripeCheckout(invoice.id)
-                                }
-                                disabled={checkoutInvoiceId !== null}
-                              >
-                                {checkoutInvoiceId === invoice.id
-                                  ? "Opening Stripe..."
-                                  : "Pay online"}
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  className="primary-button"
+                                  onClick={() =>
+                                    void openStripeCheckout(invoice.id)
+                                  }
+                                  disabled={checkoutInvoiceId !== null}
+                                >
+                                  {checkoutInvoiceId === invoice.id
+                                    ? "Opening Stripe..."
+                                    : "Pay online"}
+                                </button>
 
-                              <button
-                                type="button"
-                                className="invoice-secondary-button"
-                                onClick={() => openPaymentForm(invoice)}
-                                disabled={checkoutInvoiceId !== null}
-                              >
-                                Record other payment
-                              </button>
-                            </>
-                          )}
+                                <button
+                                  type="button"
+                                  className="invoice-secondary-button"
+                                  onClick={() => openPaymentForm(invoice)}
+                                  disabled={checkoutInvoiceId !== null}
+                                >
+                                  Record other payment
+                                </button>
+                              </>
+                            )}
                         </div>
                       )}
 
@@ -889,7 +1092,9 @@ export default function Invoices({
                               }
                             >
                               <option value="cash">Cash</option>
-                              <option value="card">External card terminal</option>
+                              <option value="card">
+                                External card terminal
+                              </option>
                               <option value="check">Check</option>
                               <option value="gift_card">Gift card</option>
                               <option value="other">Other</option>
@@ -927,6 +1132,85 @@ export default function Invoices({
                           </div>
                         </form>
                       )}
+
+                      {refundPaymentId &&
+                        invoicePayments.some(
+                          (payment) => payment.id === refundPaymentId,
+                        ) &&
+                        !readOnly && (
+                          <form
+                            className="invoice-refund-form"
+                            onSubmit={issueRefund}
+                          >
+                            <div>
+                              <h4>Refund card payment</h4>
+                              <p>
+                                The money will be returned through Stripe to the
+                                client’s original payment method.
+                              </p>
+                            </div>
+
+                            <label>
+                              Refund amount
+                              <input
+                                type="number"
+                                min="0.01"
+                                max={getRefundableAmount(
+                                  invoicePayments.find(
+                                    (payment) => payment.id === refundPaymentId,
+                                  )!,
+                                ).toFixed(2)}
+                                step="0.01"
+                                value={refundForm.amount}
+                                onChange={(event) =>
+                                  setRefundForm((current) => ({
+                                    ...current,
+                                    amount: event.target.value,
+                                  }))
+                                }
+                                required
+                              />
+                            </label>
+
+                            <label className="invoice-refund-note">
+                              Internal refund note
+                              <input
+                                type="text"
+                                maxLength={500}
+                                value={refundForm.reason}
+                                onChange={(event) =>
+                                  setRefundForm((current) => ({
+                                    ...current,
+                                    reason: event.target.value,
+                                  }))
+                                }
+                                placeholder="Why is this payment being refunded?"
+                                required
+                              />
+                            </label>
+
+                            <div className="invoice-refund-actions">
+                              <button
+                                type="button"
+                                className="invoice-secondary-button"
+                                onClick={() => {
+                                  setRefundPaymentId(null);
+                                  setRefundForm(emptyRefundForm);
+                                }}
+                                disabled={saving}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                className="invoice-danger-button"
+                                disabled={saving}
+                              >
+                                {saving ? "Refunding..." : "Issue refund"}
+                              </button>
+                            </div>
+                          </form>
+                        )}
                     </div>
                   )}
                 </article>
@@ -1060,9 +1344,7 @@ export default function Invoices({
                 <div key={item.id}>
                   <span>
                     {item.description}
-                    {Number(item.quantity) !== 1
-                      ? ` × ${item.quantity}`
-                      : ""}
+                    {Number(item.quantity) !== 1 ? ` × ${item.quantity}` : ""}
                   </span>
                   <strong>{money.format(Number(item.line_total))}</strong>
                 </div>
@@ -1085,7 +1367,9 @@ export default function Invoices({
               {Number(receiptInvoice.tax_total) > 0 && (
                 <div>
                   <span>Tax</span>
-                  <strong>{money.format(Number(receiptInvoice.tax_total))}</strong>
+                  <strong>
+                    {money.format(Number(receiptInvoice.tax_total))}
+                  </strong>
                 </div>
               )}
               <div>
@@ -1098,6 +1382,12 @@ export default function Invoices({
                   <strong>{money.format(receiptTipTotal)}</strong>
                 </div>
               )}
+              {receiptRefundTotal > 0 && (
+                <div>
+                  <span>Refunded</span>
+                  <strong>−{money.format(receiptRefundTotal)}</strong>
+                </div>
+              )}
               <div className="receipt-paid-total">
                 <span>Total paid</span>
                 <strong>
@@ -1108,7 +1398,7 @@ export default function Invoices({
                         Number(payment.amount) +
                         Number(payment.tip_amount),
                       0,
-                    ),
+                    ) - receiptRefundTotal,
                   )}
                 </strong>
               </div>
@@ -1133,6 +1423,17 @@ export default function Invoices({
                       Number(payment.amount) + Number(payment.tip_amount),
                     )}
                   </strong>
+                </div>
+              ))}
+              {receiptRefunds.map((refund) => (
+                <div key={refund.id}>
+                  <span>
+                    Refund ·{" "}
+                    {new Date(
+                      refund.refunded_at ?? refund.created_at,
+                    ).toLocaleString()}
+                  </span>
+                  <strong>−{money.format(Number(refund.amount))}</strong>
                 </div>
               ))}
             </section>
