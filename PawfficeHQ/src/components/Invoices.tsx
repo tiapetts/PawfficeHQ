@@ -317,18 +317,6 @@ export default function Invoices({
       )
       .reduce((total, payment) => total + Number(payment.amount), 0);
 
-    const paymentIds = new Set(
-      payments
-        .filter((payment) => payment.invoice_id === invoiceId)
-        .map((payment) => payment.id),
-    );
-    const refunded = refunds
-      .filter(
-        (refund) =>
-          paymentIds.has(refund.payment_id) && refund.status === "succeeded",
-      )
-      .reduce((total, refund) => total + Number(refund.amount), 0);
-
     // return Math.max(grossPaid - refunded, 0);
     return grossPaid;
   }
