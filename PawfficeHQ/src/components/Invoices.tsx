@@ -175,7 +175,10 @@ export default function Invoices({
           "id, FirstName, LastName, EmailAddress, PhoneNumber, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip",
         )
         .eq("business_id", businessId),
-      supabase.from("PET").select("id, PetName").eq("business_id", businessId),
+      supabase
+        .from("PET")
+        .select("id, PetName")
+        .eq("business_id", businessId),
       supabase.from("appointment_pet").select("appointment_id, pet_id"),
       supabase.rpc("get_business_settings", { p_business_id: businessId }),
     ]);
@@ -250,7 +253,9 @@ export default function Invoices({
 
   function getClientName(clientId: number) {
     const client = clients.find((item) => item.id === clientId);
-    return client ? `${client.FirstName} ${client.LastName}` : "Unknown client";
+    return client
+      ? `${client.FirstName} ${client.LastName}`
+      : "Unknown client";
   }
 
   function getAppointmentPetName(appointmentId: string) {
@@ -296,10 +301,7 @@ export default function Invoices({
     const normalizedSearch = search.trim().toLowerCase();
 
     return invoices.filter((invoice) => {
-      if (
-        filter === "unpaid" &&
-        !["open", "partially_paid", "overdue"].includes(invoice.status)
-      ) {
+      if (filter === "unpaid" && !["open", "partially_paid", "overdue"].includes(invoice.status)) {
         return false;
       }
       if (!["all", "unpaid"].includes(filter) && invoice.status !== filter) {
@@ -324,7 +326,14 @@ export default function Invoices({
 
       return true;
     });
-  }, [appointmentPets, clients, filter, invoices, pets, search]);
+  }, [
+    appointmentPets,
+    clients,
+    filter,
+    invoices,
+    pets,
+    search,
+  ]);
 
   const totals = useMemo(
     () => ({
@@ -406,7 +415,9 @@ export default function Invoices({
       },
     );
 
-    const checkoutData = data as { url?: string; error?: string } | null;
+    const checkoutData = data as
+      | { url?: string; error?: string }
+      | null;
 
     if (error || !checkoutData?.url) {
       console.error("Stripe Checkout error:", error, checkoutData);
@@ -724,9 +735,7 @@ export default function Invoices({
                                   ? ` × ${item.quantity}`
                                   : ""}
                               </span>
-                              <strong>
-                                {money.format(Number(item.line_total))}
-                              </strong>
+                              <strong>{money.format(Number(item.line_total))}</strong>
                             </div>
                           ))
                         )}
@@ -739,9 +748,7 @@ export default function Invoices({
                         </div>
                         <div>
                           <dt>Discounts</dt>
-                          <dd>
-                            −{money.format(Number(invoice.discount_total))}
-                          </dd>
+                          <dd>−{money.format(Number(invoice.discount_total))}</dd>
                         </div>
                         <div>
                           <dt>Tax</dt>
@@ -772,9 +779,7 @@ export default function Invoices({
                                   payment.paid_at ?? payment.created_at,
                                 ).toLocaleString()}
                               </span>
-                              <strong>
-                                {money.format(Number(payment.amount))}
-                              </strong>
+                              <strong>{money.format(Number(payment.amount))}</strong>
                             </div>
                           ))}
                         </div>
@@ -806,30 +811,30 @@ export default function Invoices({
                               invoice.status,
                             ) &&
                             balance > 0 && (
-                              <>
-                                <button
-                                  type="button"
-                                  className="primary-button"
-                                  onClick={() =>
-                                    void openStripeCheckout(invoice.id)
-                                  }
-                                  disabled={checkoutInvoiceId !== null}
-                                >
-                                  {checkoutInvoiceId === invoice.id
-                                    ? "Opening Stripe..."
-                                    : "Pay online"}
-                                </button>
+                            <>
+                              <button
+                                type="button"
+                                className="primary-button"
+                                onClick={() =>
+                                  void openStripeCheckout(invoice.id)
+                                }
+                                disabled={checkoutInvoiceId !== null}
+                              >
+                                {checkoutInvoiceId === invoice.id
+                                  ? "Opening Stripe..."
+                                  : "Pay online"}
+                              </button>
 
-                                <button
-                                  type="button"
-                                  className="invoice-secondary-button"
-                                  onClick={() => openPaymentForm(invoice)}
-                                  disabled={checkoutInvoiceId !== null}
-                                >
-                                  Record other payment
-                                </button>
-                              </>
-                            )}
+                              <button
+                                type="button"
+                                className="invoice-secondary-button"
+                                onClick={() => openPaymentForm(invoice)}
+                                disabled={checkoutInvoiceId !== null}
+                              >
+                                Record other payment
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
 
@@ -884,9 +889,7 @@ export default function Invoices({
                               }
                             >
                               <option value="cash">Cash</option>
-                              <option value="card">
-                                External card terminal
-                              </option>
+                              <option value="card">External card terminal</option>
                               <option value="check">Check</option>
                               <option value="gift_card">Gift card</option>
                               <option value="other">Other</option>
@@ -1057,7 +1060,9 @@ export default function Invoices({
                 <div key={item.id}>
                   <span>
                     {item.description}
-                    {Number(item.quantity) !== 1 ? ` × ${item.quantity}` : ""}
+                    {Number(item.quantity) !== 1
+                      ? ` × ${item.quantity}`
+                      : ""}
                   </span>
                   <strong>{money.format(Number(item.line_total))}</strong>
                 </div>
@@ -1080,9 +1085,7 @@ export default function Invoices({
               {Number(receiptInvoice.tax_total) > 0 && (
                 <div>
                   <span>Tax</span>
-                  <strong>
-                    {money.format(Number(receiptInvoice.tax_total))}
-                  </strong>
+                  <strong>{money.format(Number(receiptInvoice.tax_total))}</strong>
                 </div>
               )}
               <div>
