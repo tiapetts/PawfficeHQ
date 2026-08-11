@@ -844,6 +844,8 @@ export default function Invoices({
                 (payment) => payment.invoice_id === invoice.id,
               );
               const paid = getPaidAmount(invoice.id);
+              const refunded = getInvoiceRefundedAmount(invoice.id);
+              const netReceived = Math.max(paid - refunded, 0);
               const balance = getBalance(invoice);
               const expanded = expandedInvoiceId === invoice.id;
 
@@ -932,6 +934,19 @@ export default function Invoices({
                           <dt>Paid</dt>
                           <dd>{money.format(paid)}</dd>
                         </div>
+                        {refunded > 0 && (
+                          <>
+                            <div>
+                              <dt>Refunded</dt>
+                              <dd>−{money.format(refunded)}</dd>
+                            </div>
+
+                            <div>
+                              <dt>Net received</dt>
+                              <dd>{money.format(netReceived)}</dd>
+                            </div>
+                          </>
+                        )}
                         <div className="invoice-balance-row">
                           <dt>Balance</dt>
                           <dd>{money.format(balance)}</dd>
