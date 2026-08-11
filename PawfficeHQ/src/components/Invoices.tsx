@@ -328,7 +328,8 @@ export default function Invoices({
       )
       .reduce((total, refund) => total + Number(refund.amount), 0);
 
-    return Math.max(grossPaid - refunded, 0);
+    // return Math.max(grossPaid - refunded, 0);
+    return grossPaid;
   }
 
   function getRefundedAmount(paymentId: string, includePending = false) {
