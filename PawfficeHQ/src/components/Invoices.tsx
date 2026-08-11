@@ -333,6 +333,21 @@ export default function Invoices({
     return grossPaid;
   }
 
+  function getInvoiceRefundedAmount(invoiceId: string) {
+    const paymentIds = new Set(
+      payments
+        .filter((payment) => payment.invoice_id === invoiceId)
+        .map((payment) => payment.id),
+    );
+
+    return refunds
+      .filter(
+        (refund) =>
+          paymentIds.has(refund.payment_id) && refund.status === "succeeded",
+      )
+      .reduce((total, refund) => total + Number(refund.amount), 0);
+  }
+
   function getRefundedAmount(paymentId: string, includePending = false) {
     return refunds
       .filter(
