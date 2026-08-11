@@ -107,6 +107,7 @@ const statusLabels: Record<string, string> = {
   open: "Open",
   partially_paid: "Partially paid",
   paid: "Paid",
+  partially_refunded: "Partially refunded",
   overdue: "Overdue",
   void: "Void",
   refunded: "Refunded",
