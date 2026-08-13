@@ -868,10 +868,24 @@ export default function Invoices({
                     </span>
 
                     <div className="invoice-card-amount">
-                      <span>Total</span>
-                      <strong>{money.format(Number(invoice.total))}</strong>
-                      {balance > 0 && invoice.status !== "draft" && (
-                        <small>{money.format(balance)} due</small>
+                      <span>{refunded > 0 ? "Net received" : "Total"}</span>
+
+                      <strong>
+                        {money.format(
+                          refunded > 0 ? netReceived : Number(invoice.total),
+                        )}
+                      </strong>
+
+                      {refunded > 0 ? (
+                        <small>
+                          {money.format(Number(invoice.total))} total ·{" "}
+                          {money.format(refunded)} refunded
+                        </small>
+                      ) : (
+                        balance > 0 &&
+                        invoice.status !== "draft" && (
+                          <small>{money.format(balance)} due</small>
+                        )
                       )}
                     </div>
                   </button>
