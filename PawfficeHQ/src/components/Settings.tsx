@@ -199,6 +199,7 @@ function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
   const [notificationLoading, setNotificationLoading] = useState(true);
   const [notificationSaving, setNotificationSaving] = useState(false);
   const [pushChanging, setPushChanging] = useState(false);
+  const [pushTesting, setPushTesting] = useState(false);
   const [pushState, setPushState] = useState<PushState>("checking");
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
@@ -419,6 +420,48 @@ function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
     } finally {
       setPushChanging(false);
     }
+  }
+  async function sendTestPushNotification() {
+    setPushTesting(true);
+    setMessage("");
+    setIsError(false);
+
+    const { data, error } = await supabase.functions.invoke(
+      "send-push-notification",
+      {
+        body: {
+          businessId,
+          title: "Pawffice HQ test",
+          body: "Hoozah! Push notifications are working on this device.",
+          url: "/",
+        },
+      },
+    );
+
+    setPushTesting(false);
+
+    if (error) {
+      console.error("Test push error:", error);
+      setMessage(error.message || "The test notification could not be sent.");
+      setIsError(true);
+      return;
+    }
+
+    if (!data?.success) {
+      setMessage(
+        data?.error || "The test notification could not be delivered.",
+      );
+      setIsError(true);
+      return;
+    }
+
+    const delivered = Number(data.delivered ?? 1);
+
+    setMessage(
+      `Test notification sent to ${delivered} device${
+        delivered === 1 ? "" : "s"
+      }.`,
+    );
   }
 
   function pushStateLabel() {
@@ -868,14 +911,25 @@ function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
               </p>
 
               {!readOnly && pushState === "enabled" && (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={pushChanging}
-                  onClick={() => void disablePushNotifications()}
-                >
-                  {pushChanging ? "Updating…" : "Disable on this device"}
-                </button>
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={pushTesting || pushChanging}
+                    onClick={() => void sendTestPushNotification()}
+                  >
+                    {pushTesting ? "Sending test…" : "Send test notification"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={pushChanging || pushTesting}
+                    onClick={() => void disablePushNotifications()}
+                  >
+                    {pushChanging ? "Updating…" : "Disable on this device"}
+                  </button>
+                </div>
               )}
 
               {!readOnly &&
