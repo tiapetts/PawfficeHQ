@@ -635,6 +635,30 @@ export default function AppointmentHistory({
                           </button>
                         )}
 
+                        {appointment.status === "no_show" && (
+                          <button
+                            type="button"
+                            className="history-approve-button"
+                            disabled={updatingId === appointment.id}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  "Undo this no-show and restore the appointment to confirmed?",
+                                )
+                              ) {
+                                void updateAppointmentStatus(
+                                  appointment.id,
+                                  "confirmed",
+                                );
+                              }
+                            }}
+                          >
+                            {updatingId === appointment.id
+                              ? "Restoring..."
+                              : "Undo no-show"}
+                          </button>
+                        )}
+
                         {["requested", "confirmed"].includes(
                           appointment.status,
                         ) && (
