@@ -55,6 +55,63 @@
     gap: 10px;
 }
 
+.client-deposit-settings {
+    padding: 18px;
+    border: 1px solid #d6e0dd;
+    border-radius: 12px;
+    background: #f7faf9;
+}
+
+.client-deposit-toggle {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-start;
+    gap: 12px !important;
+    cursor: pointer;
+}
+
+.client-deposit-toggle input {
+    width: 20px !important;
+    min-height: 20px !important;
+    margin-top: 2px;
+}
+
+.client-deposit-toggle span {
+    display: grid;
+    gap: 4px;
+}
+
+.client-deposit-toggle small {
+    color: #657873;
+    font-weight: 400;
+}
+
+.client-deposit-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid #d6e0dd;
+}
+
+.client-deposit-fields textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+}
+
+.client-deposit-badge {
+    width: fit-content;
+    margin-top: 5px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #fff1c9;
+    color: #7b5700 !important;
+    font-size: .76rem;
+    font-weight: 800;
+}
+
 @media (max-width: 720px) {
     .client-edit-button {
         width: 100%;
@@ -67,5 +124,11 @@
 
     .client-form .form-actions button {
         width: 100%;
+    }
+}
+
+@media (max-width: 720px) {
+    .client-deposit-fields {
+        grid-template-columns: 1fr;
     }
 }

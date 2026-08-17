@@ -14,6 +14,10 @@ type Client = {
   ClientCity: string | null;
   ClientState: string | null;
   ClientZip: string | null;
+  booking_deposit_required: boolean;
+  booking_deposit_type: "fixed" | "percentage";
+  booking_deposit_value: number;
+  booking_deposit_reason: string | null;
 };
 const emptyForm = {
   FirstName: "",
@@ -25,10 +29,14 @@ const emptyForm = {
   ClientCity: "",
   ClientState: "",
   ClientZip: "",
+  booking_deposit_required: false,
+  booking_deposit_type: "fixed" as "fixed" | "percentage",
+  booking_deposit_value: "",
+  booking_deposit_reason: "",
 };
 type ClientForm = typeof emptyForm;
 const selection =
-  "id, FirstName, LastName, PhoneNumber, EmailAddress, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip";
+  "id, FirstName, LastName, PhoneNumber, EmailAddress, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip, booking_deposit_required, booking_deposit_type, booking_deposit_value, booking_deposit_reason";
 
 export default function Clients({
   businessId,
@@ -62,7 +70,10 @@ export default function Clients({
     void loadClients();
   }, [businessId]);
 
-  function updateField(field: keyof ClientForm, value: string) {
+  function updateField<K extends keyof ClientForm>(
+    field: K,
+    value: ClientForm[K],
+  ) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
@@ -87,6 +98,13 @@ export default function Clients({
       ClientCity: client.ClientCity ?? "",
       ClientState: client.ClientState ?? "",
       ClientZip: client.ClientZip ?? "",
+      booking_deposit_required: client.booking_deposit_required,
+      booking_deposit_type: client.booking_deposit_type,
+      booking_deposit_value:
+        client.booking_deposit_value > 0
+          ? String(client.booking_deposit_value)
+          : "",
+      booking_deposit_reason: client.booking_deposit_reason ?? "",
     });
     setMessage("");
     setSuccess(false);
@@ -117,6 +135,14 @@ export default function Clients({
       ClientCity: form.ClientCity.trim() || null,
       ClientState: form.ClientState.trim().toUpperCase() || null,
       ClientZip: form.ClientZip.trim() || null,
+      booking_deposit_required: form.booking_deposit_required,
+      booking_deposit_type: form.booking_deposit_type,
+      booking_deposit_value: form.booking_deposit_required
+        ? Number(form.booking_deposit_value)
+        : 0,
+      booking_deposit_reason: form.booking_deposit_required
+        ? form.booking_deposit_reason.trim() || null
+        : null,
     };
 
     const query = editingId
@@ -248,6 +274,75 @@ export default function Clients({
                 onChange={(e) => updateField("ClientZip", e.target.value)}
               />
             </label>
+            <div className="full-width client-deposit-settings">
+              <label className="client-deposit-toggle">
+                <input
+                  type="checkbox"
+                  checked={form.booking_deposit_required}
+                  onChange={(e) =>
+                    updateField("booking_deposit_required", e.target.checked)
+                  }
+                />
+                <span>
+                  <strong>Require a deposit for future bookings</strong>
+                  <small>
+                    New appointments for this client will require a deposit
+                    before confirmation.
+                  </small>
+                </span>
+              </label>
+
+              {form.booking_deposit_required && (
+                <div className="client-deposit-fields">
+                  <label>
+                    Deposit type
+                    <select
+                      value={form.booking_deposit_type}
+                      onChange={(e) =>
+                        updateField(
+                          "booking_deposit_type",
+                          e.target.value as "fixed" | "percentage",
+                        )
+                      }
+                    >
+                      <option value="fixed">Fixed amount</option>
+                      <option value="percentage">Percentage</option>
+                    </select>
+                  </label>
+                  <label>
+                    {form.booking_deposit_type === "fixed"
+                      ? "Deposit amount"
+                      : "Deposit percentage"}
+                    <input
+                      type="number"
+                      min="0.01"
+                      max={
+                        form.booking_deposit_type === "percentage"
+                          ? 100
+                          : undefined
+                      }
+                      step="0.01"
+                      value={form.booking_deposit_value}
+                      onChange={(e) =>
+                        updateField("booking_deposit_value", e.target.value)
+                      }
+                      required
+                    />
+                  </label>
+                  <label className="full-width">
+                    Internal reason
+                    <textarea
+                      rows={3}
+                      value={form.booking_deposit_reason}
+                      onChange={(e) =>
+                        updateField("booking_deposit_reason", e.target.value)
+                      }
+                      placeholder="For example: Deposit required after a missed appointment."
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
             <div className="full-width form-actions">
               <button
                 type="button"
@@ -289,6 +384,14 @@ export default function Clients({
                     {client.FirstName} {client.LastName}
                   </strong>
                   <span>{client.EmailAddress || "No email listed"}</span>
+                  {client.booking_deposit_required && (
+                    <span className="client-deposit-badge">
+                      Deposit required ·{" "}
+                      {client.booking_deposit_type === "percentage"
+                        ? `${client.booking_deposit_value}%`
+                        : `$${Number(client.booking_deposit_value).toFixed(2)}`}
+                    </span>
+                  )}
                 </div>
                 <div>
                   <span className="client-detail-label">Phone</span>
