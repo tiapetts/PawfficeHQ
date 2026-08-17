@@ -353,3 +353,32 @@
         grid-column: auto;
     }
 }
+
+.history-record-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e0e8e6;
+}
+
+.history-approve-button {
+    min-height: 44px;
+    padding: 0.7rem 1rem;
+    border: 1px solid #32685c;
+    border-radius: 10px;
+    background: #32685c;
+    color: #fff;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.history-approve-button:hover:not(:disabled) {
+    background: #245348;
+}
+
+.history-approve-button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}

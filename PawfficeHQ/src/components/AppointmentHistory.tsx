@@ -94,6 +94,7 @@ export default function AppointmentHistory({
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(true);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -328,6 +329,45 @@ export default function AppointmentHistory({
     setDateTo("");
   }
 
+  async function approveAppointment(appointmentId: string) {
+    setApprovingId(appointmentId);
+    setMessage("");
+
+    const { data, error } = await supabase
+      .from("appointment")
+      .update({ status: "confirmed" })
+      .eq("id", appointmentId)
+      .eq("business_id", businessId)
+      .eq("status", "requested")
+      .select("id, status")
+      .maybeSingle();
+
+    if (error) {
+      console.error(error);
+      setMessage(error.message);
+      setApprovingId(null);
+      return;
+    }
+
+    if (!data) {
+      setMessage(
+        "The appointment could not be approved. Refresh and try again.",
+      );
+      setApprovingId(null);
+      return;
+    }
+
+    setAppointments((currentAppointments) =>
+      currentAppointments.map((appointment) =>
+        appointment.id === appointmentId
+          ? { ...appointment, status: "confirmed" }
+          : appointment,
+      ),
+    );
+
+    setApprovingId(null);
+  }
+
   return (
     <>
       <header className="dashboard-header history-page-header">
@@ -520,6 +560,23 @@ export default function AppointmentHistory({
                           </div>
                         )}
                       </details>
+                    )}
+
+                    {appointment.status === "requested" && (
+                      <div className="history-record-actions">
+                        <button
+                          type="button"
+                          className="history-approve-button"
+                          disabled={approvingId === appointment.id}
+                          onClick={() =>
+                            void approveAppointment(appointment.id)
+                          }
+                        >
+                          {approvingId === appointment.id
+                            ? "Approving..."
+                            : "Approve appointment"}
+                        </button>
+                      </div>
                     )}
                   </div>
                 </article>
