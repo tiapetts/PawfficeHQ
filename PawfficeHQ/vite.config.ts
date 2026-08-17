@@ -15,6 +15,10 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
 
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+
       includeAssets: ["pwa-icon.png"],
 
       manifest: {
@@ -47,13 +51,14 @@ export default defineConfig({
         ],
       },
 
-      workbox: {
-        cleanupOutdatedCaches: true,
-        navigateFallback: "/index.html",
+      injectManifest: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest}"],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
 
       devOptions: {
         enabled: true,
+        type: "module",
       },
     }),
   ],
