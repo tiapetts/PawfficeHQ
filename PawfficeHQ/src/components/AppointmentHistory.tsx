@@ -34,6 +34,7 @@ type Appointment = {
   start_at: string;
   end_at: string;
   status: string;
+  status_before_cancellation: string | null;
   client_notes: string | null;
   internal_notes: string | null;
 };
@@ -115,7 +116,7 @@ export default function AppointmentHistory({
         supabase
           .from("appointment")
           .select(
-            "id, client_id, start_at, end_at, status, client_notes, internal_notes",
+            "id, client_id, start_at, end_at, status, status_before_cancellation, client_notes, internal_notes",
           )
           .eq("business_id", businessId)
           .order("start_at", { ascending: false }),
@@ -334,7 +335,15 @@ export default function AppointmentHistory({
 
   async function updateAppointmentStatus(
     appointmentId: string,
-    newStatus: "confirmed" | "cancelled" | "no_show",
+    newStatus:
+      | "requested"
+      | "confirmed"
+      | "checked_in"
+      | "in_progress"
+      | "ready_for_pickup"
+      | "completed"
+      | "cancelled"
+      | "no_show",
   ) {
     if (
       newStatus === "no_show" &&
@@ -353,12 +362,32 @@ export default function AppointmentHistory({
     setUpdatingId(appointmentId);
     setMessage("");
 
+    const currentAppointment = appointments.find(
+      (appointment) => appointment.id === appointmentId,
+    );
+
+    if (!currentAppointment) {
+      setMessage("The appointment could not be found. Refresh and try again.");
+      setUpdatingId(null);
+      return;
+    }
+
+    const statusBeforeCancellation =
+      newStatus === "cancelled"
+        ? currentAppointment.status
+        : currentAppointment.status === "cancelled"
+          ? null
+          : currentAppointment.status_before_cancellation;
+
     const { data, error } = await supabase
       .from("appointment")
-      .update({ status: newStatus })
+      .update({
+        status: newStatus,
+        status_before_cancellation: statusBeforeCancellation,
+      })
       .eq("id", appointmentId)
       .eq("business_id", businessId)
-      .select("id, status")
+      .select("id, status, status_before_cancellation")
       .maybeSingle();
 
     if (error) {
@@ -379,7 +408,11 @@ export default function AppointmentHistory({
     setAppointments((currentAppointments) =>
       currentAppointments.map((appointment) =>
         appointment.id === appointmentId
-          ? { ...appointment, status: newStatus }
+          ? {
+              ...appointment,
+              status: data.status,
+              status_before_cancellation: data.status_before_cancellation,
+            }
           : appointment,
       ),
     );
@@ -656,6 +689,44 @@ export default function AppointmentHistory({
                             {updatingId === appointment.id
                               ? "Restoring..."
                               : "Undo no-show"}
+                          </button>
+                        )}
+
+                        {appointment.status === "cancelled" && (
+                          <button
+                            type="button"
+                            className="history-approve-button"
+                            disabled={updatingId === appointment.id}
+                            onClick={() => {
+                              const previousStatus =
+                                appointment.status_before_cancellation;
+
+                              const restoreStatus =
+                                previousStatus === "requested" ||
+                                previousStatus === "confirmed" ||
+                                previousStatus === "checked_in" ||
+                                previousStatus === "in_progress" ||
+                                previousStatus === "ready_for_pickup"
+                                  ? previousStatus
+                                  : "confirmed";
+
+                              if (
+                                window.confirm(
+                                  `Undo this cancellation and restore the appointment to ${statusLabels[
+                                    restoreStatus
+                                  ].toLowerCase()}?`,
+                                )
+                              ) {
+                                void updateAppointmentStatus(
+                                  appointment.id,
+                                  restoreStatus,
+                                );
+                              }
+                            }}
+                          >
+                            {updatingId === appointment.id
+                              ? "Restoring..."
+                              : "Undo cancellation"}
                           </button>
                         )}
 
