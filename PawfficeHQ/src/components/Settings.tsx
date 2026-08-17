@@ -35,6 +35,24 @@ type StripeConnectionStatus = {
   updated_at: string | null;
 };
 
+type NotificationSettings = {
+  push_enabled: boolean;
+  new_request_enabled: boolean;
+  appointment_reminder_enabled: boolean;
+  appointment_status_enabled: boolean;
+  payment_enabled: boolean;
+  reminder_minutes_before: number;
+  daily_digest_enabled: boolean;
+  daily_digest_time: string;
+};
+
+type PushState =
+  | "checking"
+  | "unsupported"
+  | "blocked"
+  | "disabled"
+  | "enabled";
+
 type SettingsForm = {
   business_name: string;
   phone: string;
@@ -108,6 +126,24 @@ const defaultStripeStatus: StripeConnectionStatus = {
   updated_at: null,
 };
 
+const defaultNotificationSettings: NotificationSettings = {
+  push_enabled: false,
+  new_request_enabled: true,
+  appointment_reminder_enabled: true,
+  appointment_status_enabled: true,
+  payment_enabled: true,
+  reminder_minutes_before: 60,
+  daily_digest_enabled: false,
+  daily_digest_time: "08:00",
+};
+
+function urlBase64ToUint8Array(value: string) {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = window.atob(base64);
+  return Uint8Array.from(raw, (character) => character.charCodeAt(0));
+}
+
 const days: Array<{ key: DayName; label: string }> = [
   { key: "monday", label: "Monday" },
   { key: "tuesday", label: "Tuesday" },
@@ -158,6 +194,12 @@ function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
     useState<StripeConnectionStatus>(defaultStripeStatus);
   const [stripeLoading, setStripeLoading] = useState(true);
   const [stripeConnecting, setStripeConnecting] = useState(false);
+  const [notificationSettings, setNotificationSettings] =
+    useState<NotificationSettings>(defaultNotificationSettings);
+  const [notificationLoading, setNotificationLoading] = useState(true);
+  const [notificationSaving, setNotificationSaving] = useState(false);
+  const [pushChanging, setPushChanging] = useState(false);
+  const [pushState, setPushState] = useState<PushState>("checking");
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
 
@@ -183,6 +225,209 @@ function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
     }
     void load();
   }, [businessId]);
+
+  useEffect(() => {
+    async function loadNotifications() {
+      setNotificationLoading(true);
+
+      const { data, error } = await supabase
+        .from("business_notification_settings")
+        .select(
+          "push_enabled, new_request_enabled, appointment_reminder_enabled, appointment_status_enabled, payment_enabled, reminder_minutes_before, daily_digest_enabled, daily_digest_time",
+        )
+        .eq("business_id", businessId)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Notification settings error:", error);
+        setMessage(error.message);
+        setIsError(true);
+      } else if (data) {
+        setNotificationSettings({
+          ...defaultNotificationSettings,
+          ...(data as Partial<NotificationSettings>),
+        });
+      }
+
+      if (
+        !("serviceWorker" in navigator) ||
+        !("PushManager" in window) ||
+        !("Notification" in window)
+      ) {
+        setPushState("unsupported");
+      } else if (Notification.permission === "denied") {
+        setPushState("blocked");
+      } else {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        setPushState(subscription ? "enabled" : "disabled");
+      }
+
+      setNotificationLoading(false);
+    }
+
+    void loadNotifications();
+  }, [businessId]);
+
+  function updateNotification<K extends keyof NotificationSettings>(
+    key: K,
+    value: NotificationSettings[K],
+  ) {
+    setNotificationSettings((current) => ({ ...current, [key]: value }));
+  }
+
+  async function saveNotificationSettings() {
+    setNotificationSaving(true);
+    setMessage("");
+    setIsError(false);
+
+    const { error } = await supabase
+      .from("business_notification_settings")
+      .upsert(
+        {
+          business_id: businessId,
+          ...notificationSettings,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "business_id" },
+      );
+
+    setNotificationSaving(false);
+    if (error) {
+      setMessage(error.message);
+      setIsError(true);
+      return;
+    }
+
+    setMessage("Notification preferences saved.");
+  }
+
+  async function enablePushNotifications() {
+    setPushChanging(true);
+    setMessage("");
+    setIsError(false);
+
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        throw new Error(
+          "Push notifications are not supported by this browser.",
+        );
+      }
+
+      const publicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+      if (!publicKey) {
+        throw new Error(
+          "The VAPID public key is missing from this deployment.",
+        );
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPushState(permission === "denied" ? "blocked" : "disabled");
+        throw new Error("Notification permission was not granted.");
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+      }
+
+      const json = subscription.toJSON();
+      const { data: userData, error: userError } =
+        await supabase.auth.getUser();
+      if (userError || !userData.user)
+        throw new Error("You must be signed in.");
+      if (!json.keys?.p256dh || !json.keys.auth) {
+        throw new Error("The browser did not return complete push keys.");
+      }
+
+      const { error } = await supabase.from("push_subscription").upsert(
+        {
+          business_id: businessId,
+          auth_user_id: userData.user.id,
+          endpoint: subscription.endpoint,
+          p256dh_key: json.keys.p256dh,
+          auth_key: json.keys.auth,
+          device_name: navigator.userAgent,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "endpoint" },
+      );
+      if (error) throw error;
+
+      const updated = { ...notificationSettings, push_enabled: true };
+      const { error: settingsError } = await supabase
+        .from("business_notification_settings")
+        .upsert(
+          {
+            business_id: businessId,
+            ...updated,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "business_id" },
+        );
+      if (settingsError) throw settingsError;
+
+      setNotificationSettings(updated);
+      setPushState("enabled");
+      setMessage("Push notifications are enabled on this device.");
+    } catch (error) {
+      console.error("Push notification error:", error);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Push notifications could not be enabled.",
+      );
+      setIsError(true);
+    } finally {
+      setPushChanging(false);
+    }
+  }
+
+  async function disablePushNotifications() {
+    setPushChanging(true);
+    setMessage("");
+    setIsError(false);
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        const endpoint = subscription.endpoint;
+        await subscription.unsubscribe();
+        const { error } = await supabase
+          .from("push_subscription")
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .eq("endpoint", endpoint);
+        if (error) throw error;
+      }
+
+      setPushState("disabled");
+      setMessage("Push notifications are disabled on this device.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Push notifications could not be disabled.",
+      );
+      setIsError(true);
+    } finally {
+      setPushChanging(false);
+    }
+  }
+
+  function pushStateLabel() {
+    if (pushState === "enabled") return "Enabled on this device";
+    if (pushState === "blocked") return "Blocked in browser settings";
+    if (pushState === "unsupported") return "Not supported by this browser";
+    if (pushState === "checking") return "Checking…";
+    return "Not enabled on this device";
+  }
 
   useEffect(() => {
     async function loadStripeStatus() {
@@ -602,6 +847,214 @@ function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
               </span>
             </label>
           </div>
+        </section>
+
+        <section className="dashboard-panel settings-section">
+          <div>
+            <p className="eyebrow">Notifications</p>
+            <h3>Business alerts</h3>
+            <p className="settings-help">
+              Choose which alerts your team receives. Push permission is saved
+              separately for each phone, tablet, or computer.
+            </p>
+          </div>
+
+          {notificationLoading ? (
+            <p>Loading notification settings…</p>
+          ) : (
+            <div>
+              <p>
+                <strong>Device status: {pushStateLabel()}</strong>
+              </p>
+
+              {!readOnly && pushState === "enabled" && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={pushChanging}
+                  onClick={() => void disablePushNotifications()}
+                >
+                  {pushChanging ? "Updating…" : "Disable on this device"}
+                </button>
+              )}
+
+              {!readOnly &&
+                pushState !== "enabled" &&
+                pushState !== "unsupported" &&
+                pushState !== "blocked" && (
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={pushChanging}
+                    onClick={() => void enablePushNotifications()}
+                  >
+                    {pushChanging ? "Enabling…" : "Enable on this device"}
+                  </button>
+                )}
+
+              {pushState === "blocked" && (
+                <p className="settings-help">
+                  Allow notifications for Pawffice HQ in this browser&apos;s
+                  site settings, then reload this page.
+                </p>
+              )}
+
+              <div className="settings-switches">
+                <label>
+                  <input
+                    type="checkbox"
+                    disabled={readOnly}
+                    checked={notificationSettings.new_request_enabled}
+                    onChange={(event) =>
+                      updateNotification(
+                        "new_request_enabled",
+                        event.target.checked,
+                      )
+                    }
+                  />
+                  <span>
+                    <strong>New appointment requests</strong>
+                    <small>
+                      Alert the team when a requested booking arrives.
+                    </small>
+                  </span>
+                </label>
+
+                <label>
+                  <input
+                    type="checkbox"
+                    disabled={readOnly}
+                    checked={notificationSettings.appointment_reminder_enabled}
+                    onChange={(event) =>
+                      updateNotification(
+                        "appointment_reminder_enabled",
+                        event.target.checked,
+                      )
+                    }
+                  />
+                  <span>
+                    <strong>Upcoming appointment reminders</strong>
+                    <small>Remind the team before an appointment begins.</small>
+                  </span>
+                </label>
+
+                <label>
+                  <input
+                    type="checkbox"
+                    disabled={readOnly}
+                    checked={notificationSettings.appointment_status_enabled}
+                    onChange={(event) =>
+                      updateNotification(
+                        "appointment_status_enabled",
+                        event.target.checked,
+                      )
+                    }
+                  />
+                  <span>
+                    <strong>Appointment status changes</strong>
+                    <small>
+                      Alert the team about cancellations and updates.
+                    </small>
+                  </span>
+                </label>
+
+                <label>
+                  <input
+                    type="checkbox"
+                    disabled={readOnly}
+                    checked={notificationSettings.payment_enabled}
+                    onChange={(event) =>
+                      updateNotification(
+                        "payment_enabled",
+                        event.target.checked,
+                      )
+                    }
+                  />
+                  <span>
+                    <strong>Payments and refunds</strong>
+                    <small>
+                      Alert the team when money is received or refunded.
+                    </small>
+                  </span>
+                </label>
+
+                <label>
+                  <input
+                    type="checkbox"
+                    disabled={readOnly}
+                    checked={notificationSettings.daily_digest_enabled}
+                    onChange={(event) =>
+                      updateNotification(
+                        "daily_digest_enabled",
+                        event.target.checked,
+                      )
+                    }
+                  />
+                  <span>
+                    <strong>Daily schedule summary</strong>
+                    <small>
+                      Send a morning overview of the day&apos;s appointments.
+                    </small>
+                  </span>
+                </label>
+              </div>
+
+              <div className="settings-form-grid">
+                <label>
+                  Remind me before appointments
+                  <select
+                    disabled={
+                      readOnly ||
+                      !notificationSettings.appointment_reminder_enabled
+                    }
+                    value={notificationSettings.reminder_minutes_before}
+                    onChange={(event) =>
+                      updateNotification(
+                        "reminder_minutes_before",
+                        Number(event.target.value),
+                      )
+                    }
+                  >
+                    <option value={15}>15 minutes before</option>
+                    <option value={30}>30 minutes before</option>
+                    <option value={60}>1 hour before</option>
+                    <option value={120}>2 hours before</option>
+                    <option value={1440}>1 day before</option>
+                  </select>
+                </label>
+
+                <label>
+                  Daily summary time
+                  <input
+                    type="time"
+                    disabled={
+                      readOnly || !notificationSettings.daily_digest_enabled
+                    }
+                    value={notificationSettings.daily_digest_time}
+                    onChange={(event) =>
+                      updateNotification(
+                        "daily_digest_time",
+                        event.target.value,
+                      )
+                    }
+                  />
+                </label>
+              </div>
+
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={notificationSaving}
+                  onClick={() => void saveNotificationSettings()}
+                >
+                  {notificationSaving
+                    ? "Saving…"
+                    : "Save notification preferences"}
+                </button>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="dashboard-panel settings-section">
