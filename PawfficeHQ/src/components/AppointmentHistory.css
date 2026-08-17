@@ -382,3 +382,50 @@
     cursor: wait;
     opacity: 0.65;
 }
+
+.history-record {
+    cursor: pointer;
+    transition:
+        border-color 160ms ease,
+        box-shadow 160ms ease;
+}
+
+.history-record:hover,
+.history-record-selected {
+    border-color: #7fa399;
+    box-shadow: 0 8px 22px rgb(24 63 55 / 10%);
+}
+
+.history-record-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.65rem;
+}
+
+.history-secondary-button,
+.history-danger-button {
+    min-height: 44px;
+    padding: 0.7rem 1rem;
+    border-radius: 10px;
+    background: #fff;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.history-secondary-button {
+    border: 1px solid #9aada8;
+    color: #245348;
+}
+
+.history-danger-button {
+    border: 1px solid #c9554c;
+    color: #a52f28;
+}
+
+.history-secondary-button:disabled,
+.history-danger-button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}

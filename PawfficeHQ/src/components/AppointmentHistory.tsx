@@ -94,7 +94,10 @@ export default function AppointmentHistory({
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(true);
-  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<
+    string | null
+  >(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -329,43 +332,60 @@ export default function AppointmentHistory({
     setDateTo("");
   }
 
-  async function approveAppointment(appointmentId: string) {
-    setApprovingId(appointmentId);
+  async function updateAppointmentStatus(
+    appointmentId: string,
+    newStatus: "confirmed" | "cancelled" | "no_show",
+  ) {
+    if (
+      newStatus === "no_show" &&
+      !window.confirm("Mark this appointment as a no-show?")
+    ) {
+      return;
+    }
+
+    if (
+      newStatus === "cancelled" &&
+      !window.confirm("Cancel this appointment?")
+    ) {
+      return;
+    }
+
+    setUpdatingId(appointmentId);
     setMessage("");
 
     const { data, error } = await supabase
       .from("appointment")
-      .update({ status: "confirmed" })
+      .update({ status: newStatus })
       .eq("id", appointmentId)
       .eq("business_id", businessId)
-      .eq("status", "requested")
       .select("id, status")
       .maybeSingle();
 
     if (error) {
       console.error(error);
       setMessage(error.message);
-      setApprovingId(null);
+      setUpdatingId(null);
       return;
     }
 
     if (!data) {
       setMessage(
-        "The appointment could not be approved. Refresh and try again.",
+        "The appointment could not be updated. Refresh the page and try again.",
       );
-      setApprovingId(null);
+      setUpdatingId(null);
       return;
     }
 
     setAppointments((currentAppointments) =>
       currentAppointments.map((appointment) =>
         appointment.id === appointmentId
-          ? { ...appointment, status: "confirmed" }
+          ? { ...appointment, status: newStatus }
           : appointment,
       ),
     );
 
-    setApprovingId(null);
+    setSelectedAppointmentId(null);
+    setUpdatingId(null);
   }
 
   return (
@@ -488,7 +508,19 @@ export default function AppointmentHistory({
               const end = new Date(appointment.end_at);
 
               return (
-                <article className="history-record" key={appointment.id}>
+                <article
+                  className={`history-record ${
+                    selectedAppointmentId === appointment.id
+                      ? "history-record-selected"
+                      : ""
+                  }`}
+                  key={appointment.id}
+                  onClick={() =>
+                    setSelectedAppointmentId((currentId) =>
+                      currentId === appointment.id ? null : appointment.id,
+                    )
+                  }
+                >
                   <div className="history-record-date">
                     <strong>
                       {start.toLocaleDateString([], {
@@ -562,20 +594,64 @@ export default function AppointmentHistory({
                       </details>
                     )}
 
-                    {appointment.status === "requested" && (
-                      <div className="history-record-actions">
-                        <button
-                          type="button"
-                          className="history-approve-button"
-                          disabled={approvingId === appointment.id}
-                          onClick={() =>
-                            void approveAppointment(appointment.id)
-                          }
-                        >
-                          {approvingId === appointment.id
-                            ? "Approving..."
-                            : "Approve appointment"}
-                        </button>
+                    {selectedAppointmentId === appointment.id && (
+                      <div
+                        className="history-record-actions"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {appointment.status === "requested" && (
+                          <button
+                            type="button"
+                            className="history-approve-button"
+                            disabled={updatingId === appointment.id}
+                            onClick={() =>
+                              void updateAppointmentStatus(
+                                appointment.id,
+                                "confirmed",
+                              )
+                            }
+                          >
+                            {updatingId === appointment.id
+                              ? "Updating..."
+                              : "Approve appointment"}
+                          </button>
+                        )}
+
+                        {["confirmed", "checked_in"].includes(
+                          appointment.status,
+                        ) && (
+                          <button
+                            type="button"
+                            className="history-danger-button"
+                            disabled={updatingId === appointment.id}
+                            onClick={() =>
+                              void updateAppointmentStatus(
+                                appointment.id,
+                                "no_show",
+                              )
+                            }
+                          >
+                            Mark no-show
+                          </button>
+                        )}
+
+                        {["requested", "confirmed"].includes(
+                          appointment.status,
+                        ) && (
+                          <button
+                            type="button"
+                            className="history-secondary-button"
+                            disabled={updatingId === appointment.id}
+                            onClick={() =>
+                              void updateAppointmentStatus(
+                                appointment.id,
+                                "cancelled",
+                              )
+                            }
+                          >
+                            Cancel appointment
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
