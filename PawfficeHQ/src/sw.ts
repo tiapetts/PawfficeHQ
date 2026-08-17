@@ -1,15 +1,11 @@
-import { precacheAndRoute } from "workbox-precaching";
+// @ts-nocheck
+/// <reference lib="webworker" />
 
-declare const self: ServiceWorkerGlobalScope & {
-  __WB_MANIFEST: Array<{
-    url: string;
-    revision?: string | null;
-  }>;
-};
+import { precacheAndRoute } from "workbox-precaching";
 
 precacheAndRoute(self.__WB_MANIFEST);
 
-self.addEventListener("push", (event: PushEvent) => {
+self.addEventListener("push", (event) => {
   let payload = {
     title: "Pawffice HQ",
     body: "You have a new notification.",
@@ -41,7 +37,7 @@ self.addEventListener("push", (event: PushEvent) => {
   );
 });
 
-self.addEventListener("notificationclick", (event: NotificationEvent) => {
+self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
   const destination =
