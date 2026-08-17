@@ -3,6 +3,12 @@
 
 import { precacheAndRoute } from "workbox-precaching";
 
+self.skipWaiting();
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 precacheAndRoute(self.__WB_MANIFEST);
 
 self.addEventListener("push", (event) => {
@@ -53,15 +59,13 @@ self.addEventListener("notificationclick", (event) => {
       })
       .then(async (clients) => {
         for (const client of clients) {
-          if ("focus" in client) {
-            await client.focus();
+          await client.focus();
 
-            if ("navigate" in client) {
-              await client.navigate(destination);
-            }
-
-            return;
+          if ("navigate" in client) {
+            await client.navigate(destination);
           }
+
+          return;
         }
 
         await self.clients.openWindow(destination);
