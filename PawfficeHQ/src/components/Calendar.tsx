@@ -55,7 +55,7 @@ type AppointmentService = {
   staff_id: string | null;
 };
 
-function Calendar({ businessId }: CalendarProps) {
+function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [clientPets, setClientPets] = useState<ClientPet[]>([]);
