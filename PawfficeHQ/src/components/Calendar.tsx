@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 
 type CalendarProps = {
   businessId: string;
+  readOnly?: boolean;
 };
 
 type Client = {
@@ -136,7 +137,9 @@ function Calendar({ businessId }: CalendarProps) {
     }
 
     const loadedAppointments = appointmentsResult.data ?? [];
-    const appointmentIds = loadedAppointments.map((appointment) => appointment.id);
+    const appointmentIds = loadedAppointments.map(
+      (appointment) => appointment.id,
+    );
 
     let loadedAppointmentPets: AppointmentPet[] = [];
     let loadedAppointmentServices: AppointmentService[] = [];
@@ -242,7 +245,9 @@ function Calendar({ businessId }: CalendarProps) {
 
   function clientName(id: number) {
     const client = clients.find((item) => item.id === id);
-    return client ? `${client.first_name} ${client.last_name}` : "Unknown client";
+    return client
+      ? `${client.first_name} ${client.last_name}`
+      : "Unknown client";
   }
 
   function petName(appointmentId: string) {
