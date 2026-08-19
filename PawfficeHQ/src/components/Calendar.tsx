@@ -64,61 +64,6 @@ type AppointmentService = {
   staff_id: string | null;
 };
 
-type DayName =
-  | "sunday"
-  | "monday"
-  | "tuesday"
-  | "wednesday"
-  | "thursday"
-  | "friday"
-  | "saturday";
-
-type DayHours = {
-  open: boolean;
-  start: string;
-  end: string;
-};
-
-type BusinessHours = Record<DayName, DayHours>;
-
-const defaultBusinessHours: BusinessHours = {
-  sunday: {
-    open: false,
-    start: "08:00",
-    end: "17:00",
-  },
-  monday: {
-    open: true,
-    start: "08:00",
-    end: "17:00",
-  },
-  tuesday: {
-    open: true,
-    start: "08:00",
-    end: "17:00",
-  },
-  wednesday: {
-    open: true,
-    start: "08:00",
-    end: "17:00",
-  },
-  thursday: {
-    open: true,
-    start: "08:00",
-    end: "17:00",
-  },
-  friday: {
-    open: true,
-    start: "08:00",
-    end: "17:00",
-  },
-  saturday: {
-    open: false,
-    start: "08:00",
-    end: "17:00",
-  },
-};
-
 function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
@@ -138,7 +83,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [staffId, setStaffId] = useState("");
   const [startTime, setStartTime] = useState("");
   const [notes, setNotes] = useState("");
-  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date(), 1));
+  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
   const [mobileDate, setMobileDate] = useState(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -158,16 +103,12 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [notificationBody, setNotificationBody] = useState("");
   const [confirmSmsConsent, setConfirmSmsConsent] = useState(false);
   const [sendingNotification, setSendingNotification] = useState(false);
+  const [payingAppointmentId, setPayingAppointmentId] = useState<string | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [appointmentInterval, setAppointmentInterval] = useState(30);
-  const [calendarStart, setCalendarStart] = useState("08:00");
-  const [calendarEnd, setCalendarEnd] = useState("18:00");
-  const [weekStartsOn, setWeekStartsOn] = useState(1);
-  const [businessHours, setBusinessHours] =
-    useState<BusinessHours>(defaultBusinessHours);
-  const [allowDoubleBooking, setAllowDoubleBooking] = useState(false);
 
   async function loadCalendar() {
     setLoading(true);
@@ -275,57 +216,6 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   }, [businessId]);
 
   useEffect(() => {
-    async function loadCalendarSettings() {
-      const { data, error } = await supabase.rpc("get_business_settings", {
-        p_business_id: businessId,
-      });
-
-      if (error) {
-        console.error("Calendar settings error:", error);
-        setMessage(error.message);
-        return;
-      }
-
-      const savedInterval = Number(data?.appointment_interval);
-
-      if ([15, 30, 60].includes(savedInterval)) {
-        setAppointmentInterval(savedInterval);
-      }
-
-      if (typeof data?.calendar_start === "string" && data.calendar_start) {
-        setCalendarStart(data.calendar_start);
-      }
-
-      if (typeof data?.calendar_end === "string" && data.calendar_end) {
-        setCalendarEnd(data.calendar_end);
-      }
-
-      const savedWeekStart = Number(data?.week_starts_on);
-
-      if ([0, 1].includes(savedWeekStart)) {
-        setWeekStartsOn(savedWeekStart);
-
-        setWeekStart((currentDate) =>
-          getWeekStart(currentDate, savedWeekStart),
-        );
-      }
-
-      if (data?.business_hours && typeof data.business_hours === "object") {
-        setBusinessHours({
-          ...defaultBusinessHours,
-          ...(data.business_hours as Partial<BusinessHours>),
-        });
-      }
-
-      if (typeof data?.allow_double_booking === "boolean") {
-        setAllowDoubleBooking(data.allow_double_booking);
-      }
-    }
-
-    void loadCalendarSettings();
-  }, [businessId]);
-
-  useEffect(() => {
     const query = window.matchMedia("(max-width: 720px)");
     const update = (event: MediaQueryListEvent) => setIsMobile(event.matches);
     setIsMobile(query.matches);
@@ -355,34 +245,11 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     [weekStart],
   );
 
-  //
-  const timeSlots = useMemo(() => {
-    const [startHour = 8, startMinute = 0] = calendarStart
-      .split(":")
-      .map(Number);
+  const timeSlots = useMemo(
+    () => Array.from({ length: 21 }, (_, index) => 8 * 60 + index * 30),
+    [],
+  );
 
-    const [endHour = 18, endMinute = 0] = calendarEnd.split(":").map(Number);
-
-    const startInMinutes = startHour * 60 + startMinute;
-    const endInMinutes = endHour * 60 + endMinute;
-
-    if (
-      !Number.isFinite(startInMinutes) ||
-      !Number.isFinite(endInMinutes) ||
-      endInMinutes <= startInMinutes
-    ) {
-      return [];
-    }
-
-    const numberOfSlots = Math.ceil(
-      (endInMinutes - startInMinutes) / appointmentInterval,
-    );
-
-    return Array.from(
-      { length: numberOfSlots },
-      (_, index) => startInMinutes + index * appointmentInterval,
-    );
-  }, [appointmentInterval, calendarStart, calendarEnd]);
   const visibleDays = isMobile ? [mobileDate] : weekDays;
 
   function moveCalendar(amount: number) {
@@ -406,7 +273,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     setMobileDate(today);
-    setWeekStart(getWeekStart(today, weekStartsOn));
+    setWeekStart(getMonday(today));
   }
 
   const upcomingAppointments = useMemo(
@@ -420,15 +287,13 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     [appointments],
   );
 
-  function getWeekStart(date: Date, startsOn: number) {
-    const start = new Date(date);
-    const currentDay = start.getDay();
-    const distance = (currentDay - startsOn + 7) % 7;
-
-    start.setDate(start.getDate() - distance);
-    start.setHours(0, 0, 0, 0);
-
-    return start;
+  function getMonday(date: Date) {
+    const monday = new Date(date);
+    const day = monday.getDay();
+    const distance = day === 0 ? -6 : 1 - day;
+    monday.setDate(monday.getDate() + distance);
+    monday.setHours(0, 0, 0, 0);
+    return monday;
   }
 
   function formatInputDateTime(date: Date) {
@@ -440,47 +305,8 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   }
 
-  function timeValueToMinutes(value: string) {
-    const [hours = "0", minutes = "0"] = value.split(":");
-
-    return Number(hours) * 60 + Number(minutes);
-  }
-
-  function getDayHours(date: Date) {
-    const dayNames: DayName[] = [
-      "sunday",
-      "monday",
-      "tuesday",
-      "wednesday",
-      "thursday",
-      "friday",
-      "saturday",
-    ];
-
-    return businessHours[dayNames[date.getDay()]];
-  }
-
-  function isOpenTimeSlot(day: Date, minutesAfterMidnight: number) {
-    const hours = getDayHours(day);
-
-    if (!hours?.open) {
-      return false;
-    }
-
-    const openingTime = timeValueToMinutes(hours.start);
-    const closingTime = timeValueToMinutes(hours.end);
-
-    return (
-      minutesAfterMidnight >= openingTime && minutesAfterMidnight < closingTime
-    );
-  }
-
   function selectTimeSlot(day: Date, minutesAfterMidnight: number) {
     if (readOnly) return;
-    if (!isOpenTimeSlot(day, minutesAfterMidnight)) {
-      setMessage("That time is outside your saved business hours.");
-      return;
-    }
     const selected = new Date(day);
     selected.setHours(
       Math.floor(minutesAfterMidnight / 60),
@@ -494,7 +320,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function appointmentsInSlot(day: Date, minutesAfterMidnight: number) {
+  function appointmentInSlot(day: Date, minutesAfterMidnight: number) {
     const slotStart = new Date(day);
     slotStart.setHours(
       Math.floor(minutesAfterMidnight / 60),
@@ -502,33 +328,25 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       0,
       0,
     );
-    const slotEnd = new Date(
-      slotStart.getTime() + appointmentInterval * 60_000,
-    );
+    const slotEnd = new Date(slotStart.getTime() + 30 * 60_000);
 
-    return appointments
-      .filter((item) => {
-        if (item.status === "cancelled" || item.status === "void") {
-          return false;
-        }
+    const appointment = appointments.find((item) => {
+      if (item.status === "cancelled" || item.status === "void") {
+        return false;
+      }
 
-        const start = new Date(item.start_at);
-        const end = new Date(item.end_at);
-        return start < slotEnd && end > slotStart;
-      })
-      .map((appointment) => {
-        const appointmentStart = new Date(appointment.start_at);
-        return {
-          appointment,
-          isFirstSlot:
-            appointmentStart >= slotStart && appointmentStart < slotEnd,
-        };
-      })
-      .sort(
-        (a, b) =>
-          new Date(a.appointment.start_at).getTime() -
-          new Date(b.appointment.start_at).getTime(),
-      );
+      const start = new Date(item.start_at);
+      const end = new Date(item.end_at);
+      return start < slotEnd && end > slotStart;
+    });
+
+    if (!appointment) return null;
+
+    const appointmentStart = new Date(appointment.start_at);
+    return {
+      appointment,
+      isFirstSlot: appointmentStart >= slotStart && appointmentStart < slotEnd,
+    };
   }
 
   function formatSlotTime(minutesAfterMidnight: number) {
@@ -551,12 +369,6 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
 
     if (readOnly) return;
 
-    if (!isOpenTimeSlot(day, minutesAfterMidnight)) {
-      setMessage("Appointments cannot be moved outside business hours.");
-      setDraggingAppointmentId(null);
-      return;
-    }
-
     const appointmentId =
       event.dataTransfer.getData("text/plain") || draggingAppointmentId;
     const appointment = appointments.find((item) => item.id === appointmentId);
@@ -578,31 +390,29 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
 
     setMessage("");
 
-    if (!allowDoubleBooking) {
-      const { data: conflicts, error: conflictError } = await supabase
-        .from("appointment")
-        .select("id")
-        .eq("business_id", businessId)
-        .neq("id", appointment.id)
-        .lt("start_at", newEnd.toISOString())
-        .gt("end_at", newStart.toISOString())
-        .not("status", "in", "(cancelled,void)")
-        .limit(1);
+    const { data: conflicts, error: conflictError } = await supabase
+      .from("appointment")
+      .select("id")
+      .eq("business_id", businessId)
+      .neq("id", appointment.id)
+      .lt("start_at", newEnd.toISOString())
+      .gt("end_at", newStart.toISOString())
+      .not("status", "in", "(cancelled,void)")
+      .limit(1);
 
-      if (conflictError) {
-        console.error(conflictError);
-        setMessage(conflictError.message);
-        setDraggingAppointmentId(null);
-        return;
-      }
+    if (conflictError) {
+      console.error(conflictError);
+      setMessage(conflictError.message);
+      setDraggingAppointmentId(null);
+      return;
+    }
 
-      if (conflicts && conflicts.length > 0) {
-        setMessage(
-          "That move would overlap another appointment. Choose another time.",
-        );
-        setDraggingAppointmentId(null);
-        return;
-      }
+    if (conflicts && conflicts.length > 0) {
+      setMessage(
+        "That move would overlap another appointment. Choose another time.",
+      );
+      setDraggingAppointmentId(null);
+      return;
     }
 
     const { error: updateError } = await supabase
@@ -723,6 +533,22 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     return colors[status] ?? "#315f55";
   }
 
+  function statusCellColor(status: string) {
+    const colors: Record<string, string> = {
+      requested: "#f4eadb",
+      confirmed: "#dcece7",
+      checked_in: "#dcecf6",
+      in_progress: "#f8ebcd",
+      ready_for_pickup: "#d8eee8",
+      completed: "#e4e8e7",
+      cancelled: "#f6dddd",
+      no_show: "#eee0ea",
+      void: "#e5e7e6",
+    };
+
+    return colors[status] ?? "#dcece7";
+  }
+
   function resetForm() {
     setClientId("");
     setPetId("");
@@ -748,30 +574,28 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       start.getTime() + selectedService.duration_minutes * 60_000,
     );
 
-    if (!allowDoubleBooking) {
-      const { data: conflicts, error: conflictError } = await supabase
-        .from("appointment")
-        .select("id")
-        .eq("business_id", businessId)
-        .lt("start_at", end.toISOString())
-        .gt("end_at", start.toISOString())
-        .not("status", "in", "(cancelled,void)")
-        .limit(1);
+    const { data: conflicts, error: conflictError } = await supabase
+      .from("appointment")
+      .select("id")
+      .eq("business_id", businessId)
+      .lt("start_at", end.toISOString())
+      .gt("end_at", start.toISOString())
+      .not("status", "in", "(cancelled,void)")
+      .limit(1);
 
-      if (conflictError) {
-        console.error(conflictError);
-        setMessage(conflictError.message);
-        setSaving(false);
-        return;
-      }
+    if (conflictError) {
+      console.error(conflictError);
+      setMessage(conflictError.message);
+      setSaving(false);
+      return;
+    }
 
-      if (conflicts && conflicts.length > 0) {
-        setMessage(
-          "That time overlaps an existing appointment. Please choose another time.",
-        );
-        setSaving(false);
-        return;
-      }
+    if (conflicts && conflicts.length > 0) {
+      setMessage(
+        "That time overlaps an existing appointment. Please choose another time.",
+      );
+      setSaving(false);
+      return;
     }
 
     const { error } = await supabase.rpc("create_appointment", {
@@ -829,6 +653,83 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     return employee
       ? `${employee.first_name} ${employee.last_name}`
       : "Unassigned";
+  }
+
+  async function openAppointmentCheckout(appointmentId: string) {
+    setPayingAppointmentId(appointmentId);
+    setMessage("");
+
+    try {
+      const { data: invoiceIdData, error: invoiceError } = await supabase.rpc(
+        "create_invoice_from_appointment",
+        { p_appointment_id: appointmentId },
+      );
+
+      if (invoiceError || !invoiceIdData) {
+        throw (
+          invoiceError ??
+          new Error("The appointment invoice could not be created.")
+        );
+      }
+
+      const invoiceId = String(invoiceIdData);
+      const { data: invoice, error: invoiceStatusError } = await supabase
+        .from("invoice")
+        .select("id, status")
+        .eq("id", invoiceId)
+        .single();
+
+      if (invoiceStatusError || !invoice) {
+        throw (
+          invoiceStatusError ??
+          new Error("The appointment invoice could not be loaded.")
+        );
+      }
+
+      if (invoice.status === "draft") {
+        const { error: issueError } = await supabase.rpc("issue_invoice", {
+          p_invoice_id: invoiceId,
+        });
+
+        if (issueError) throw issueError;
+      } else if (
+        !["open", "partially_paid", "overdue"].includes(invoice.status)
+      ) {
+        throw new Error(
+          invoice.status === "paid"
+            ? "This appointment is already paid."
+            : "This appointment is not currently available for payment.",
+        );
+      }
+
+      const returnUrl = `${window.location.origin}${window.location.pathname}`;
+      const { data, error } = await supabase.functions.invoke(
+        "create-stripe-checkout",
+        {
+          body: { invoiceId, returnUrl },
+        },
+      );
+
+      const checkoutData = data as { url?: string; error?: string } | null;
+
+      if (error || !checkoutData?.url) {
+        throw new Error(
+          checkoutData?.error ??
+            error?.message ??
+            "Stripe Checkout could not be opened.",
+        );
+      }
+
+      window.location.assign(checkoutData.url);
+    } catch (error) {
+      console.error("Appointment checkout error:", error);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Stripe Checkout could not be opened.",
+      );
+      setPayingAppointmentId(null);
+    }
   }
 
   return (
@@ -1086,22 +987,21 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                 {formatSlotTime(slot)}
               </div>,
               ...visibleDays.map((day) => {
-                const occupiedSlots = appointmentsInSlot(day, slot);
-                const hasAppointments = occupiedSlots.length > 0;
-                const openSlot = isOpenTimeSlot(day, slot);
+                const occupiedSlot = appointmentInSlot(day, slot);
                 return (
                   <button
                     key={`${day.toISOString()}-${slot}`}
                     type="button"
                     onClick={() => {
-                      if (!hasAppointments) {
+                      if (occupiedSlot) {
+                        setSelectedAppointment(occupiedSlot.appointment);
+                      } else {
                         selectTimeSlot(day, slot);
                       }
                     }}
                     onDragOver={(event) => {
-                      if (!readOnly && openSlot && draggingAppointmentId) {
+                      if (!readOnly && draggingAppointmentId)
                         event.preventDefault();
-                      }
                     }}
                     onDrop={(event) => {
                       if (!readOnly) void moveAppointment(event, day, slot);
@@ -1112,32 +1012,23 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                       border: 0,
                       borderRight: "1px solid #d7e0dd",
                       borderBottom: "1px solid #d7e0dd",
-                      background: openSlot ? "#ffffff" : "#eef2f1",
-                      cursor:
-                        hasAppointments || !openSlot ? "default" : "pointer",
+                      background: occupiedSlot
+                        ? statusCellColor(occupiedSlot.appointment.status)
+                        : "#ffffff",
+                      cursor: occupiedSlot ? "default" : "pointer",
                       textAlign: "left",
                       color: "#183b34",
-                      opacity: openSlot || hasAppointments ? 1 : 0.7,
-                      display: "flex",
-                      alignItems: "stretch",
-                      gap: 4,
+                      opacity: 1,
                     }}
                     title={
-                      hasAppointments
-                        ? `${occupiedSlots.length} appointment${occupiedSlots.length === 1 ? "" : "s"}`
-                        : openSlot
-                          ? "Create an appointment at this time"
-                          : "Outside business hours"
+                      occupiedSlot
+                        ? "Drag this appointment to an open time"
+                        : "Create an appointment at this time"
                     }
                   >
-                    {occupiedSlots.map((occupiedSlot) => (
+                    {occupiedSlot && (
                       <span
-                        key={occupiedSlot.appointment.id}
                         draggable={!readOnly && occupiedSlot.isFirstSlot}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedAppointment(occupiedSlot.appointment);
-                        }}
                         onDragStart={(event) => {
                           if (readOnly || !occupiedSlot.isFirstSlot) return;
                           event.stopPropagation();
@@ -1152,8 +1043,6 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                         style={{
                           display: "block",
                           height: "100%",
-                          flex: "1 1 0",
-                          minWidth: 0,
                           minHeight: 44,
                           padding: "6px 7px",
                           borderRadius: occupiedSlot.isFirstSlot
@@ -1165,8 +1054,6 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                           color: "white",
                           fontSize: 12,
                           lineHeight: 1.25,
-                          overflow: "hidden",
-                          wordBreak: "break-word",
                           cursor:
                             !readOnly && occupiedSlot.isFirstSlot
                               ? "grab"
@@ -1191,7 +1078,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                           <span style={{ opacity: 0.8 }}>Continues</span>
                         )}
                       </span>
-                    ))}
+                    )}
                   </button>
                 );
               }),
@@ -1251,6 +1138,20 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                     </strong>
                     <p>{staffName(appointment.id)}</p>
                     <span className="status-badge">{appointment.status}</span>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() =>
+                          void openAppointmentCheckout(appointment.id)
+                        }
+                        disabled={payingAppointmentId !== null}
+                      >
+                        {payingAppointmentId === appointment.id
+                          ? "Opening Stripe..."
+                          : "Take payment"}
+                      </button>
+                    )}
                   </div>
                 </article>
               );
