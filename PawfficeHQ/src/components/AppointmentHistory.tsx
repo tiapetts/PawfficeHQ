@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import "./AppointmentHistory.css";
 
@@ -56,6 +56,21 @@ type AppointmentInvoice = {
   status: string;
 };
 
+type AppointmentPayment = {
+  id: string;
+  invoice_id: string;
+  amount: number;
+  status: string;
+  provider: string | null;
+};
+
+type AppointmentRefund = {
+  id: string;
+  payment_id: string;
+  amount: number;
+  status: string;
+};
+
 type HistoryFilter =
   | "all"
   | "upcoming"
@@ -97,6 +112,8 @@ export default function AppointmentHistory({
     AppointmentService[]
   >([]);
   const [invoices, setInvoices] = useState<AppointmentInvoice[]>([]);
+  const [payments, setPayments] = useState<AppointmentPayment[]>([]);
+  const [refunds, setRefunds] = useState<AppointmentRefund[]>([]);
   const [activeFilter, setActiveFilter] = useState<HistoryFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -109,6 +126,10 @@ export default function AppointmentHistory({
   const [payingAppointmentId, setPayingAppointmentId] = useState<string | null>(
     null,
   );
+  const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
+  const [refunding, setRefunding] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -123,6 +144,8 @@ export default function AppointmentHistory({
         servicesResult,
         staffResult,
         invoicesResult,
+        paymentsResult,
+        refundsResult,
       ] = await Promise.all([
         supabase
           .from("appointment")
@@ -152,6 +175,16 @@ export default function AppointmentHistory({
           .select("id, appointment_id, status")
           .eq("business_id", businessId)
           .neq("status", "void"),
+        supabase
+          .from("payment")
+          .select("id, invoice_id, amount, status, provider")
+          .eq("business_id", businessId)
+          .in("status", ["succeeded", "partially_refunded", "refunded"]),
+        supabase
+          .from("refund")
+          .select("id, payment_id, amount, status")
+          .eq("business_id", businessId)
+          .in("status", ["pending", "succeeded"]),
       ]);
 
       const firstError = [
@@ -161,6 +194,8 @@ export default function AppointmentHistory({
         servicesResult.error,
         staffResult.error,
         invoicesResult.error,
+        paymentsResult.error,
+        refundsResult.error,
       ].find(Boolean);
 
       if (firstError) {
@@ -209,6 +244,8 @@ export default function AppointmentHistory({
       setServices(servicesResult.data ?? []);
       setStaff(staffResult.data ?? []);
       setInvoices(invoicesResult.data ?? []);
+      setPayments(paymentsResult.data ?? []);
+      setRefunds(refundsResult.data ?? []);
       setAppointmentPets(loadedPetLinks);
       setAppointmentServices(loadedServiceLinks);
       setLoading(false);
@@ -516,6 +553,106 @@ export default function AppointmentHistory({
     }
   }
 
+  function openRefundForm(payment: AppointmentPayment, refundable: number) {
+    setRefundPaymentId(payment.id);
+    setRefundAmount(refundable.toFixed(2));
+    setRefundReason("");
+    setMessage("");
+  }
+
+  async function issueRefund(
+    event: FormEvent<HTMLFormElement>,
+    refundable: number,
+  ) {
+    event.preventDefault();
+    if (!refundPaymentId) return;
+
+    const amount = Number(refundAmount);
+
+    if (!Number.isFinite(amount) || amount <= 0 || amount > refundable) {
+      setMessage(
+        `Enter an amount between $0.01 and $${refundable.toFixed(2)}.`,
+      );
+      return;
+    }
+
+    if (!refundReason.trim()) {
+      setMessage("Enter an internal reason for the refund.");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Refund $${amount.toFixed(2)} to the client's original card?`,
+      )
+    ) {
+      return;
+    }
+
+    setRefunding(true);
+    setMessage("");
+
+    const { data, error } = await supabase.functions.invoke(
+      "create-stripe-refund",
+      {
+        body: {
+          paymentId: refundPaymentId,
+          amount,
+          reason: refundReason.trim(),
+        },
+      },
+    );
+
+    const refundData = data as {
+      success?: boolean;
+      status?: string;
+      error?: string;
+    } | null;
+
+    if (error || !refundData?.success) {
+      console.error("Stripe refund error:", error, refundData);
+      setMessage(
+        refundData?.error ??
+          error?.message ??
+          "The refund could not be issued.",
+      );
+      setRefunding(false);
+      return;
+    }
+
+    const [invoicesResult, paymentsResult, refundsResult] = await Promise.all([
+      supabase
+        .from("invoice")
+        .select("id, appointment_id, status")
+        .eq("business_id", businessId)
+        .neq("status", "void"),
+      supabase
+        .from("payment")
+        .select("id, invoice_id, amount, status, provider")
+        .eq("business_id", businessId)
+        .in("status", ["succeeded", "partially_refunded", "refunded"]),
+      supabase
+        .from("refund")
+        .select("id, payment_id, amount, status")
+        .eq("business_id", businessId)
+        .in("status", ["pending", "succeeded"]),
+    ]);
+
+    if (invoicesResult.data) setInvoices(invoicesResult.data);
+    if (paymentsResult.data) setPayments(paymentsResult.data);
+    if (refundsResult.data) setRefunds(refundsResult.data);
+
+    setRefundPaymentId(null);
+    setRefundAmount("");
+    setRefundReason("");
+    setRefunding(false);
+    setMessage(
+      refundData.status === "succeeded"
+        ? "Refund completed successfully."
+        : "Refund submitted and pending.",
+    );
+  }
+
   return (
     <>
       <header className="dashboard-header history-page-header">
@@ -637,7 +774,22 @@ export default function AppointmentHistory({
               const appointmentInvoice = invoices.find(
                 (invoice) => invoice.appointment_id === appointment.id,
               );
-              const paymentComplete = appointmentInvoice?.status === "paid";
+              const stripePayment = payments.find(
+                (payment) =>
+                  payment.invoice_id === appointmentInvoice?.id &&
+                  payment.provider === "stripe",
+              );
+              const refundedAmount = stripePayment
+                ? refunds
+                    .filter((refund) => refund.payment_id === stripePayment.id)
+                    .reduce((total, refund) => total + Number(refund.amount), 0)
+                : 0;
+              const refundable = stripePayment
+                ? Math.max(Number(stripePayment.amount) - refundedAmount, 0)
+                : 0;
+              const fullyRefunded = Boolean(stripePayment && refundable <= 0);
+              const partiallyRefunded = refundedAmount > 0 && !fullyRefunded;
+              const paymentComplete = Boolean(stripePayment);
 
               return (
                 <article
@@ -727,14 +879,89 @@ export default function AppointmentHistory({
                     )}
 
                     {paymentComplete ? (
-                      <div className="history-record-actions">
+                      <div
+                        className="history-record-actions"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <button
                           type="button"
                           className="secondary-button"
                           disabled
                         >
-                          Paid
+                          {fullyRefunded
+                            ? "Refunded"
+                            : partiallyRefunded
+                              ? "Partially refunded"
+                              : "Paid"}
                         </button>
+
+                        {!fullyRefunded && stripePayment && (
+                          <button
+                            type="button"
+                            className="history-danger-button"
+                            disabled={refunding}
+                            onClick={() =>
+                              openRefundForm(stripePayment, refundable)
+                            }
+                          >
+                            Refund payment
+                          </button>
+                        )}
+
+                        {refundPaymentId === stripePayment?.id && (
+                          <form
+                            onSubmit={(event) =>
+                              void issueRefund(event, refundable)
+                            }
+                            style={{ width: "100%" }}
+                          >
+                            <label>
+                              Refund amount
+                              <input
+                                type="number"
+                                min="0.01"
+                                max={refundable.toFixed(2)}
+                                step="0.01"
+                                value={refundAmount}
+                                onChange={(event) =>
+                                  setRefundAmount(event.target.value)
+                                }
+                                required
+                              />
+                            </label>
+
+                            <label>
+                              Internal refund reason
+                              <input
+                                type="text"
+                                maxLength={500}
+                                value={refundReason}
+                                onChange={(event) =>
+                                  setRefundReason(event.target.value)
+                                }
+                                required
+                              />
+                            </label>
+
+                            <div className="history-record-actions">
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                disabled={refunding}
+                                onClick={() => setRefundPaymentId(null)}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="submit"
+                                className="history-danger-button"
+                                disabled={refunding}
+                              >
+                                {refunding ? "Refunding..." : "Issue refund"}
+                              </button>
+                            </div>
+                          </form>
+                        )}
                       </div>
                     ) : !["requested", "cancelled", "no_show", "void"].includes(
                         appointment.status,
