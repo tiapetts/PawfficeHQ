@@ -99,6 +99,9 @@ export default function AppointmentHistory({
     string | null
   >(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [payingAppointmentId, setPayingAppointmentId] = useState<string | null>(
+    null,
+  );
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -421,6 +424,83 @@ export default function AppointmentHistory({
     setUpdatingId(null);
   }
 
+  async function openAppointmentCheckout(appointmentId: string) {
+    setPayingAppointmentId(appointmentId);
+    setMessage("");
+
+    try {
+      const { data: invoiceIdData, error: invoiceError } = await supabase.rpc(
+        "create_invoice_from_appointment",
+        { p_appointment_id: appointmentId },
+      );
+
+      if (invoiceError || !invoiceIdData) {
+        throw (
+          invoiceError ??
+          new Error("The appointment invoice could not be created.")
+        );
+      }
+
+      const invoiceId = String(invoiceIdData);
+      const { data: invoice, error: invoiceStatusError } = await supabase
+        .from("invoice")
+        .select("id, status")
+        .eq("id", invoiceId)
+        .single();
+
+      if (invoiceStatusError || !invoice) {
+        throw (
+          invoiceStatusError ??
+          new Error("The appointment invoice could not be loaded.")
+        );
+      }
+
+      if (invoice.status === "draft") {
+        const { error: issueError } = await supabase.rpc("issue_invoice", {
+          p_invoice_id: invoiceId,
+        });
+
+        if (issueError) throw issueError;
+      } else if (
+        !["open", "partially_paid", "overdue"].includes(invoice.status)
+      ) {
+        throw new Error(
+          invoice.status === "paid"
+            ? "This appointment is already paid."
+            : "This appointment is not currently available for payment.",
+        );
+      }
+
+      const returnUrl = `${window.location.origin}${window.location.pathname}`;
+      const { data, error } = await supabase.functions.invoke(
+        "create-stripe-checkout",
+        {
+          body: { invoiceId, returnUrl },
+        },
+      );
+
+      const checkoutData = data as { url?: string; error?: string } | null;
+
+      if (error || !checkoutData?.url) {
+        throw new Error(
+          checkoutData?.error ??
+            error?.message ??
+            "Stripe Checkout could not be opened.",
+        );
+      }
+
+      window.location.assign(checkoutData.url);
+    } catch (error) {
+      console.error("Appointment checkout error:", error);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Stripe Checkout could not be opened.",
+      );
+      setPayingAppointmentId(null);
+    }
+  }
+
   return (
     <>
       <header className="dashboard-header history-page-header">
@@ -625,6 +705,28 @@ export default function AppointmentHistory({
                           </div>
                         )}
                       </details>
+                    )}
+
+                    {!["requested", "cancelled", "no_show", "void"].includes(
+                      appointment.status,
+                    ) && (
+                      <div
+                        className="history-record-actions"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className="primary-button"
+                          disabled={payingAppointmentId !== null}
+                          onClick={() =>
+                            void openAppointmentCheckout(appointment.id)
+                          }
+                        >
+                          {payingAppointmentId === appointment.id
+                            ? "Opening Stripe..."
+                            : "Take payment"}
+                        </button>
+                      </div>
                     )}
 
                     {selectedAppointmentId === appointment.id && (
