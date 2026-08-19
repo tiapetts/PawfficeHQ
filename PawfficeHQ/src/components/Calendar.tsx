@@ -3,7 +3,6 @@ import { supabase } from "../lib/supabase";
 
 type CalendarProps = {
   businessId: string;
-  readOnly?: boolean;
 };
 
 type Client = {
@@ -55,7 +54,7 @@ type AppointmentService = {
   staff_id: string | null;
 };
 
-function Calendar({ businessId, readOnly = false }: CalendarProps) {
+function Calendar({ businessId }: CalendarProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [clientPets, setClientPets] = useState<ClientPet[]>([]);
@@ -137,9 +136,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     }
 
     const loadedAppointments = appointmentsResult.data ?? [];
-    const appointmentIds = loadedAppointments.map(
-      (appointment) => appointment.id,
-    );
+    const appointmentIds = loadedAppointments.map((appointment) => appointment.id);
 
     let loadedAppointmentPets: AppointmentPet[] = [];
     let loadedAppointmentServices: AppointmentService[] = [];
@@ -245,9 +242,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
 
   function clientName(id: number) {
     const client = clients.find((item) => item.id === id);
-    return client
-      ? `${client.first_name} ${client.last_name}`
-      : "Unknown client";
+    return client ? `${client.first_name} ${client.last_name}` : "Unknown client";
   }
 
   function petName(appointmentId: string) {
