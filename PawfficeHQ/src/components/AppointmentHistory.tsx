@@ -50,6 +50,12 @@ type AppointmentService = {
   staff_id: string | null;
 };
 
+type AppointmentInvoice = {
+  id: string;
+  appointment_id: string | null;
+  status: string;
+};
+
 type HistoryFilter =
   | "all"
   | "upcoming"
@@ -90,6 +96,7 @@ export default function AppointmentHistory({
   const [appointmentServices, setAppointmentServices] = useState<
     AppointmentService[]
   >([]);
+  const [invoices, setInvoices] = useState<AppointmentInvoice[]>([]);
   const [activeFilter, setActiveFilter] = useState<HistoryFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -115,6 +122,7 @@ export default function AppointmentHistory({
         petsResult,
         servicesResult,
         staffResult,
+        invoicesResult,
       ] = await Promise.all([
         supabase
           .from("appointment")
@@ -139,6 +147,11 @@ export default function AppointmentHistory({
           .from("STAFF")
           .select("id, first_name, last_name")
           .eq("business_id", businessId),
+        supabase
+          .from("invoice")
+          .select("id, appointment_id, status")
+          .eq("business_id", businessId)
+          .neq("status", "void"),
       ]);
 
       const firstError = [
@@ -147,6 +160,7 @@ export default function AppointmentHistory({
         petsResult.error,
         servicesResult.error,
         staffResult.error,
+        invoicesResult.error,
       ].find(Boolean);
 
       if (firstError) {
@@ -194,6 +208,7 @@ export default function AppointmentHistory({
       setPets(petsResult.data ?? []);
       setServices(servicesResult.data ?? []);
       setStaff(staffResult.data ?? []);
+      setInvoices(invoicesResult.data ?? []);
       setAppointmentPets(loadedPetLinks);
       setAppointmentServices(loadedServiceLinks);
       setLoading(false);
@@ -619,6 +634,10 @@ export default function AppointmentHistory({
             {filteredAppointments.map((appointment) => {
               const start = new Date(appointment.start_at);
               const end = new Date(appointment.end_at);
+              const appointmentInvoice = invoices.find(
+                (invoice) => invoice.appointment_id === appointment.id,
+              );
+              const paymentComplete = appointmentInvoice?.status === "paid";
 
               return (
                 <article
@@ -707,9 +726,19 @@ export default function AppointmentHistory({
                       </details>
                     )}
 
-                    {!["requested", "cancelled", "no_show", "void"].includes(
-                      appointment.status,
-                    ) && (
+                    {paymentComplete ? (
+                      <div className="history-record-actions">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled
+                        >
+                          Paid
+                        </button>
+                      </div>
+                    ) : !["requested", "cancelled", "no_show", "void"].includes(
+                        appointment.status,
+                      ) ? (
                       <div
                         className="history-record-actions"
                         onClick={(event) => event.stopPropagation()}
@@ -727,7 +756,7 @@ export default function AppointmentHistory({
                             : "Take payment"}
                         </button>
                       </div>
-                    )}
+                    ) : null}
 
                     {selectedAppointmentId === appointment.id && (
                       <div
