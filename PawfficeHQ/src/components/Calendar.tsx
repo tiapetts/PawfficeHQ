@@ -1331,6 +1331,25 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
               )}
             </div>
 
+            {!readOnly && (
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() =>
+                  void openAppointmentCheckout(selectedAppointment.id)
+                }
+                disabled={payingAppointmentId !== null}
+                style={{
+                  width: "100%",
+                  marginTop: 16,
+                  marginBottom: 16,
+                }}
+              >
+                {payingAppointmentId === selectedAppointment.id
+                  ? "Opening Stripe..."
+                  : "Take payment"}
+              </button>
+            )}
             {showNotification && !readOnly && (
               <form
                 className="notification-composer"
