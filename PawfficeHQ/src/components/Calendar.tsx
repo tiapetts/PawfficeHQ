@@ -1,19 +1,28 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type DragEvent,
+  type FormEvent,
+} from "react";
 import { supabase } from "../lib/supabase";
+import "./Responsive.css";
+import "./Notifications.css";
 
 type CalendarProps = {
   businessId: string;
+  readOnly?: boolean;
 };
 
 type Client = {
   id: number;
-  first_name: string;
-  last_name: string;
+  FirstName: string;
+  LastName: string;
 };
 
 type Pet = {
   id: number;
-  name: string;
+  PetName: string;
 };
 
 type ClientPet = {
@@ -37,10 +46,11 @@ type Staff = {
 type Appointment = {
   id: string;
   client_id: number;
-  start_time: string;
-  end_time: string;
+  start_at: string;
+  end_at: string;
   status: string;
-  notes: string | null;
+  client_notes: string | null;
+  internal_notes: string | null;
 };
 
 type AppointmentPet = {
@@ -54,7 +64,7 @@ type AppointmentService = {
   staff_id: string | null;
 };
 
-function Calendar({ businessId }: CalendarProps) {
+function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [clientPets, setClientPets] = useState<ClientPet[]>([]);
@@ -73,6 +83,29 @@ function Calendar({ businessId }: CalendarProps) {
   const [staffId, setStaffId] = useState("");
   const [startTime, setStartTime] = useState("");
   const [notes, setNotes] = useState("");
+  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
+  const [mobileDate, setMobileDate] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  });
+  const [isMobile, setIsMobile] = useState(
+    () => window.matchMedia("(max-width: 720px)").matches,
+  );
+  const [draggingAppointmentId, setDraggingAppointmentId] = useState<
+    string | null
+  >(null);
+  const [selectedAppointment, setSelectedAppointment] =
+    useState<Appointment | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationChannel, setNotificationChannel] = useState("email");
+  const [notificationBody, setNotificationBody] = useState("");
+  const [confirmSmsConsent, setConfirmSmsConsent] = useState(false);
+  const [sendingNotification, setSendingNotification] = useState(false);
+  const [payingAppointmentId, setPayingAppointmentId] = useState<string | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -91,14 +124,14 @@ function Calendar({ businessId }: CalendarProps) {
     ] = await Promise.all([
       supabase
         .from("CLIENT")
-        .select("id, first_name, last_name")
+        .select("id, FirstName, LastName")
         .eq("business_id", businessId)
-        .order("last_name"),
+        .order("LastName"),
       supabase
         .from("PET")
-        .select("id, name")
+        .select("id, PetName")
         .eq("business_id", businessId)
-        .order("name"),
+        .order("PetName"),
       supabase.from("client_pet").select("client_id, pet_id"),
       supabase
         .from("service")
@@ -113,10 +146,11 @@ function Calendar({ businessId }: CalendarProps) {
         .order("last_name"),
       supabase
         .from("appointment")
-        .select("id, client_id, start_time, end_time, status, notes")
+        .select(
+          "id, client_id, start_at, end_at, status, client_notes, internal_notes",
+        )
         .eq("business_id", businessId)
-        .gte("start_time", new Date().toISOString())
-        .order("start_time"),
+        .order("start_at"),
     ]);
 
     const firstError = [
@@ -136,7 +170,9 @@ function Calendar({ businessId }: CalendarProps) {
     }
 
     const loadedAppointments = appointmentsResult.data ?? [];
-    const appointmentIds = loadedAppointments.map((appointment) => appointment.id);
+    const appointmentIds = loadedAppointments.map(
+      (appointment) => appointment.id,
+    );
 
     let loadedAppointmentPets: AppointmentPet[] = [];
     let loadedAppointmentServices: AppointmentService[] = [];
@@ -179,6 +215,14 @@ function Calendar({ businessId }: CalendarProps) {
     void loadCalendar();
   }, [businessId]);
 
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 720px)");
+    const update = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+    setIsMobile(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
   const availablePets = useMemo(() => {
     if (!clientId) return [];
 
@@ -190,6 +234,320 @@ function Calendar({ businessId }: CalendarProps) {
   }, [clientId, clientPets, pets]);
 
   const selectedService = services.find((service) => service.id === serviceId);
+
+  const weekDays = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, index) => {
+        const day = new Date(weekStart);
+        day.setDate(weekStart.getDate() + index);
+        return day;
+      }),
+    [weekStart],
+  );
+
+  const timeSlots = useMemo(
+    () => Array.from({ length: 21 }, (_, index) => 8 * 60 + index * 30),
+    [],
+  );
+
+  const visibleDays = isMobile ? [mobileDate] : weekDays;
+
+  function moveCalendar(amount: number) {
+    if (isMobile) {
+      setMobileDate((current) => {
+        const next = new Date(current);
+        next.setDate(next.getDate() + amount);
+        return next;
+      });
+      return;
+    }
+
+    setWeekStart((current) => {
+      const next = new Date(current);
+      next.setDate(next.getDate() + amount * 7);
+      return next;
+    });
+  }
+
+  function goToToday() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    setMobileDate(today);
+    setWeekStart(getMonday(today));
+  }
+
+  const upcomingAppointments = useMemo(
+    () =>
+      appointments.filter(
+        (appointment) =>
+          new Date(appointment.end_at) >= new Date() &&
+          appointment.status !== "cancelled" &&
+          appointment.status !== "void",
+      ),
+    [appointments],
+  );
+
+  function getMonday(date: Date) {
+    const monday = new Date(date);
+    const day = monday.getDay();
+    const distance = day === 0 ? -6 : 1 - day;
+    monday.setDate(monday.getDate() + distance);
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  }
+
+  function formatInputDateTime(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  function selectTimeSlot(day: Date, minutesAfterMidnight: number) {
+    if (readOnly) return;
+    const selected = new Date(day);
+    selected.setHours(
+      Math.floor(minutesAfterMidnight / 60),
+      minutesAfterMidnight % 60,
+      0,
+      0,
+    );
+    setStartTime(formatInputDateTime(selected));
+    setMessage("");
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function appointmentInSlot(day: Date, minutesAfterMidnight: number) {
+    const slotStart = new Date(day);
+    slotStart.setHours(
+      Math.floor(minutesAfterMidnight / 60),
+      minutesAfterMidnight % 60,
+      0,
+      0,
+    );
+    const slotEnd = new Date(slotStart.getTime() + 30 * 60_000);
+
+    const appointment = appointments.find((item) => {
+      if (item.status === "cancelled" || item.status === "void") {
+        return false;
+      }
+
+      const start = new Date(item.start_at);
+      const end = new Date(item.end_at);
+      return start < slotEnd && end > slotStart;
+    });
+
+    if (!appointment) return null;
+
+    const appointmentStart = new Date(appointment.start_at);
+    return {
+      appointment,
+      isFirstSlot: appointmentStart >= slotStart && appointmentStart < slotEnd,
+    };
+  }
+
+  function formatSlotTime(minutesAfterMidnight: number) {
+    const time = new Date();
+    time.setHours(
+      Math.floor(minutesAfterMidnight / 60),
+      minutesAfterMidnight % 60,
+      0,
+      0,
+    );
+    return time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+
+  async function moveAppointment(
+    event: DragEvent<HTMLButtonElement>,
+    day: Date,
+    minutesAfterMidnight: number,
+  ) {
+    event.preventDefault();
+
+    if (readOnly) return;
+
+    const appointmentId =
+      event.dataTransfer.getData("text/plain") || draggingAppointmentId;
+    const appointment = appointments.find((item) => item.id === appointmentId);
+
+    if (!appointment) return;
+
+    const newStart = new Date(day);
+    newStart.setHours(
+      Math.floor(minutesAfterMidnight / 60),
+      minutesAfterMidnight % 60,
+      0,
+      0,
+    );
+
+    const duration =
+      new Date(appointment.end_at).getTime() -
+      new Date(appointment.start_at).getTime();
+    const newEnd = new Date(newStart.getTime() + duration);
+
+    setMessage("");
+
+    const { data: conflicts, error: conflictError } = await supabase
+      .from("appointment")
+      .select("id")
+      .eq("business_id", businessId)
+      .neq("id", appointment.id)
+      .lt("start_at", newEnd.toISOString())
+      .gt("end_at", newStart.toISOString())
+      .not("status", "in", "(cancelled,void)")
+      .limit(1);
+
+    if (conflictError) {
+      console.error(conflictError);
+      setMessage(conflictError.message);
+      setDraggingAppointmentId(null);
+      return;
+    }
+
+    if (conflicts && conflicts.length > 0) {
+      setMessage(
+        "That move would overlap another appointment. Choose another time.",
+      );
+      setDraggingAppointmentId(null);
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from("appointment")
+      .update({
+        start_at: newStart.toISOString(),
+        end_at: newEnd.toISOString(),
+      })
+      .eq("id", appointment.id)
+      .eq("business_id", businessId);
+
+    if (updateError) {
+      console.error(updateError);
+      setMessage(updateError.message);
+      setDraggingAppointmentId(null);
+      return;
+    }
+
+    setDraggingAppointmentId(null);
+    setMessage(
+      `Appointment moved to ${newStart.toLocaleDateString()} at ${newStart.toLocaleTimeString(
+        [],
+        { hour: "numeric", minute: "2-digit" },
+      )}.`,
+    );
+    await loadCalendar();
+  }
+
+  async function updateAppointmentStatus(status: string) {
+    if (!selectedAppointment || readOnly) return;
+
+    setUpdatingStatus(true);
+    setMessage("");
+
+    const { data, error } = await supabase
+      .from("appointment")
+      .update({ status })
+      .eq("id", selectedAppointment.id)
+      .eq("business_id", businessId)
+      .select(
+        "id, client_id, start_at, end_at, status, client_notes, internal_notes",
+      )
+      .single();
+
+    setUpdatingStatus(false);
+
+    if (error) {
+      console.error(error);
+      setMessage(error.message);
+      return;
+    }
+
+    setSelectedAppointment(data);
+    setAppointments((current) =>
+      current.map((appointment) =>
+        appointment.id === data.id ? data : appointment,
+      ),
+    );
+  }
+
+  function openReadyNotification() {
+    if (!selectedAppointment) return;
+    setNotificationBody(
+      `${petName(selectedAppointment.id)} is ready for pickup! Please contact us if you have any questions.`,
+    );
+    setNotificationChannel("email");
+    setConfirmSmsConsent(false);
+    setShowNotification(true);
+  }
+
+  async function sendReadyNotification(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedAppointment) return;
+    setSendingNotification(true);
+    setMessage("");
+    const { data, error } = await supabase.functions.invoke(
+      "send-client-notification",
+      {
+        body: {
+          appointmentId: selectedAppointment.id,
+          channel: notificationChannel,
+          message: notificationBody,
+          confirmSmsConsent,
+        },
+      },
+    );
+    setSendingNotification(false);
+    if (error || data?.error) {
+      setMessage(data?.error ?? error?.message ?? "Notification failed");
+      return;
+    }
+    const results = (data?.results ?? []) as Array<{ message: string }>;
+    setMessage(results.map((result) => result.message).join(" • "));
+    setShowNotification(false);
+    setSelectedAppointment(null);
+    await loadCalendar();
+  }
+
+  function formatStatus(status: string) {
+    return status
+      .replaceAll("_", " ")
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  function statusColor(status: string) {
+    const colors: Record<string, string> = {
+      requested: "#7c5c2e",
+      confirmed: "#315f55",
+      checked_in: "#2f6f9f",
+      in_progress: "#b7791f",
+      ready_for_pickup: "#27695a",
+      completed: "#687773",
+      cancelled: "#a33f3f",
+      no_show: "#713b62",
+      void: "#5f6664",
+    };
+
+    return colors[status] ?? "#315f55";
+  }
+
+  function statusCellColor(status: string) {
+    const colors: Record<string, string> = {
+      requested: "#f4eadb",
+      confirmed: "#dcece7",
+      checked_in: "#dcecf6",
+      in_progress: "#f8ebcd",
+      ready_for_pickup: "#d8eee8",
+      completed: "#e4e8e7",
+      cancelled: "#f6dddd",
+      no_show: "#eee0ea",
+      void: "#e5e7e6",
+    };
+
+    return colors[status] ?? "#dcece7";
+  }
 
   function resetForm() {
     setClientId("");
@@ -216,15 +574,38 @@ function Calendar({ businessId }: CalendarProps) {
       start.getTime() + selectedService.duration_minutes * 60_000,
     );
 
+    const { data: conflicts, error: conflictError } = await supabase
+      .from("appointment")
+      .select("id")
+      .eq("business_id", businessId)
+      .lt("start_at", end.toISOString())
+      .gt("end_at", start.toISOString())
+      .not("status", "in", "(cancelled,void)")
+      .limit(1);
+
+    if (conflictError) {
+      console.error(conflictError);
+      setMessage(conflictError.message);
+      setSaving(false);
+      return;
+    }
+
+    if (conflicts && conflicts.length > 0) {
+      setMessage(
+        "That time overlaps an existing appointment. Please choose another time.",
+      );
+      setSaving(false);
+      return;
+    }
+
     const { error } = await supabase.rpc("create_appointment", {
-      p_business_id: businessId,
       p_client_id: Number(clientId),
       p_pet_id: Number(petId),
       p_service_id: serviceId,
-      p_staff_id: staffId || null,
-      p_start_time: start.toISOString(),
-      p_end_time: end.toISOString(),
-      p_notes: notes.trim() || null,
+      p_staff_id: staffId,
+      p_start_at: start.toISOString(),
+      p_client_notes: notes.trim() || null,
+      p_internal_notes: null,
     });
 
     setSaving(false);
@@ -242,14 +623,16 @@ function Calendar({ businessId }: CalendarProps) {
 
   function clientName(id: number) {
     const client = clients.find((item) => item.id === id);
-    return client ? `${client.first_name} ${client.last_name}` : "Unknown client";
+    return client ? `${client.FirstName} ${client.LastName}` : "Unknown client";
   }
 
   function petName(appointmentId: string) {
     const link = appointmentPets.find(
       (item) => item.appointment_id === appointmentId,
     );
-    return pets.find((pet) => pet.id === link?.pet_id)?.name ?? "Unknown pet";
+    return (
+      pets.find((pet) => pet.id === link?.pet_id)?.PetName ?? "Unknown pet"
+    );
   }
 
   function serviceName(appointmentId: string) {
@@ -272,6 +655,83 @@ function Calendar({ businessId }: CalendarProps) {
       : "Unassigned";
   }
 
+  async function openAppointmentCheckout(appointmentId: string) {
+    setPayingAppointmentId(appointmentId);
+    setMessage("");
+
+    try {
+      const { data: invoiceIdData, error: invoiceError } = await supabase.rpc(
+        "create_invoice_from_appointment",
+        { p_appointment_id: appointmentId },
+      );
+
+      if (invoiceError || !invoiceIdData) {
+        throw (
+          invoiceError ??
+          new Error("The appointment invoice could not be created.")
+        );
+      }
+
+      const invoiceId = String(invoiceIdData);
+      const { data: invoice, error: invoiceStatusError } = await supabase
+        .from("invoice")
+        .select("id, status")
+        .eq("id", invoiceId)
+        .single();
+
+      if (invoiceStatusError || !invoice) {
+        throw (
+          invoiceStatusError ??
+          new Error("The appointment invoice could not be loaded.")
+        );
+      }
+
+      if (invoice.status === "draft") {
+        const { error: issueError } = await supabase.rpc("issue_invoice", {
+          p_invoice_id: invoiceId,
+        });
+
+        if (issueError) throw issueError;
+      } else if (
+        !["open", "partially_paid", "overdue"].includes(invoice.status)
+      ) {
+        throw new Error(
+          invoice.status === "paid"
+            ? "This appointment is already paid."
+            : "This appointment is not currently available for payment.",
+        );
+      }
+
+      const returnUrl = `${window.location.origin}${window.location.pathname}`;
+      const { data, error } = await supabase.functions.invoke(
+        "create-stripe-checkout",
+        {
+          body: { invoiceId, returnUrl },
+        },
+      );
+
+      const checkoutData = data as { url?: string; error?: string } | null;
+
+      if (error || !checkoutData?.url) {
+        throw new Error(
+          checkoutData?.error ??
+            error?.message ??
+            "Stripe Checkout could not be opened.",
+        );
+      }
+
+      window.location.assign(checkoutData.url);
+    } catch (error) {
+      console.error("Appointment checkout error:", error);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Stripe Checkout could not be opened.",
+      );
+      setPayingAppointmentId(null);
+    }
+  }
+
   return (
     <div>
       <header className="dashboard-header">
@@ -280,13 +740,15 @@ function Calendar({ businessId }: CalendarProps) {
           <h2>Calendar</h2>
         </div>
 
-        <button
-          className="primary-button"
-          type="button"
-          onClick={() => setShowForm((current) => !current)}
-        >
-          {showForm ? "Cancel" : "+ New appointment"}
-        </button>
+        {!readOnly && (
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => setShowForm((current) => !current)}
+          >
+            {showForm ? "Cancel" : "+ New appointment"}
+          </button>
+        )}
       </header>
 
       {message && (
@@ -318,7 +780,7 @@ function Calendar({ businessId }: CalendarProps) {
                 <option value="">Choose a client</option>
                 {clients.map((client) => (
                   <option key={client.id} value={client.id}>
-                    {client.first_name} {client.last_name}
+                    {client.FirstName} {client.LastName}
                   </option>
                 ))}
               </select>
@@ -335,7 +797,7 @@ function Calendar({ businessId }: CalendarProps) {
                 <option value="">Choose a pet</option>
                 {availablePets.map((pet) => (
                   <option key={pet.id} value={pet.id}>
-                    {pet.name}
+                    {pet.PetName}
                   </option>
                 ))}
               </select>
@@ -404,6 +866,227 @@ function Calendar({ businessId }: CalendarProps) {
         </section>
       )}
 
+      <section className="dashboard-panel" style={{ overflow: "hidden" }}>
+        <div
+          className="panel-heading"
+          style={{ display: "flex", justifyContent: "space-between", gap: 16 }}
+        >
+          <div>
+            <p className="eyebrow">
+              {isMobile ? "Daily schedule" : "Weekly schedule"}
+            </p>
+            <h3>
+              {visibleDays[0].toLocaleDateString(undefined, {
+                weekday: isMobile ? "long" : undefined,
+                month: "long",
+                day: "numeric",
+              })}
+              {!isMobile && (
+                <>
+                  {" – "}
+                  {weekDays[6].toLocaleDateString(undefined, {
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </>
+              )}
+            </h3>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => moveCalendar(-1)}
+            >
+              {isMobile ? "‹" : "Previous"}
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={goToToday}
+            >
+              Today
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => moveCalendar(1)}
+            >
+              {isMobile ? "›" : "Next"}
+            </button>
+          </div>
+        </div>
+
+        <p style={{ marginTop: 0, color: "#58716b" }}>
+          {readOnly
+            ? "Click an appointment to view its details."
+            : "Click an open time to create an appointment, or drag an appointment to reschedule it."}
+        </p>
+
+        <div className="calendar-scroll">
+          <div
+            className="calendar-grid"
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile
+                ? "70px minmax(0, 1fr)"
+                : "84px repeat(7, minmax(135px, 1fr))",
+              minWidth: isMobile ? 0 : 1030,
+              borderTop: "1px solid #d7e0dd",
+              borderLeft: "1px solid #d7e0dd",
+            }}
+          >
+            <div
+              style={{
+                padding: 12,
+                borderRight: "1px solid #d7e0dd",
+                borderBottom: "1px solid #d7e0dd",
+              }}
+            />
+            {visibleDays.map((day) => {
+              const isToday = day.toDateString() === new Date().toDateString();
+              return (
+                <div
+                  key={day.toISOString()}
+                  style={{
+                    padding: 12,
+                    textAlign: "center",
+                    borderRight: "1px solid #d7e0dd",
+                    borderBottom: "1px solid #d7e0dd",
+                    background: isToday ? "#e1eeea" : "#f7faf9",
+                  }}
+                >
+                  <strong>
+                    {day.toLocaleDateString(undefined, { weekday: "short" })}
+                  </strong>
+                  <div>
+                    {day.toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            {timeSlots.flatMap((slot) => [
+              <div
+                key={`time-${slot}`}
+                style={{
+                  padding: "10px 8px",
+                  color: "#58716b",
+                  fontSize: 13,
+                  textAlign: "right",
+                  borderRight: "1px solid #d7e0dd",
+                  borderBottom: "1px solid #d7e0dd",
+                  background: "#f7faf9",
+                }}
+              >
+                {formatSlotTime(slot)}
+              </div>,
+              ...visibleDays.map((day) => {
+                const occupiedSlot = appointmentInSlot(day, slot);
+                return (
+                  <button
+                    key={`${day.toISOString()}-${slot}`}
+                    type="button"
+                    onClick={() => {
+                      if (occupiedSlot) {
+                        setSelectedAppointment(occupiedSlot.appointment);
+                      } else {
+                        selectTimeSlot(day, slot);
+                      }
+                    }}
+                    onDragOver={(event) => {
+                      if (!readOnly && draggingAppointmentId)
+                        event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      if (!readOnly) void moveAppointment(event, day, slot);
+                    }}
+                    style={{
+                      minHeight: 62,
+                      padding: 5,
+                      border: 0,
+                      borderRight: "1px solid #d7e0dd",
+                      borderBottom: "1px solid #d7e0dd",
+                      background: occupiedSlot
+                        ? statusCellColor(occupiedSlot.appointment.status)
+                        : "#ffffff",
+                      cursor: occupiedSlot ? "default" : "pointer",
+                      textAlign: "left",
+                      color: "#183b34",
+                      opacity: 1,
+                    }}
+                    title={
+                      occupiedSlot
+                        ? "Drag this appointment to an open time"
+                        : "Create an appointment at this time"
+                    }
+                  >
+                    {occupiedSlot && (
+                      <span
+                        draggable={!readOnly && occupiedSlot.isFirstSlot}
+                        onDragStart={(event) => {
+                          if (readOnly || !occupiedSlot.isFirstSlot) return;
+                          event.stopPropagation();
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData(
+                            "text/plain",
+                            occupiedSlot.appointment.id,
+                          );
+                          setDraggingAppointmentId(occupiedSlot.appointment.id);
+                        }}
+                        onDragEnd={() => setDraggingAppointmentId(null)}
+                        style={{
+                          display: "block",
+                          height: "100%",
+                          minHeight: 44,
+                          padding: "6px 7px",
+                          borderRadius: occupiedSlot.isFirstSlot
+                            ? "6px 6px 0 0"
+                            : 0,
+                          background: statusColor(
+                            occupiedSlot.appointment.status,
+                          ),
+                          color: "white",
+                          fontSize: 12,
+                          lineHeight: 1.25,
+                          cursor:
+                            !readOnly && occupiedSlot.isFirstSlot
+                              ? "grab"
+                              : occupiedSlot.isFirstSlot
+                                ? "pointer"
+                                : "default",
+                        }}
+                      >
+                        {occupiedSlot.isFirstSlot ? (
+                          <>
+                            <strong>
+                              {petName(occupiedSlot.appointment.id)}
+                            </strong>
+                            <br />
+                            {serviceName(occupiedSlot.appointment.id)}
+                            <br />
+                            <span style={{ opacity: 0.85 }}>
+                              {formatStatus(occupiedSlot.appointment.status)}
+                            </span>
+                          </>
+                        ) : (
+                          <span style={{ opacity: 0.8 }}>Continues</span>
+                        )}
+                      </span>
+                    )}
+                  </button>
+                );
+              }),
+            ])}
+          </div>
+        </div>
+      </section>
+
       <section className="dashboard-panel">
         <div className="panel-heading">
           <div>
@@ -414,16 +1097,16 @@ function Calendar({ businessId }: CalendarProps) {
 
         {loading ? (
           <p>Loading appointments...</p>
-        ) : appointments.length === 0 ? (
+        ) : upcomingAppointments.length === 0 ? (
           <div className="empty-state">
             <h3>No upcoming appointments</h3>
             <p>Your scheduled appointments will appear here.</p>
           </div>
         ) : (
           <div className="appointment-list">
-            {appointments.map((appointment) => {
-              const start = new Date(appointment.start_time);
-              const end = new Date(appointment.end_time);
+            {upcomingAppointments.map((appointment) => {
+              const start = new Date(appointment.start_at);
+              const end = new Date(appointment.end_at);
 
               return (
                 <article className="appointment-card" key={appointment.id}>
@@ -455,6 +1138,20 @@ function Calendar({ businessId }: CalendarProps) {
                     </strong>
                     <p>{staffName(appointment.id)}</p>
                     <span className="status-badge">{appointment.status}</span>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() =>
+                          void openAppointmentCheckout(appointment.id)
+                        }
+                        disabled={payingAppointmentId !== null}
+                      >
+                        {payingAppointmentId === appointment.id
+                          ? "Opening Stripe..."
+                          : "Take payment"}
+                      </button>
+                    )}
                   </div>
                 </article>
               );
@@ -462,6 +1159,257 @@ function Calendar({ businessId }: CalendarProps) {
           </div>
         )}
       </section>
+
+      {selectedAppointment && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 300,
+            display: "grid",
+            placeItems: "center",
+            padding: 20,
+            background: "rgba(18, 44, 38, 0.58)",
+          }}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget)
+              setSelectedAppointment(null);
+          }}
+        >
+          <section
+            className="dashboard-panel"
+            style={{
+              width: "min(680px, 100%)",
+              margin: 0,
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 20,
+              }}
+            >
+              <div>
+                <p className="eyebrow">Appointment details</p>
+                <h2 style={{ marginTop: 5 }}>
+                  {petName(selectedAppointment.id)} —{" "}
+                  {serviceName(selectedAppointment.id)}
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setSelectedAppointment(null)}
+              >
+                Close
+              </button>
+            </div>
+
+            {readOnly && (
+              <p
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 7,
+                  background: "#fff3c4",
+                  color: "#594710",
+                  fontWeight: 700,
+                }}
+              >
+                Read-only support view
+              </p>
+            )}
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 18,
+                margin: "24px 0",
+              }}
+            >
+              <div>
+                <p className="eyebrow">Client</p>
+                <strong>{clientName(selectedAppointment.client_id)}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Pet</p>
+                <strong>{petName(selectedAppointment.id)}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Service</p>
+                <strong>{serviceName(selectedAppointment.id)}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Staff</p>
+                <strong>{staffName(selectedAppointment.id)}</strong>
+              </div>
+              <div>
+                <p className="eyebrow">Date</p>
+                <strong>
+                  {new Date(selectedAppointment.start_at).toLocaleDateString(
+                    undefined,
+                    {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    },
+                  )}
+                </strong>
+              </div>
+              <div>
+                <p className="eyebrow">Time</p>
+                <strong>
+                  {new Date(selectedAppointment.start_at).toLocaleTimeString(
+                    [],
+                    {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    },
+                  )}
+                  {" – "}
+                  {new Date(selectedAppointment.end_at).toLocaleTimeString([], {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </strong>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 22 }}>
+              <p className="eyebrow">Client notes</p>
+              <p>{selectedAppointment.client_notes || "No client notes."}</p>
+              <p className="eyebrow">Internal notes</p>
+              <p>
+                {selectedAppointment.internal_notes || "No internal notes."}
+              </p>
+            </div>
+
+            <div>
+              <p className="eyebrow">Status</p>
+              <h3>{formatStatus(selectedAppointment.status)}</h3>
+
+              {!readOnly && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {[
+                    ["confirmed", "Confirmed"],
+                    ["checked_in", "Checked in"],
+                    ["in_progress", "In progress"],
+                    ["ready_for_pickup", "Ready for pickup"],
+                    ["completed", "Completed"],
+                    ["cancelled", "Cancelled"],
+                    ["no_show", "No-show"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={
+                        selectedAppointment.status === value
+                          ? "primary-button"
+                          : "secondary-button"
+                      }
+                      disabled={updatingStatus}
+                      onClick={() => void updateAppointmentStatus(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                  {selectedAppointment.status !== "completed" && (
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={updatingStatus}
+                      onClick={openReadyNotification}
+                    >
+                      Notify ready for pickup
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {showNotification && !readOnly && (
+              <form
+                className="notification-composer"
+                onSubmit={sendReadyNotification}
+              >
+                <div>
+                  <p className="eyebrow">Client notification</p>
+                  <h3>Ready for pickup</h3>
+                </div>
+                <label>
+                  Send by
+                  <select
+                    value={notificationChannel}
+                    onChange={(event) =>
+                      setNotificationChannel(event.target.value)
+                    }
+                  >
+                    <option value="email">Email</option>
+                    <option value="sms">Text message</option>
+                    <option value="both">Email and text</option>
+                  </select>
+                </label>
+                <label>
+                  Message
+                  <textarea
+                    rows={4}
+                    maxLength={1000}
+                    required
+                    value={notificationBody}
+                    onChange={(event) =>
+                      setNotificationBody(event.target.value)
+                    }
+                  />
+                </label>
+                {(notificationChannel === "sms" ||
+                  notificationChannel === "both") && (
+                  <label className="notification-consent">
+                    <input
+                      type="checkbox"
+                      required
+                      checked={confirmSmsConsent}
+                      onChange={(event) =>
+                        setConfirmSmsConsent(event.target.checked)
+                      }
+                    />{" "}
+                    I confirm this client consented to receive text messages.
+                  </label>
+                )}
+                <div className="notification-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setShowNotification(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      void updateAppointmentStatus("ready_for_pickup");
+                      setShowNotification(false);
+                    }}
+                  >
+                    Mark ready without sending
+                  </button>
+                  <button
+                    type="submit"
+                    className="primary-button"
+                    disabled={sendingNotification}
+                  >
+                    {sendingNotification ? "Sending…" : "Send notification"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
