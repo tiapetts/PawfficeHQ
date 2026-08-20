@@ -6,6 +6,7 @@ import BusinessSetup from "./components/BusinessSetup";
 import Dashboard from "./components/Dashboard";
 import PlatformAdmin from "./components/PlatformAdmin";
 import SetPassword from "./components/SetPassword";
+import SubscriptionGate, { type SubscriptionAccess } from "./components/SubscriptionGate";
 import "./App.css";
 
 type StaffProfile = {
@@ -30,6 +31,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [profileError, setProfileError] = useState("");
+  const [subscriptionAccess, setSubscriptionAccess] = useState<SubscriptionAccess | null>(null);
 
   async function loadStaffProfile(userId: string) {
     const { data, error } = await supabase
@@ -78,6 +80,19 @@ function App() {
     setIsPlatformAdmin(false);
     await loadStaffProfile(userId);
   }
+
+  async function loadSubscriptionAccess(businessId: string) {
+    const { data, error } = await supabase.rpc("get_subscription_access", { p_business_id: businessId });
+    if (error) {
+      setProfileError(`Subscription check failed: ${error.message}`);
+      return;
+    }
+    setSubscriptionAccess((data?.[0] as SubscriptionAccess | undefined) ?? null);
+  }
+
+  useEffect(() => {
+    if (staff?.business_id && !isPlatformAdmin) void loadSubscriptionAccess(staff.business_id);
+  }, [staff?.business_id, isPlatformAdmin]);
 
   useEffect(() => {
     let mounted = true;
@@ -236,6 +251,14 @@ function App() {
 
   if (!staff) {
     return <p className="loading-message">Loading your profile...</p>;
+  }
+
+  if (!isPlatformAdmin && !subscriptionAccess) {
+    return <p className="loading-message">Checking your Pawffice HQ membership...</p>;
+  }
+
+  if (!isPlatformAdmin && subscriptionAccess && !subscriptionAccess.has_access) {
+    return <SubscriptionGate businessId={staff.business_id} access={subscriptionAccess} onRefresh={() => void loadSubscriptionAccess(staff.business_id)} />;
   }
 
   return (
