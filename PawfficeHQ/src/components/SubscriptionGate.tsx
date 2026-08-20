@@ -20,26 +20,56 @@ export default function SubscriptionGate({ businessId, access, onRefresh }: Prop
   const [loading, setLoading] = useState<"basic" | "pro" | "portal" | null>(null);
   const [message, setMessage] = useState("");
 
+  async function invokeBillingFunction(name: string, body: Record<string, unknown>) {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (sessionError || !accessToken) throw new Error("Your session expired. Please sign in again.");
+
+    const { data, error } = await supabase.functions.invoke(name, {
+      body,
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (error) {
+      let detail = error.message;
+      if ("context" in error && error.context instanceof Response) {
+        try {
+          const payload = await error.context.clone().json();
+          detail = payload.error ?? payload.message ?? detail;
+        } catch {
+          // Keep the Functions client message when the response is not JSON.
+        }
+      }
+      throw new Error(detail);
+    }
+    if (data?.error) throw new Error(data.error);
+    return data;
+  }
+
   async function openCheckout(plan: "basic" | "pro") {
     setLoading(plan);
     setMessage("");
-    const { data, error } = await supabase.functions.invoke("create-subscription-checkout", {
-      body: { businessId, plan, returnUrl: window.location.origin },
-    });
-    setLoading(null);
-    if (error || data?.error || !data?.url) return setMessage(data?.error ?? error?.message ?? "Unable to start checkout.");
-    window.location.assign(data.url);
+    try {
+      const data = await invokeBillingFunction("create-subscription-checkout", { businessId, plan, returnUrl: window.location.origin });
+      if (!data?.url) throw new Error("Unable to start checkout.");
+      window.location.assign(data.url);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to start checkout.");
+      setLoading(null);
+    }
   }
 
   async function openPortal() {
     setLoading("portal");
     setMessage("");
-    const { data, error } = await supabase.functions.invoke("create-billing-portal", {
-      body: { businessId, returnUrl: window.location.origin },
-    });
-    setLoading(null);
-    if (error || data?.error || !data?.url) return setMessage(data?.error ?? error?.message ?? "Unable to open billing.");
-    window.location.assign(data.url);
+    try {
+      const data = await invokeBillingFunction("create-billing-portal", { businessId, returnUrl: window.location.origin });
+      if (!data?.url) throw new Error("Unable to open billing.");
+      window.location.assign(data.url);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to open billing.");
+      setLoading(null);
+    }
   }
 
   return (
@@ -69,4 +99,3 @@ export default function SubscriptionGate({ businessId, access, onRefresh }: Prop
     </main>
   );
 }
-
