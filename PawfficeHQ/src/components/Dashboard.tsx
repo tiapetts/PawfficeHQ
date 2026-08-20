@@ -8,6 +8,8 @@ import AppointmentHistory from "./AppointmentHistory";
 import Invoices from "./Invoices";
 import Staff from "./Staff";
 import Settings from "./Settings";
+import Billing from "./Billing";
+import type { SubscriptionAccess } from "./SubscriptionGate";
 import { applyBusinessTheme } from "./Settings";
 import "./Responsive.css";
 
@@ -15,6 +17,8 @@ type DashboardProps = {
   businessId: string;
   firstName: string;
   readOnly?: boolean;
+  subscriptionAccess?: SubscriptionAccess | null;
+  onSubscriptionRefresh?: () => void;
 };
 
 type Business = {
@@ -64,12 +68,15 @@ type ActivePage =
   | "history"
   | "invoices"
   | "staff"
+  | "billing"
   | "settings";
 
 function Dashboard({
   businessId,
   firstName,
   readOnly = false,
+  subscriptionAccess = null,
+  onSubscriptionRefresh,
 }: DashboardProps) {
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -252,6 +259,20 @@ function Dashboard({
     setMobileMenuOpen(false);
   }
 
+  function subscriptionLabel() {
+    if (!subscriptionAccess) return null;
+    if (subscriptionAccess.status === "trialing") {
+      const remaining = subscriptionAccess.trial_end
+        ? Math.max(0, Math.ceil((new Date(subscriptionAccess.trial_end).getTime() - Date.now()) / 86_400_000))
+        : 0;
+      return `Pro trial · ${remaining} day${remaining === 1 ? "" : "s"} left`;
+    }
+    if (["past_due", "unpaid", "incomplete", "incomplete_expired"].includes(subscriptionAccess.status)) {
+      return "Payment required";
+    }
+    return `${subscriptionAccess.plan === "pro" ? "Pro" : "Basic"} · Active`;
+  }
+
   return (
     <div className="dashboard">
       <button
@@ -276,6 +297,15 @@ function Dashboard({
           <p className="business-label">
             {business?.business_name ?? "Your business"}
           </p>
+          {subscriptionAccess && (
+            <button
+              className={`subscription-status-badge ${subscriptionAccess.status === "trialing" ? "trial" : ""}`}
+              type="button"
+              onClick={() => openPage("billing")}
+            >
+              {subscriptionLabel()}
+            </button>
+          )}
         </div>
 
         <nav>
@@ -327,6 +357,14 @@ function Dashboard({
           >
             Staff
           </button>
+          {subscriptionAccess && (
+            <button
+              className={`nav-button ${activePage === "billing" ? "active" : ""}`}
+              onClick={() => openPage("billing")}
+            >
+              Billing
+            </button>
+          )}
           <button
             className={`nav-button ${activePage === "settings" ? "active" : ""}`}
             onClick={() => openPage("settings")}
@@ -358,6 +396,12 @@ function Dashboard({
           <Services businessId={businessId} />
         ) : activePage === "staff" ? (
           <Staff businessId={businessId} readOnly={readOnly} />
+        ) : activePage === "billing" && subscriptionAccess ? (
+          <Billing
+            businessId={businessId}
+            access={subscriptionAccess}
+            onRefresh={onSubscriptionRefresh}
+          />
         ) : activePage === "settings" ? (
           <Settings
             businessId={businessId}

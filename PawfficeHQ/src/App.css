@@ -278,9 +278,27 @@
 }
 
 .business-label {
-  margin: 8px 0 32px;
+  margin: 8px 0 12px;
   color: #c8d8d3;
   font-size: 0.9rem;
+}
+
+.subscription-status-badge {
+  margin: 0 0 24px;
+  padding: 7px 10px;
+  border: 1px solid #8eb2a9;
+  border-radius: 999px;
+  background: #e4f1ed;
+  color: #173c33;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.subscription-status-badge.trial {
+  border-color: #f4c95d;
+  background: #f4c95d;
 }
 
 .sidebar nav {
