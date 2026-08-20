@@ -262,7 +262,12 @@ function App() {
   }
 
   return (
-    <Dashboard businessId={staff.business_id} firstName={staff.first_name} />
+    <Dashboard
+      businessId={staff.business_id}
+      firstName={staff.first_name}
+      subscriptionAccess={subscriptionAccess}
+      onSubscriptionRefresh={() => void loadSubscriptionAccess(staff.business_id)}
+    />
   );
 }
 

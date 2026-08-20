@@ -1,0 +1,131 @@
+.billing-page {
+  max-width: 980px;
+}
+
+.billing-page header h2 {
+  margin: 4px 0 8px;
+  font-size: 2rem;
+}
+
+.billing-page header > p:last-child {
+  margin-bottom: 28px;
+  color: #5d726c;
+}
+
+.billing-summary-card,
+.billing-detail-card,
+.trial-plan-actions {
+  border: 1px solid #d5e0dc;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 10px 24px rgba(32, 51, 46, 0.06);
+}
+
+.billing-summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px;
+}
+
+.billing-summary-card h3 {
+  margin: 12px 0 4px;
+  font-size: 1.65rem;
+}
+
+.billing-summary-card p {
+  margin: 0;
+  color: #5d726c;
+}
+
+.billing-state {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e4f1ed;
+  color: #205d4d;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.billing-state.trial {
+  background: #fff0bd;
+  color: #6f5000;
+}
+
+.billing-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 18px 0;
+}
+
+.billing-detail-card {
+  display: grid;
+  gap: 8px;
+  padding: 22px;
+}
+
+.billing-detail-card span {
+  color: #5d726c;
+}
+
+.billing-detail-card strong {
+  font-size: 1.25rem;
+}
+
+.trial-plan-actions {
+  padding: 28px;
+}
+
+.trial-plan-actions h3 {
+  margin: 0 0 6px;
+}
+
+.trial-plan-actions > p {
+  margin: 0 0 20px;
+  color: #5d726c;
+}
+
+.trial-plan-actions > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.trial-plan-actions button,
+.billing-refresh {
+  padding: 12px 16px;
+  border: 1px solid #2f6b5e;
+  border-radius: 9px;
+  background: #2f6b5e;
+  color: white;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.billing-refresh {
+  margin-top: 8px;
+  background: transparent;
+  color: #2f6b5e;
+}
+
+.billing-error {
+  color: #a32222;
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .billing-summary-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .billing-details-grid {
+    grid-template-columns: 1fr;
+  }
+}
