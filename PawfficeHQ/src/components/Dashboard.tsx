@@ -212,8 +212,8 @@ function Dashboard({
         };
         setBusinessLogo(loadedSettings.logo_url ?? null);
         applyBusinessTheme(
-          loadedSettings.primary_color ?? "#183f37",
-          loadedSettings.accent_color ?? "#32685c",
+          loadedSettings.primary_color ?? "#00b4d8",
+          loadedSettings.accent_color ?? "#0077b6",
         );
       }
       setClientCount(clientsCountResult.count ?? 0);

@@ -268,8 +268,8 @@
   display: flex;
   flex-direction: column;
   padding: 28px 20px;
-  background: #203c35;
-  color: white;
+  background: #00b4d8;
+  color: #173a35;
 }
 
 .sidebar h1 {
@@ -279,7 +279,7 @@
 
 .business-label {
   margin: 8px 0 12px;
-  color: #c8d8d3;
+  color: #173a35;
   font-size: 0.9rem;
 }
 
@@ -320,12 +320,13 @@
 
 .nav-button:hover,
 .nav-button.active {
-  background: #315f55;
+  background: #0077b6;
+  color: white;
 }
 
 .sign-out-button {
   margin-top: auto;
-  border: 1px solid #52756c;
+  border: 1px solid #00638f;
 }
 
 .dashboard-main {
