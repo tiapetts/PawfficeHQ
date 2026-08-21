@@ -1,4 +1,4 @@
-:root { --brand-primary: #183f37; --brand-accent: #32685c; --brand-on-primary: #fff; --brand-on-accent: #fff; }
+:root { --brand-primary: #00b4d8; --brand-accent: #0077b6; --brand-on-primary: #173a35; --brand-on-accent: #fff; }
 .sidebar, .mobile-menu-button { background: var(--brand-primary) !important; color: var(--brand-on-primary) !important; }
 .nav-button.active, .primary-button { background: var(--brand-accent) !important; color: var(--brand-on-accent) !important; }
 .settings-layout { display: grid; gap: 24px; }

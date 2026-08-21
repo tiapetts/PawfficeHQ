@@ -102,8 +102,8 @@ const defaults: SettingsForm = {
   description: "",
   logo_url: null,
   theme_preset: "pawffice",
-  primary_color: "#183f37",
-  accent_color: "#32685c",
+  primary_color: "#00b4d8",
+  accent_color: "#0077b6",
   business_hours: defaultHours,
   appointment_interval: 30,
   calendar_start: "08:00",
@@ -158,8 +158,8 @@ const themes = [
   {
     id: "pawffice",
     name: "Pawffice Classic",
-    primary: "#183f37",
-    accent: "#32685c",
+    primary: "#00b4d8",
+    accent: "#0077b6",
   },
   { id: "ocean", name: "Ocean Blue", primary: "#183b56", accent: "#2f718f" },
   { id: "berry", name: "Berry", primary: "#55263f", accent: "#8b4868" },
@@ -172,17 +172,20 @@ function contrastText(hex: string) {
   const [r, g, b] = [0, 2, 4].map((index) =>
     parseInt(value.slice(index, index + 2), 16),
   );
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5
     ? "#173a35"
     : "#ffffff";
 }
 
 export function applyBusinessTheme(primary: string, accent: string) {
+  // Automatically upgrade businesses still using the original Pawffice colors.
+  const resolvedPrimary = primary.toLowerCase() === "#183f37" ? "#00b4d8" : primary;
+  const resolvedAccent = accent.toLowerCase() === "#32685c" ? "#0077b6" : accent;
   const root = document.documentElement;
-  root.style.setProperty("--brand-primary", primary);
-  root.style.setProperty("--brand-accent", accent);
-  root.style.setProperty("--brand-on-primary", contrastText(primary));
-  root.style.setProperty("--brand-on-accent", contrastText(accent));
+  root.style.setProperty("--brand-primary", resolvedPrimary);
+  root.style.setProperty("--brand-accent", resolvedAccent);
+  root.style.setProperty("--brand-on-primary", contrastText(resolvedPrimary));
+  root.style.setProperty("--brand-on-accent", contrastText(resolvedAccent));
 }
 
 function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
