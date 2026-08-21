@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
+import ClientImportExport from "./ClientImportExport";
 import "./ClientEditing.css";
 
 type ClientsProps = { businessId: string; readOnly?: boolean };
@@ -46,6 +47,7 @@ export default function Clients({
   const [form, setForm] = useState<ClientForm>(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showMigration, setShowMigration] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -173,12 +175,21 @@ export default function Clients({
           <h2>Clients</h2>
         </div>
         {!readOnly && (
-          <button
-            className="primary-button"
-            onClick={showForm ? closeForm : openNew}
-          >
-            {showForm ? "Cancel" : "+ Add client"}
-          </button>
+          <div className="client-header-actions">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setShowMigration((current) => !current)}
+            >
+              {showMigration ? "Close import/export" : "Import / Export"}
+            </button>
+            <button
+              className="primary-button"
+              onClick={showForm ? closeForm : openNew}
+            >
+              {showForm ? "Cancel" : "+ Add client"}
+            </button>
+          </div>
         )}
       </header>
       {message && (
@@ -361,6 +372,14 @@ export default function Clients({
             </div>
           </form>
         </section>
+      )}
+
+      {showMigration && !readOnly && (
+        <ClientImportExport
+          businessId={businessId}
+          clients={clients}
+          onImported={loadClients}
+        />
       )}
 
       <section className="dashboard-panel">
