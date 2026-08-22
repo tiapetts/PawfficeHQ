@@ -95,3 +95,77 @@
         font-size: .7rem;
     }
 }
+
+.pet-report-card-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.pet-report-card-actions .pet-edit-button {
+    margin-top: 14px;
+    font-size: .82rem;
+}
+
+.pet-report-viewer {
+    margin-bottom: 24px;
+}
+
+.pet-report-viewer-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.pet-report-viewer-heading h3 {
+    margin: 4px 0 0;
+}
+
+.pet-report-history-list {
+    display: grid;
+    gap: 14px;
+}
+
+.pet-report-history-card {
+    position: relative;
+    padding: 18px;
+    border: 1px solid #dce4e1;
+    border-radius: 12px;
+    background: #fafdFC;
+}
+
+.pet-report-history-card h4 {
+    margin: 5px 0 14px;
+}
+
+.pet-report-history-status {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 800;
+    text-transform: capitalize;
+}
+
+.pet-report-history-status.completed { background: #e2f5ea; color: #17633f; }
+.pet-report-history-status.draft { background: #fff4cf; color: #795400; }
+
+.pet-report-field {
+    display: grid;
+    grid-template-columns: minmax(110px, .3fr) 1fr;
+    gap: 14px;
+    padding: 9px 0;
+    border-top: 1px solid #e1e7e5;
+}
+
+.pet-report-field strong { text-transform: capitalize; }
+.pet-report-field p { color: #20332e; white-space: pre-wrap; }
+
+@media (max-width: 520px) {
+    .pet-report-card-actions, .pet-report-field { grid-template-columns: 1fr; }
+    .pet-report-viewer-heading { align-items: stretch; flex-direction: column; }
+}

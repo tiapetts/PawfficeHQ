@@ -37,6 +37,12 @@ type VaccinationRecord = {
   expires_on: string;
 };
 type VaccineBadgeState = "current" | "warning" | "expired" | "missing" | "none";
+type PetReportCard = {
+  id: string; pet_id: PetId; report_type: string; status: string; created_at: string;
+  visit_summary: string | null; behavior: string | null; food: string | null;
+  water: string | null; potty: string | null; medication: string | null;
+  activity: string | null; staff_notes: string | null;
+};
 const emptyForm = {
   ownerId: "",
   PetName: "",
@@ -54,6 +60,8 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
   const [clientPets, setClientPets] = useState<ClientPet[]>([]);
   const [vaccineRequirements, setVaccineRequirements] = useState<VaccineRequirement[]>([]);
   const [vaccinationRecords, setVaccinationRecords] = useState<VaccinationRecord[]>([]);
+  const [reportCards, setReportCards] = useState<PetReportCard[]>([]);
+  const [reportView, setReportView] = useState<{ pet: Pet; mode: "latest" | "history" } | null>(null);
   const [form, setForm] = useState<PetForm>(emptyForm);
   const [editingId, setEditingId] = useState<PetId | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -64,7 +72,7 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
   const [success, setSuccess] = useState(false);
 
   async function loadData() {
-    const [petsResult, clientsResult, linksResult, requirementsResult, vaccinationsResult] = await Promise.all([
+    const [petsResult, clientsResult, linksResult, requirementsResult, vaccinationsResult, reportsResult] = await Promise.all([
       supabase
         .from("PET")
         .select(petSelection)
@@ -86,8 +94,13 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
         .from("pet_vaccination")
         .select("pet_id, requirement_id, vaccine_name, expires_on")
         .eq("business_id", businessId),
+      supabase
+        .from("pet_report_card")
+        .select("id, pet_id, report_type, status, created_at, visit_summary, behavior, food, water, potty, medication, activity, staff_notes")
+        .eq("business_id", businessId)
+        .order("created_at", { ascending: false }),
     ]);
-    const error = petsResult.error || clientsResult.error || linksResult.error || requirementsResult.error || vaccinationsResult.error;
+    const error = petsResult.error || clientsResult.error || linksResult.error || requirementsResult.error || vaccinationsResult.error || reportsResult.error;
     if (error) {
       console.error(error);
       setMessage(error.message);
@@ -98,6 +111,7 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
       setClientPets((linksResult.data as ClientPet[] | null) ?? []);
       setVaccineRequirements((requirementsResult.data as VaccineRequirement[] | null) ?? []);
       setVaccinationRecords((vaccinationsResult.data as VaccinationRecord[] | null) ?? []);
+      setReportCards((reportsResult.data as PetReportCard[] | null) ?? []);
     }
     setLoading(false);
   }
@@ -287,6 +301,7 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
   const visiblePets = pets.filter((pet) =>
     listMode === "archived" ? pet.archived_at !== null : pet.archived_at === null,
   );
+  const reportsForPet = (petId: PetId) => reportCards.filter((report) => String(report.pet_id) === String(petId));
 
   return (
     <>
@@ -434,6 +449,28 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
         </button>
       </div>
 
+      {reportView && (
+        <section className="dashboard-panel pet-report-viewer">
+          <div className="pet-report-viewer-heading">
+            <div><p className="eyebrow">{reportView.mode === "latest" ? "Latest report" : "Report history"}</p><h3>{reportView.pet.PetName}</h3></div>
+            <button className="secondary-button" type="button" onClick={() => setReportView(null)}>Close</button>
+          </div>
+          <div className="pet-report-history-list">
+            {reportsForPet(reportView.pet.id).slice(0, reportView.mode === "latest" ? 1 : undefined).map((report) => (
+              <article className="pet-report-history-card" key={report.id}>
+                <span className={`pet-report-history-status ${report.status}`}>{report.status}</span>
+                <p className="eyebrow">{report.report_type.replaceAll("_", " ")}</p>
+                <h4>{new Date(report.created_at).toLocaleDateString()}</h4>
+                {["visit_summary", "behavior", "food", "water", "potty", "medication", "activity", "staff_notes"].map((field) => {
+                  const value = report[field as keyof PetReportCard];
+                  return typeof value === "string" && value ? <div className="pet-report-field" key={field}><strong>{field.replaceAll("_", " ")}</strong><p>{value}</p></div> : null;
+                })}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
       {loading ? (
         <p>Loading pets...</p>
       ) : visiblePets.length === 0 ? (
@@ -490,6 +527,12 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
                     <button className="pet-edit-button" type="button" onClick={() => void restorePet(pet)}>Restore pet</button>
                   ) : (
                     <>
+                      {reportsForPet(pet.id).length > 0 && (
+                        <div className="pet-report-card-actions">
+                          <button className="pet-edit-button" type="button" onClick={() => { setReportView({ pet, mode: "latest" }); window.scrollTo({ top: 0, behavior: "smooth" }); }}>View latest report</button>
+                          <button className="pet-edit-button" type="button" onClick={() => { setReportView({ pet, mode: "history" }); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Report history ({reportsForPet(pet.id).length})</button>
+                        </div>
+                      )}
                       <button className="pet-edit-button" type="button" onClick={() => openEdit(pet)}>Edit pet</button>
                       <button className="archive-button" type="button" onClick={() => void archivePet(pet)}>Archive pet</button>
                     </>
