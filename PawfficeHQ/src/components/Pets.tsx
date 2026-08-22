@@ -23,6 +23,20 @@ type ClientPet = {
   relationship: string | null;
   is_primary: boolean;
 };
+type VaccineRequirement = {
+  id: string;
+  name: string;
+  species: string;
+  alert_days_before: number;
+  is_active: boolean;
+};
+type VaccinationRecord = {
+  pet_id: PetId;
+  requirement_id: string | null;
+  vaccine_name: string;
+  expires_on: string;
+};
+type VaccineBadgeState = "current" | "warning" | "expired" | "missing" | "none";
 const emptyForm = {
   ownerId: "",
   PetName: "",
@@ -38,6 +52,8 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
   const [pets, setPets] = useState<Pet[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [clientPets, setClientPets] = useState<ClientPet[]>([]);
+  const [vaccineRequirements, setVaccineRequirements] = useState<VaccineRequirement[]>([]);
+  const [vaccinationRecords, setVaccinationRecords] = useState<VaccinationRecord[]>([]);
   const [form, setForm] = useState<PetForm>(emptyForm);
   const [editingId, setEditingId] = useState<PetId | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -48,7 +64,7 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
   const [success, setSuccess] = useState(false);
 
   async function loadData() {
-    const [petsResult, clientsResult, linksResult] = await Promise.all([
+    const [petsResult, clientsResult, linksResult, requirementsResult, vaccinationsResult] = await Promise.all([
       supabase
         .from("PET")
         .select(petSelection)
@@ -62,8 +78,16 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
       supabase
         .from("client_pet")
         .select("client_id, pet_id, relationship, is_primary"),
+      supabase
+        .from("vaccine_requirement")
+        .select("id, name, species, alert_days_before, is_active")
+        .eq("business_id", businessId),
+      supabase
+        .from("pet_vaccination")
+        .select("pet_id, requirement_id, vaccine_name, expires_on")
+        .eq("business_id", businessId),
     ]);
-    const error = petsResult.error || clientsResult.error || linksResult.error;
+    const error = petsResult.error || clientsResult.error || linksResult.error || requirementsResult.error || vaccinationsResult.error;
     if (error) {
       console.error(error);
       setMessage(error.message);
@@ -72,6 +96,8 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
       setPets((petsResult.data as Pet[] | null) ?? []);
       setClients(clientsResult.data ?? []);
       setClientPets((linksResult.data as ClientPet[] | null) ?? []);
+      setVaccineRequirements((requirementsResult.data as VaccineRequirement[] | null) ?? []);
+      setVaccinationRecords((vaccinationsResult.data as VaccinationRecord[] | null) ?? []);
     }
     setLoading(false);
   }
@@ -95,6 +121,34 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
       (client) => String(client.id) === String(link?.client_id),
     );
     return owner ? `${owner.FirstName} ${owner.LastName}` : "No owner attached";
+  }
+  function getVaccineBadge(pet: Pet): { state: VaccineBadgeState; label: string } {
+    const applicable = vaccineRequirements.filter(
+      (requirement) => requirement.is_active &&
+        (requirement.species === "All" || requirement.species.toLowerCase() === pet.species.toLowerCase()),
+    );
+    if (applicable.length === 0) return { state: "none", label: "No requirements" };
+
+    const states = applicable.map((requirement) => {
+      const record = vaccinationRecords
+        .filter((item) =>
+          String(item.pet_id) === String(pet.id) &&
+          (item.requirement_id === requirement.id || item.vaccine_name.toLowerCase() === requirement.name.toLowerCase()),
+        )
+        .sort((a, b) => b.expires_on.localeCompare(a.expires_on))[0];
+      if (!record) return "missing" as const;
+      const daysRemaining = Math.ceil(
+        (new Date(`${record.expires_on}T23:59:59`).getTime() - Date.now()) / 86_400_000,
+      );
+      if (daysRemaining < 0) return "expired" as const;
+      if (daysRemaining <= requirement.alert_days_before) return "warning" as const;
+      return "current" as const;
+    });
+
+    if (states.includes("expired")) return { state: "expired", label: "Vaccine expired" };
+    if (states.includes("missing")) return { state: "missing", label: "Vaccines missing" };
+    if (states.includes("warning")) return { state: "warning", label: "Expiring soon" };
+    return { state: "current", label: "Vaccines current" };
   }
   function closeForm() {
     setShowForm(false);
@@ -391,8 +445,14 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
         </section>
       ) : (
         <section className="pet-grid">
-          {visiblePets.map((pet) => (
-            <article className="pet-card" key={pet.id}>
+          {visiblePets.map((pet) => {
+            const vaccineBadge = getVaccineBadge(pet);
+            return <article className="pet-card" key={pet.id}>
+              {!pet.archived_at && (
+                <span className={`pet-vaccine-badge ${vaccineBadge.state}`}>
+                  {vaccineBadge.label}
+                </span>
+              )}
               <ProfilePhoto
                 businessId={businessId}
                 entity="pets"
@@ -436,8 +496,8 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
                   )}
                 </div>
               )}
-            </article>
-          ))}
+            </article>;
+          })}
         </section>
       )}
     </>
