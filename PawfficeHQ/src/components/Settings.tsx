@@ -1,11 +1,13 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
+import BusinessModules from "./BusinessModules";
 import "./Settings.css";
 
 type SettingsProps = {
   businessId: string;
   readOnly?: boolean;
   onSaved?: (businessName: string, logoUrl: string | null) => void;
+  onModulesChanged?: (enabled: Array<"grooming"|"pet_sitting"|"boarding_daycare"|"veterinary">) => void;
 };
 
 type DayHours = { open: boolean; start: string; end: string };
@@ -188,7 +190,7 @@ export function applyBusinessTheme(primary: string, accent: string) {
   root.style.setProperty("--brand-on-accent", contrastText(resolvedAccent));
 }
 
-function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
+function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: SettingsProps) {
   const [form, setForm] = useState<SettingsForm>(defaults);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -704,6 +706,7 @@ function Settings({ businessId, readOnly = false, onSaved }: SettingsProps) {
       )}
 
       <div className="settings-layout">
+        <BusinessModules businessId={businessId} readOnly={readOnly} onChanged={onModulesChanged} />
         <section className="dashboard-panel settings-section">
           <div>
             <p className="eyebrow">Profile</p>
