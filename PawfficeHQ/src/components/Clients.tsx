@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import ClientImportExport from "./ClientImportExport";
+import ProfilePhoto from "./ProfilePhoto";
 import "./ClientEditing.css";
 
 type ClientsProps = { businessId: string; readOnly?: boolean };
@@ -19,6 +20,9 @@ type Client = {
   booking_deposit_type: "fixed" | "percentage";
   booking_deposit_value: number;
   booking_deposit_reason: string | null;
+  profile_photo_path: string | null;
+  archived_at: string | null;
+  archive_reason: string | null;
 };
 const emptyForm = {
   FirstName: "",
@@ -37,7 +41,7 @@ const emptyForm = {
 };
 type ClientForm = typeof emptyForm;
 const selection =
-  "id, FirstName, LastName, PhoneNumber, EmailAddress, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip, booking_deposit_required, booking_deposit_type, booking_deposit_value, booking_deposit_reason";
+  "id, FirstName, LastName, PhoneNumber, EmailAddress, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip, booking_deposit_required, booking_deposit_type, booking_deposit_value, booking_deposit_reason, profile_photo_path, archived_at, archive_reason";
 
 export default function Clients({
   businessId,
@@ -48,6 +52,7 @@ export default function Clients({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showMigration, setShowMigration] = useState(false);
+  const [listMode, setListMode] = useState<"active" | "archived">("active");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -167,6 +172,48 @@ export default function Clients({
     setMessage(wasEditing ? "Client changes saved." : "Client added.");
   }
 
+  async function archiveClient(client: Client) {
+    const reason = window.prompt(
+      `Why are you archiving ${client.FirstName} ${client.LastName}?`,
+      "No longer receiving services",
+    );
+    if (reason === null) return;
+    const { error } = await supabase
+      .from("CLIENT")
+      .update({ archived_at: new Date().toISOString(), archive_reason: reason.trim() || null })
+      .eq("id", client.id)
+      .eq("business_id", businessId);
+    if (error) {
+      setSuccess(false);
+      setMessage(error.message);
+      return;
+    }
+    if (editingId === client.id) closeForm();
+    await loadClients();
+    setSuccess(true);
+    setMessage(`${client.FirstName} ${client.LastName} was archived. Their history was preserved.`);
+  }
+
+  async function restoreClient(client: Client) {
+    const { error } = await supabase
+      .from("CLIENT")
+      .update({ archived_at: null, archive_reason: null })
+      .eq("id", client.id)
+      .eq("business_id", businessId);
+    if (error) {
+      setSuccess(false);
+      setMessage(error.message);
+      return;
+    }
+    await loadClients();
+    setSuccess(true);
+    setMessage(`${client.FirstName} ${client.LastName} was restored.`);
+  }
+
+  const visibleClients = clients.filter((client) =>
+    listMode === "archived" ? client.archived_at !== null : client.archived_at === null,
+  );
+
   return (
     <>
       <header className="dashboard-header">
@@ -212,6 +259,21 @@ export default function Clients({
             </div>
             {editingId && <span>Client #{editingId}</span>}
           </div>
+          {editingId !== null && (
+            <div className="profile-photo-section">
+              <ProfilePhoto
+                businessId={businessId}
+                entity="clients"
+                table="CLIENT"
+                recordId={editingId}
+                photoPath={clients.find((client) => client.id === editingId)?.profile_photo_path ?? null}
+                initials={`${form.FirstName.charAt(0)}${form.LastName.charAt(0)}`}
+                label={`${form.FirstName} ${form.LastName}`.trim() || "Client"}
+                editable
+                onChanged={loadClients}
+              />
+            </div>
+          )}
           <form className="client-form" onSubmit={handleSubmit}>
             <label>
               First name
@@ -382,22 +444,37 @@ export default function Clients({
         />
       )}
 
+      <div className="record-list-filter" role="group" aria-label="Client status">
+        <button type="button" className={listMode === "active" ? "active" : ""} onClick={() => setListMode("active")}>
+          Active ({clients.filter((client) => !client.archived_at).length})
+        </button>
+        <button type="button" className={listMode === "archived" ? "active" : ""} onClick={() => setListMode("archived")}>
+          Archived ({clients.filter((client) => client.archived_at).length})
+        </button>
+      </div>
+
       <section className="dashboard-panel">
         {loading ? (
           <p>Loading clients...</p>
-        ) : clients.length === 0 ? (
+        ) : visibleClients.length === 0 ? (
           <div className="empty-state">
-            <h3>No clients yet</h3>
-            <p>Add your first client to begin their profile.</p>
+            <h3>{listMode === "archived" ? "No archived clients" : "No active clients yet"}</h3>
+            <p>{listMode === "archived" ? "Archived client profiles will appear here." : "Add your first client to begin their profile."}</p>
           </div>
         ) : (
           <div className="client-list">
-            {clients.map((client) => (
+            {visibleClients.map((client) => (
               <article className="client-row" key={client.id}>
-                <div className="client-avatar">
-                  {client.FirstName.charAt(0)}
-                  {client.LastName.charAt(0)}
-                </div>
+                <ProfilePhoto
+                  businessId={businessId}
+                  entity="clients"
+                  table="CLIENT"
+                  recordId={client.id}
+                  photoPath={client.profile_photo_path}
+                  initials={`${client.FirstName.charAt(0)}${client.LastName.charAt(0)}`}
+                  label={`${client.FirstName} ${client.LastName}`}
+                  compact
+                />
                 <div className="client-name">
                   <strong>
                     {client.FirstName} {client.LastName}
@@ -410,6 +487,9 @@ export default function Clients({
                         ? `${client.booking_deposit_value}%`
                         : `$${Number(client.booking_deposit_value).toFixed(2)}`}
                     </span>
+                  )}
+                  {client.archived_at && (
+                    <span className="archive-reason">Archived · {client.archive_reason || "No reason provided"}</span>
                   )}
                 </div>
                 <div>
@@ -425,13 +505,16 @@ export default function Clients({
                   </p>
                 </div>
                 {!readOnly && (
-                  <button
-                    className="client-edit-button"
-                    type="button"
-                    onClick={() => openEdit(client)}
-                  >
-                    Edit
-                  </button>
+                  <div className="record-actions">
+                    {client.archived_at ? (
+                      <button className="client-edit-button" type="button" onClick={() => void restoreClient(client)}>Restore</button>
+                    ) : (
+                      <>
+                        <button className="client-edit-button" type="button" onClick={() => openEdit(client)}>Edit</button>
+                        <button className="archive-button" type="button" onClick={() => void archiveClient(client)}>Archive</button>
+                      </>
+                    )}
+                  </div>
                 )}
               </article>
             ))}

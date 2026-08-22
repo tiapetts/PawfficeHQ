@@ -126,11 +126,13 @@ function Dashboard({
         supabase
           .from("CLIENT")
           .select("*", { count: "exact", head: true })
-          .eq("business_id", businessId),
+          .eq("business_id", businessId)
+          .is("archived_at", null),
         supabase
           .from("PET")
           .select("*", { count: "exact", head: true })
-          .eq("business_id", businessId),
+          .eq("business_id", businessId)
+          .is("archived_at", null),
         supabase
           .from("appointment")
           .select("id, client_id, start_at, end_at, status")

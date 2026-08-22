@@ -126,11 +126,13 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
         .from("CLIENT")
         .select("id, FirstName, LastName")
         .eq("business_id", businessId)
+        .is("archived_at", null)
         .order("LastName"),
       supabase
         .from("PET")
         .select("id, PetName")
         .eq("business_id", businessId)
+        .is("archived_at", null)
         .order("PetName"),
       supabase.from("client_pet").select("client_id, pet_id"),
       supabase

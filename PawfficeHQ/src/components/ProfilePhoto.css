@@ -1,0 +1,93 @@
+.profile-photo-control {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.profile-photo-frame {
+  width: 104px;
+  height: 104px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: #dcebe6;
+  box-shadow: 0 0 0 1px #bfd0cb;
+  color: #21463d;
+  font-size: 1.65rem;
+  font-weight: 900;
+}
+
+.profile-photo-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-photo-control.compact {
+  display: block;
+}
+
+.profile-photo-control.compact .profile-photo-frame {
+  width: 44px;
+  height: 44px;
+  border-width: 2px;
+  font-size: .9rem;
+}
+
+.profile-photo-actions {
+  flex: 1;
+  display: grid;
+  gap: 10px;
+}
+
+.profile-photo-actions > div:first-child,
+.profile-photo-actions > div:nth-child(2) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.profile-photo-actions > div:first-child {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.profile-photo-actions small {
+  color: #657873;
+}
+
+.profile-photo-actions input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.profile-photo-remove {
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  color: #a52a2a;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.profile-photo-error {
+  margin: 0;
+  color: #a52a2a;
+  font-weight: 700;
+}
+
+@media (max-width: 520px) {
+  .profile-photo-control:not(.compact) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
