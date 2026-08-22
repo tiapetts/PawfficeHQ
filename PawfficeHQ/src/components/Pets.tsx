@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
+import ProfilePhoto from "./ProfilePhoto";
 import "./PetEditing.css";
 
 type PetsProps = { businessId: string; readOnly?: boolean };
@@ -11,8 +12,11 @@ type Pet = {
   PetBreed: string | null;
   PetDOB: string | null;
   PetWeight: number | null;
+  profile_photo_path: string | null;
+  archived_at: string | null;
+  archive_reason: string | null;
 };
-type Client = { id: number; FirstName: string; LastName: string };
+type Client = { id: number; FirstName: string; LastName: string; archived_at: string | null };
 type ClientPet = {
   client_id: number;
   pet_id: PetId;
@@ -28,7 +32,7 @@ const emptyForm = {
   PetWeight: "",
 };
 type PetForm = typeof emptyForm;
-const petSelection = "id, PetName, species, PetBreed, PetDOB, PetWeight";
+const petSelection = "id, PetName, species, PetBreed, PetDOB, PetWeight, profile_photo_path, archived_at, archive_reason";
 
 export default function Pets({ businessId, readOnly = false }: PetsProps) {
   const [pets, setPets] = useState<Pet[]>([]);
@@ -37,6 +41,7 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
   const [form, setForm] = useState<PetForm>(emptyForm);
   const [editingId, setEditingId] = useState<PetId | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [listMode, setListMode] = useState<"active" | "archived">("active");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -51,7 +56,7 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
         .order("PetName"),
       supabase
         .from("CLIENT")
-        .select("id, FirstName, LastName")
+        .select("id, FirstName, LastName, archived_at")
         .eq("business_id", businessId)
         .order("LastName"),
       supabase
@@ -187,6 +192,48 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
     setMessage(wasEditing ? "Pet changes saved." : "Pet added.");
   }
 
+  async function archivePet(pet: Pet) {
+    const reason = window.prompt(
+      `Why are you archiving ${pet.PetName}?`,
+      "No longer receiving services",
+    );
+    if (reason === null) return;
+    const { error } = await supabase
+      .from("PET")
+      .update({ archived_at: new Date().toISOString(), archive_reason: reason.trim() || null })
+      .eq("id", pet.id)
+      .eq("business_id", businessId);
+    if (error) {
+      setSuccess(false);
+      setMessage(error.message);
+      return;
+    }
+    if (String(editingId) === String(pet.id)) closeForm();
+    await loadData();
+    setSuccess(true);
+    setMessage(`${pet.PetName} was archived. Their care history was preserved.`);
+  }
+
+  async function restorePet(pet: Pet) {
+    const { error } = await supabase
+      .from("PET")
+      .update({ archived_at: null, archive_reason: null })
+      .eq("id", pet.id)
+      .eq("business_id", businessId);
+    if (error) {
+      setSuccess(false);
+      setMessage(error.message);
+      return;
+    }
+    await loadData();
+    setSuccess(true);
+    setMessage(`${pet.PetName} was restored.`);
+  }
+
+  const visiblePets = pets.filter((pet) =>
+    listMode === "archived" ? pet.archived_at !== null : pet.archived_at === null,
+  );
+
   return (
     <>
       <header className="dashboard-header">
@@ -220,7 +267,22 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
             </div>
             {editingId !== null && <span>Pet #{editingId}</span>}
           </div>
-          {clients.length === 0 ? (
+          {editingId !== null && (
+            <div className="profile-photo-section">
+              <ProfilePhoto
+                businessId={businessId}
+                entity="pets"
+                table="PET"
+                recordId={editingId}
+                photoPath={pets.find((pet) => String(pet.id) === String(editingId))?.profile_photo_path ?? null}
+                initials={form.PetName.charAt(0)}
+                label={form.PetName || "Pet"}
+                editable
+                onChanged={loadData}
+              />
+            </div>
+          )}
+          {clients.filter((client) => !client.archived_at).length === 0 ? (
             <p>You must add a client before adding their pet.</p>
           ) : (
             <form className="client-form" onSubmit={handleSubmit}>
@@ -232,7 +294,7 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
                   required
                 >
                   <option value="">Select a client</option>
-                  {clients.map((client) => (
+                  {clients.filter((client) => !client.archived_at).map((client) => (
                     <option key={client.id} value={client.id}>
                       {client.FirstName} {client.LastName}
                     </option>
@@ -309,23 +371,42 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
         </section>
       )}
 
+      <div className="record-list-filter" role="group" aria-label="Pet status">
+        <button type="button" className={listMode === "active" ? "active" : ""} onClick={() => setListMode("active")}>
+          Active ({pets.filter((pet) => !pet.archived_at).length})
+        </button>
+        <button type="button" className={listMode === "archived" ? "active" : ""} onClick={() => setListMode("archived")}>
+          Archived ({pets.filter((pet) => pet.archived_at).length})
+        </button>
+      </div>
+
       {loading ? (
         <p>Loading pets...</p>
-      ) : pets.length === 0 ? (
+      ) : visiblePets.length === 0 ? (
         <section className="dashboard-panel">
           <div className="empty-state">
-            <h3>No pets yet</h3>
-            <p>Add a pet and connect them to their owner.</p>
+            <h3>{listMode === "archived" ? "No archived pets" : "No active pets yet"}</h3>
+            <p>{listMode === "archived" ? "Archived pet profiles will appear here." : "Add a pet and connect them to their owner."}</p>
           </div>
         </section>
       ) : (
         <section className="pet-grid">
-          {pets.map((pet) => (
+          {visiblePets.map((pet) => (
             <article className="pet-card" key={pet.id}>
-              <div className="pet-avatar">{pet.PetName.charAt(0)}</div>
+              <ProfilePhoto
+                businessId={businessId}
+                entity="pets"
+                table="PET"
+                recordId={pet.id}
+                photoPath={pet.profile_photo_path}
+                initials={pet.PetName.charAt(0)}
+                label={pet.PetName}
+                compact
+              />
               <div>
                 <h3>{pet.PetName}</h3>
                 <p>{[pet.species, pet.PetBreed].filter(Boolean).join(" · ")}</p>
+                {pet.archived_at && <p className="archive-reason">Archived · {pet.archive_reason || "No reason provided"}</p>}
               </div>
               <dl className="pet-details">
                 <div>
@@ -344,13 +425,16 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
                 </div>
               </dl>
               {!readOnly && (
-                <button
-                  className="pet-edit-button"
-                  type="button"
-                  onClick={() => openEdit(pet)}
-                >
-                  Edit pet
-                </button>
+                <div className="record-actions pet-record-actions">
+                  {pet.archived_at ? (
+                    <button className="pet-edit-button" type="button" onClick={() => void restorePet(pet)}>Restore pet</button>
+                  ) : (
+                    <>
+                      <button className="pet-edit-button" type="button" onClick={() => openEdit(pet)}>Edit pet</button>
+                      <button className="archive-button" type="button" onClick={() => void archivePet(pet)}>Archive pet</button>
+                    </>
+                  )}
+                </div>
               )}
             </article>
           ))}

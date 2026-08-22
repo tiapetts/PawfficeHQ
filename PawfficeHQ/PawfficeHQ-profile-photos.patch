@@ -1,0 +1,166 @@
+diff --git a/PawfficeHQ/src/components/ClientEditing.css b/PawfficeHQ/src/components/ClientEditing.css
+index bed39a9..48b2f98 100644
+--- a/PawfficeHQ/src/components/ClientEditing.css
++++ b/PawfficeHQ/src/components/ClientEditing.css
+@@ -19,6 +19,14 @@
+     font-weight: 800;
+ }
+ 
++.profile-photo-section {
++    margin: 0 0 22px;
++    padding: 18px;
++    border: 1px solid #d6e0dd;
++    border-radius: 12px;
++    background: #f7faf9;
++}
++
+ .client-row {
+     position: relative;
+ }
+@@ -131,4 +139,4 @@
+     .client-deposit-fields {
+         grid-template-columns: 1fr;
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/PawfficeHQ/src/components/Clients.tsx b/PawfficeHQ/src/components/Clients.tsx
+index 421b206..58ac0eb 100644
+--- a/PawfficeHQ/src/components/Clients.tsx
++++ b/PawfficeHQ/src/components/Clients.tsx
+@@ -1,6 +1,7 @@
+ import { useEffect, useState, type FormEvent } from "react";
+ import { supabase } from "../lib/supabase";
+ import ClientImportExport from "./ClientImportExport";
++import ProfilePhoto from "./ProfilePhoto";
+ import "./ClientEditing.css";
+ 
+ type ClientsProps = { businessId: string; readOnly?: boolean };
+@@ -19,6 +20,7 @@ type Client = {
+   booking_deposit_type: "fixed" | "percentage";
+   booking_deposit_value: number;
+   booking_deposit_reason: string | null;
++  profile_photo_path: string | null;
+ };
+ const emptyForm = {
+   FirstName: "",
+@@ -37,7 +39,7 @@ const emptyForm = {
+ };
+ type ClientForm = typeof emptyForm;
+ const selection =
+-  "id, FirstName, LastName, PhoneNumber, EmailAddress, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip, booking_deposit_required, booking_deposit_type, booking_deposit_value, booking_deposit_reason";
++  "id, FirstName, LastName, PhoneNumber, EmailAddress, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip, booking_deposit_required, booking_deposit_type, booking_deposit_value, booking_deposit_reason, profile_photo_path";
+ 
+ export default function Clients({
+   businessId,
+@@ -212,6 +214,21 @@ export default function Clients({
+             </div>
+             {editingId && <span>Client #{editingId}</span>}
+           </div>
++          {editingId !== null && (
++            <div className="profile-photo-section">
++              <ProfilePhoto
++                businessId={businessId}
++                entity="clients"
++                table="CLIENT"
++                recordId={editingId}
++                photoPath={clients.find((client) => client.id === editingId)?.profile_photo_path ?? null}
++                initials={`${form.FirstName.charAt(0)}${form.LastName.charAt(0)}`}
++                label={`${form.FirstName} ${form.LastName}`.trim() || "Client"}
++                editable
++                onChanged={loadClients}
++              />
++            </div>
++          )}
+           <form className="client-form" onSubmit={handleSubmit}>
+             <label>
+               First name
+@@ -394,10 +411,16 @@ export default function Clients({
+           <div className="client-list">
+             {clients.map((client) => (
+               <article className="client-row" key={client.id}>
+-                <div className="client-avatar">
+-                  {client.FirstName.charAt(0)}
+-                  {client.LastName.charAt(0)}
+-                </div>
++                <ProfilePhoto
++                  businessId={businessId}
++                  entity="clients"
++                  table="CLIENT"
++                  recordId={client.id}
++                  photoPath={client.profile_photo_path}
++                  initials={`${client.FirstName.charAt(0)}${client.LastName.charAt(0)}`}
++                  label={`${client.FirstName} ${client.LastName}`}
++                  compact
++                />
+                 <div className="client-name">
+                   <strong>
+                     {client.FirstName} {client.LastName}
+diff --git a/PawfficeHQ/src/components/Pets.tsx b/PawfficeHQ/src/components/Pets.tsx
+index 103cefc..8e96ff9 100644
+--- a/PawfficeHQ/src/components/Pets.tsx
++++ b/PawfficeHQ/src/components/Pets.tsx
+@@ -1,5 +1,6 @@
+ import { useEffect, useState, type FormEvent } from "react";
+ import { supabase } from "../lib/supabase";
++import ProfilePhoto from "./ProfilePhoto";
+ import "./PetEditing.css";
+ 
+ type PetsProps = { businessId: string; readOnly?: boolean };
+@@ -11,6 +12,7 @@ type Pet = {
+   PetBreed: string | null;
+   PetDOB: string | null;
+   PetWeight: number | null;
++  profile_photo_path: string | null;
+ };
+ type Client = { id: number; FirstName: string; LastName: string };
+ type ClientPet = {
+@@ -28,7 +30,7 @@ const emptyForm = {
+   PetWeight: "",
+ };
+ type PetForm = typeof emptyForm;
+-const petSelection = "id, PetName, species, PetBreed, PetDOB, PetWeight";
++const petSelection = "id, PetName, species, PetBreed, PetDOB, PetWeight, profile_photo_path";
+ 
+ export default function Pets({ businessId, readOnly = false }: PetsProps) {
+   const [pets, setPets] = useState<Pet[]>([]);
+@@ -220,6 +222,21 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
+             </div>
+             {editingId !== null && <span>Pet #{editingId}</span>}
+           </div>
++          {editingId !== null && (
++            <div className="profile-photo-section">
++              <ProfilePhoto
++                businessId={businessId}
++                entity="pets"
++                table="PET"
++                recordId={editingId}
++                photoPath={pets.find((pet) => String(pet.id) === String(editingId))?.profile_photo_path ?? null}
++                initials={form.PetName.charAt(0)}
++                label={form.PetName || "Pet"}
++                editable
++                onChanged={loadData}
++              />
++            </div>
++          )}
+           {clients.length === 0 ? (
+             <p>You must add a client before adding their pet.</p>
+           ) : (
+@@ -322,7 +339,16 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
+         <section className="pet-grid">
+           {pets.map((pet) => (
+             <article className="pet-card" key={pet.id}>
+-              <div className="pet-avatar">{pet.PetName.charAt(0)}</div>
++              <ProfilePhoto
++                businessId={businessId}
++                entity="pets"
++                table="PET"
++                recordId={pet.id}
++                photoPath={pet.profile_photo_path}
++                initials={pet.PetName.charAt(0)}
++                label={pet.PetName}
++                compact
++              />
+               <div>
+                 <h3>{pet.PetName}</h3>
+                 <p>{[pet.species, pet.PetBreed].filter(Boolean).join(" · ")}</p>
