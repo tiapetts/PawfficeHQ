@@ -11,6 +11,7 @@ import Settings from "./Settings";
 import Billing from "./Billing";
 import Vaccinations, { vaccinationState } from "./Vaccinations";
 import RevenueOverview from "./RevenueOverview";
+import ReportCards from "./ReportCards";
 import type { SubscriptionAccess } from "./SubscriptionGate";
 import { applyBusinessTheme } from "./Settings";
 import "./Responsive.css";
@@ -76,6 +77,7 @@ type ActivePage =
   | "staff"
   | "billing"
   | "vaccinations"
+  | "report_cards"
   | "settings";
 
 function Dashboard({
@@ -379,6 +381,7 @@ function Dashboard({
           >
             Vaccinations
           </button>
+          <button className={`nav-button ${activePage === "report_cards" ? "active" : ""}`} onClick={() => openPage("report_cards")}>Report cards</button>
           <button
             className={`nav-button ${activePage === "services" ? "active" : ""}`}
             onClick={() => openPage("services")}
@@ -428,6 +431,8 @@ function Dashboard({
           <Pets businessId={businessId} />
         ) : activePage === "vaccinations" ? (
           <Vaccinations businessId={businessId} readOnly={readOnly} />
+        ) : activePage === "report_cards" ? (
+          <ReportCards businessId={businessId} readOnly={readOnly} />
         ) : activePage === "services" ? (
           <Services businessId={businessId} />
         ) : activePage === "staff" ? (
