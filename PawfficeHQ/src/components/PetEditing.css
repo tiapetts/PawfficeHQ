@@ -44,3 +44,54 @@
     color: #17634f;
     font-weight: 700;
 }
+
+.pet-card {
+    position: relative;
+}
+
+.pet-vaccine-badge {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    max-width: calc(100% - 100px);
+    padding: 6px 10px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.pet-vaccine-badge.current {
+    border-color: #86c9a8;
+    background: #e2f5ea;
+    color: #17633f;
+}
+
+.pet-vaccine-badge.warning {
+    border-color: #e7bd55;
+    background: #fff4cf;
+    color: #795400;
+}
+
+.pet-vaccine-badge.expired,
+.pet-vaccine-badge.missing {
+    border-color: #e4a09a;
+    background: #fde8e6;
+    color: #9b2d22;
+}
+
+.pet-vaccine-badge.none {
+    border-color: #ccd7d4;
+    background: #f1f5f4;
+    color: #596b66;
+}
+
+@media (max-width: 520px) {
+    .pet-vaccine-badge {
+        top: 14px;
+        right: 14px;
+        font-size: .7rem;
+    }
+}

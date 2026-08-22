@@ -9,6 +9,7 @@ import Invoices from "./Invoices";
 import Staff from "./Staff";
 import Settings from "./Settings";
 import Billing from "./Billing";
+import Vaccinations, { vaccinationState } from "./Vaccinations";
 import type { SubscriptionAccess } from "./SubscriptionGate";
 import { applyBusinessTheme } from "./Settings";
 import "./Responsive.css";
@@ -42,7 +43,11 @@ type Client = {
 type Pet = {
   id: number;
   PetName: string;
+  species?: string;
 };
+
+type VaccineRequirement = { id: string; name: string; species: string; alert_days_before: number; is_active: boolean };
+type VaccinationRecord = { id: string; pet_id: number; requirement_id: string | null; vaccine_name: string; expires_on: string };
 
 type AppointmentPet = {
   appointment_id: string;
@@ -69,6 +74,7 @@ type ActivePage =
   | "invoices"
   | "staff"
   | "billing"
+  | "vaccinations"
   | "settings";
 
 function Dashboard({
@@ -84,6 +90,7 @@ function Dashboard({
   const [businessLogo, setBusinessLogo] = useState<string | null>(null);
   const [clientCount, setClientCount] = useState(0);
   const [petCount, setPetCount] = useState(0);
+  const [vaccinationAlertCount, setVaccinationAlertCount] = useState(0);
   const [todayAppointments, setTodayAppointments] = useState<
     TodayAppointment[]
   >([]);
@@ -117,6 +124,8 @@ function Dashboard({
         petsResult,
         servicesResult,
         settingsResult,
+        requirementsResult,
+        vaccinationsResult,
       ] = await Promise.all([
         supabase
           .from("business")
@@ -147,13 +156,16 @@ function Dashboard({
           .eq("business_id", businessId),
         supabase
           .from("PET")
-          .select("id, PetName")
-          .eq("business_id", businessId),
+          .select("id, PetName, species")
+          .eq("business_id", businessId)
+          .is("archived_at", null),
         supabase
           .from("service")
           .select("id, name")
           .eq("business_id", businessId),
         supabase.rpc("get_business_settings", { p_business_id: businessId }),
+        supabase.from("vaccine_requirement").select("id, name, species, alert_days_before, is_active").eq("business_id", businessId).eq("is_active", true),
+        supabase.from("pet_vaccination").select("id, pet_id, requirement_id, vaccine_name, expires_on").eq("business_id", businessId),
       ]);
 
       const firstError = [
@@ -165,6 +177,8 @@ function Dashboard({
         petsResult.error,
         servicesResult.error,
         settingsResult.error,
+        requirementsResult.error,
+        vaccinationsResult.error,
       ].find(Boolean);
 
       if (firstError) {
@@ -223,6 +237,17 @@ function Dashboard({
       setTodayAppointments(loadedAppointments);
       setClients(clientsResult.data ?? []);
       setPets(petsResult.data ?? []);
+      const dashboardPets = (petsResult.data as Pet[] | null) ?? [];
+      const dashboardRequirements = (requirementsResult.data as VaccineRequirement[] | null) ?? [];
+      const dashboardVaccinations = (vaccinationsResult.data as VaccinationRecord[] | null) ?? [];
+      const alertCount = dashboardPets.reduce((count, pet) => count + dashboardRequirements.filter((requirement) => {
+        if (requirement.species !== "All" && requirement.species !== pet.species) return false;
+        const record = dashboardVaccinations
+          .filter((item) => item.pet_id === pet.id && (item.requirement_id === requirement.id || item.vaccine_name.toLowerCase() === requirement.name.toLowerCase()))
+          .sort((a, b) => b.expires_on.localeCompare(a.expires_on))[0];
+        return vaccinationState(record, requirement) !== "current";
+      }).length, 0);
+      setVaccinationAlertCount(alertCount);
       setServices(servicesResult.data ?? []);
       setAppointmentPets(loadedAppointmentPets);
       setAppointmentServices(loadedAppointmentServices);
@@ -348,6 +373,12 @@ function Dashboard({
             Pets
           </button>
           <button
+            className={`nav-button ${activePage === "vaccinations" ? "active" : ""}`}
+            onClick={() => openPage("vaccinations")}
+          >
+            Vaccinations
+          </button>
+          <button
             className={`nav-button ${activePage === "services" ? "active" : ""}`}
             onClick={() => openPage("services")}
           >
@@ -394,6 +425,8 @@ function Dashboard({
           <Clients businessId={businessId} />
         ) : activePage === "pets" ? (
           <Pets businessId={businessId} />
+        ) : activePage === "vaccinations" ? (
+          <Vaccinations businessId={businessId} readOnly={readOnly} />
         ) : activePage === "services" ? (
           <Services businessId={businessId} />
         ) : activePage === "staff" ? (
@@ -451,7 +484,7 @@ function Dashboard({
               </article>
               <article className="summary-card">
                 <span>Vaccination alerts</span>
-                <strong>0</strong>
+                <strong>{loading ? "—" : vaccinationAlertCount}</strong>
               </article>
             </section>
 
