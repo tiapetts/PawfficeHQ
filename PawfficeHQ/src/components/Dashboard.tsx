@@ -10,6 +10,7 @@ import Staff from "./Staff";
 import Settings from "./Settings";
 import Billing from "./Billing";
 import Vaccinations, { vaccinationState } from "./Vaccinations";
+import RevenueOverview from "./RevenueOverview";
 import type { SubscriptionAccess } from "./SubscriptionGate";
 import { applyBusinessTheme } from "./Settings";
 import "./Responsive.css";
@@ -543,6 +544,8 @@ function Dashboard({
                 </div>
               )}
             </section>
+
+            <RevenueOverview businessId={businessId} />
           </>
         )}
       </main>
