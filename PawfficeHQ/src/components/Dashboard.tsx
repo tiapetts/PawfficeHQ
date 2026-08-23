@@ -13,6 +13,9 @@ import Vaccinations, { vaccinationState } from "./Vaccinations";
 import RevenueOverview from "./RevenueOverview";
 import ReportCards from "./ReportCards";
 import ModuleWorkspace from "./ModuleWorkspace";
+import PetSitting from "./PetSitting";
+import PetSittingCalendarView from "./PetSittingCalendarView";
+import PetSittingReports from "./PetSittingReports";
 import type { SubscriptionAccess } from "./SubscriptionGate";
 import { applyBusinessTheme } from "./Settings";
 import "./Responsive.css";
@@ -82,6 +85,8 @@ type ActivePage =
   | "report_cards"
   | "grooming_module"
   | "pet_sitting_module"
+  | "pet_sitting_calendar"
+  | "pet_sitting_reports"
   | "boarding_daycare_module"
   | "veterinary_module"
   | "settings";
@@ -383,7 +388,7 @@ function Dashboard({
           </button>
           <div className="core-nav-divider" />
           {enabledModules.includes("grooming")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.grooming} onClick={()=>setExpandedModules(current=>({...current,grooming:!current.grooming}))}><span>Grooming</span><span>⌄</span></button>{expandedModules.grooming&&<div className="module-nav-items"><button className={`nav-button ${activePage==="history"?"active":""}`} onClick={()=>openPage("history")}>Appointment history</button><button className={`nav-button ${activePage==="services"?"active":""}`} onClick={()=>openPage("services")}>Grooming services</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Grooming report cards</button></div>}</div>}
-          {enabledModules.includes("pet_sitting")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.pet_sitting} onClick={()=>setExpandedModules(current=>({...current,pet_sitting:!current.pet_sitting}))}><span>Pet sitting</span><span>⌄</span></button>{expandedModules.pet_sitting&&<div className="module-nav-items"><button className={`nav-button ${activePage==="pet_sitting_module"?"active":""}`} onClick={()=>openPage("pet_sitting_module")}>Visits & care plans</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Visit reports</button></div>}</div>}
+          {enabledModules.includes("pet_sitting")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.pet_sitting} onClick={()=>setExpandedModules(current=>({...current,pet_sitting:!current.pet_sitting}))}><span>Pet sitting</span><span>⌄</span></button>{expandedModules.pet_sitting&&<div className="module-nav-items"><button className={`nav-button ${activePage==="pet_sitting_module"?"active":""}`} onClick={()=>openPage("pet_sitting_module")}>Bookings & care plans</button><button className={`nav-button ${activePage==="pet_sitting_calendar"?"active":""}`} onClick={()=>openPage("pet_sitting_calendar")}>Visit calendar</button><button className={`nav-button ${activePage==="pet_sitting_reports"?"active":""}`} onClick={()=>openPage("pet_sitting_reports")}>Visit reports</button></div>}</div>}
           {enabledModules.includes("boarding_daycare")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.boarding_daycare} onClick={()=>setExpandedModules(current=>({...current,boarding_daycare:!current.boarding_daycare}))}><span>Boarding & daycare</span><span>⌄</span></button>{expandedModules.boarding_daycare&&<div className="module-nav-items"><button className={`nav-button ${activePage==="boarding_daycare_module"?"active":""}`} onClick={()=>openPage("boarding_daycare_module")}>Reservations & occupancy</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Care reports</button></div>}</div>}
           {enabledModules.includes("veterinary")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.veterinary} onClick={()=>setExpandedModules(current=>({...current,veterinary:!current.veterinary}))}><span>Veterinary</span><span>⌄</span></button>{expandedModules.veterinary&&<div className="module-nav-items"><button className={`nav-button ${activePage==="veterinary_module"?"active":""}`} onClick={()=>openPage("veterinary_module")}>Encounters & records</button><button className={`nav-button ${activePage==="vaccinations"?"active":""}`} onClick={()=>openPage("vaccinations")}>Vaccinations</button></div>}</div>}
           <div className="core-nav-divider" />
@@ -432,6 +437,12 @@ function Dashboard({
           <Vaccinations businessId={businessId} readOnly={readOnly} />
         ) : activePage === "report_cards" ? (
           <ReportCards businessId={businessId} readOnly={readOnly} />
+        ) : activePage === "pet_sitting_module" ? (
+          <PetSitting businessId={businessId} readOnly={readOnly} />
+        ) : activePage === "pet_sitting_calendar" ? (
+          <><header className="dashboard-header"><div><p className="eyebrow">Pet sitting</p><h2>Visit calendar</h2></div></header><PetSittingCalendarView businessId={businessId} focused /></>
+        ) : activePage === "pet_sitting_reports" ? (
+          <PetSittingReports businessId={businessId} />
         ) : activePage.endsWith("_module") ? (
           <ModuleWorkspace moduleKey={activePage.replace("_module","") as "grooming"|"pet_sitting"|"boarding_daycare"|"veterinary"} />
         ) : activePage === "services" ? (
@@ -456,6 +467,8 @@ function Dashboard({
               setEnabledModules(modules);
               setActivePage((current) => {
                 if (current.endsWith("_module") && !modules.includes(current.replace("_module","") as "grooming"|"pet_sitting"|"boarding_daycare"|"veterinary")) return "settings";
+                if (current === "pet_sitting_calendar" && !modules.includes("pet_sitting")) return "settings";
+                if (current === "pet_sitting_reports" && !modules.includes("pet_sitting")) return "settings";
                 if (!modules.includes("grooming") && ["history","services"].includes(current)) return "settings";
                 if (!modules.includes("veterinary") && current === "vaccinations") return "settings";
                 return current;
