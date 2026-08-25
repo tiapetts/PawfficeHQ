@@ -21,6 +21,15 @@ type PlatformBusiness = {
   last_appointment_at: string | null;
 };
 
+type ModuleAccessRequest = {
+  id: string;
+  business_id: string;
+  module_key: "pet_sitting" | "boarding_daycare" | "veterinary";
+  request_type: string;
+  message: string | null;
+  created_at: string;
+};
+
 const emptyOverview: PlatformOverview = {
   total_businesses: 0,
   active_businesses_30_days: 0,
@@ -39,6 +48,7 @@ export default function PlatformAdmin({
 }: PlatformAdminProps) {
   const [overview, setOverview] = useState<PlatformOverview>(emptyOverview);
   const [businesses, setBusinesses] = useState<PlatformBusiness[]>([]);
+  const [moduleRequests, setModuleRequests] = useState<ModuleAccessRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
@@ -55,12 +65,13 @@ export default function PlatformAdmin({
       setLoading(true);
       setMessage("");
 
-      const [overviewResult, businessesResult] = await Promise.all([
+      const [overviewResult, businessesResult, requestsResult] = await Promise.all([
         supabase.rpc("get_platform_overview").single(),
         supabase.rpc("get_platform_businesses"),
+        supabase.from("module_access_request").select("id, business_id, module_key, request_type, message, created_at").eq("status","pending").order("created_at"),
       ]);
 
-      const error = overviewResult.error || businessesResult.error;
+      const error = overviewResult.error || businessesResult.error || requestsResult.error;
 
       if (error) {
         console.error(error);
@@ -70,6 +81,7 @@ export default function PlatformAdmin({
           (overviewResult.data as PlatformOverview | null) ?? emptyOverview,
         );
         setBusinesses(businessesResult.data ?? []);
+        setModuleRequests((requestsResult.data as ModuleAccessRequest[] | null) ?? []);
       }
 
       setLoading(false);
@@ -77,6 +89,24 @@ export default function PlatformAdmin({
 
     void loadPlatformAdmin();
   }, []);
+
+  function moduleName(key: ModuleAccessRequest["module_key"]) {
+    return key === "pet_sitting" ? "Pet sitting" : key === "boarding_daycare" ? "Boarding & daycare" : "Veterinary";
+  }
+
+  async function reviewModuleRequest(request: ModuleAccessRequest, approve: boolean) {
+    setMessage("");
+    if (approve) {
+      const entitlement = await supabase.from("business_module_entitlement").upsert({ business_id: request.business_id, module_key: request.module_key, status: "active", source: "manual", granted_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "business_id,module_key" });
+      if (entitlement.error) { setMessage(entitlement.error.message); return; }
+    }
+    const reviewed = await supabase.from("module_access_request").update({ status: approve ? "approved" : "denied", reviewed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", request.id);
+    if (reviewed.error) setMessage(reviewed.error.message);
+    else {
+      setModuleRequests(current => current.filter(item => item.id !== request.id));
+      setMessage(`${moduleName(request.module_key)} request ${approve ? "approved" : "denied"}.`);
+    }
+  }
 
   const filteredBusinesses = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -294,6 +324,14 @@ export default function PlatformAdmin({
             <span>Total pets</span>
             <strong>{loading ? "—" : overview.total_pets}</strong>
           </article>
+        </section>
+
+        <section className="dashboard-panel" style={{ marginBottom: 32 }}>
+          <div className="panel-heading"><div><p className="eyebrow">Module access</p><h3>Pending upgrade requests</h3></div><strong>{moduleRequests.length} pending</strong></div>
+          {moduleRequests.length === 0 ? <div className="empty-state"><p>No module requests need review.</p></div> : <div style={{display:"grid",gap:12}}>{moduleRequests.map(request => {
+            const business = businesses.find(item => item.business_id === request.business_id);
+            return <article key={request.id} style={{border:"1px solid #d7e0dd",borderRadius:12,padding:16,display:"flex",justifyContent:"space-between",gap:20,alignItems:"center",flexWrap:"wrap"}}><div><strong>{business?.business_name ?? "Unknown business"}</strong><p style={{margin:"5px 0"}}>{moduleName(request.module_key)} · {request.request_type.replaceAll("_"," ")}</p><small>{new Date(request.created_at).toLocaleString()}</small>{request.message&&<p>{request.message}</p>}</div><div style={{display:"flex",gap:8}}><button className="secondary-button" onClick={()=>void reviewModuleRequest(request,false)}>Deny</button><button className="primary-button" onClick={()=>void reviewModuleRequest(request,true)}>Approve access</button></div></article>
+          })}</div>}
         </section>
 
         <section className="dashboard-panel">

@@ -152,6 +152,7 @@ function Dashboard({
         requirementsResult,
         vaccinationsResult,
         modulesResult,
+        moduleEntitlementsResult,
       ] = await Promise.all([
         supabase
           .from("business")
@@ -193,6 +194,7 @@ function Dashboard({
         supabase.from("vaccine_requirement").select("id, name, species, alert_days_before, is_active").eq("business_id", businessId).eq("is_active", true),
         supabase.from("pet_vaccination").select("id, pet_id, requirement_id, vaccine_name, expires_on").eq("business_id", businessId),
         supabase.from("business_module").select("module_key").eq("business_id",businessId).eq("is_enabled",true),
+        supabase.from("business_module_entitlement").select("module_key, status, expires_at").eq("business_id",businessId).in("status",["active","trialing"]),
       ]);
 
       const firstError = [
@@ -207,6 +209,7 @@ function Dashboard({
         requirementsResult.error,
         vaccinationsResult.error,
         modulesResult.error,
+        moduleEntitlementsResult.error,
       ].find(Boolean);
 
       if (firstError) {
@@ -276,7 +279,8 @@ function Dashboard({
         return vaccinationState(record, requirement) !== "current";
       }).length, 0);
       setVaccinationAlertCount(alertCount);
-      setEnabledModules(((modulesResult.data as Array<{module_key:"grooming"|"pet_sitting"|"boarding_daycare"|"veterinary"}>|null)??[]).map(row=>row.module_key));
+      const entitledKeys = new Set(((moduleEntitlementsResult.data as Array<{module_key:string;status:string;expires_at:string|null}>|null)??[]).filter(row=>!row.expires_at||new Date(row.expires_at)>new Date()).map(row=>row.module_key));
+      setEnabledModules(((modulesResult.data as Array<{module_key:"grooming"|"pet_sitting"|"boarding_daycare"|"veterinary"}>|null)??[]).filter(row=>entitledKeys.has(row.module_key)).map(row=>row.module_key));
       setServices(servicesResult.data ?? []);
       setAppointmentPets(loadedAppointmentPets);
       setAppointmentServices(loadedAppointmentServices);
