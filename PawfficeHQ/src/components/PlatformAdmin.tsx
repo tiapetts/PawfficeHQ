@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import Dashboard from "./Dashboard";
+import "./StaffEarnings.css";
 
 type PlatformOverview = {
   total_businesses: number;
@@ -29,6 +30,8 @@ type ModuleAccessRequest = {
   message: string | null;
   created_at: string;
 };
+type ComplimentaryAccess={business_id:string;access_override_plan:"basic"|"pro"|null;access_override_expires_at:string|null;access_override_reason:string|null};
+type ComplimentaryModule={business_id:string;module_key:"pet_sitting"|"boarding_daycare"|"veterinary"};
 
 const emptyOverview: PlatformOverview = {
   total_businesses: 0,
@@ -49,6 +52,15 @@ export default function PlatformAdmin({
   const [overview, setOverview] = useState<PlatformOverview>(emptyOverview);
   const [businesses, setBusinesses] = useState<PlatformBusiness[]>([]);
   const [moduleRequests, setModuleRequests] = useState<ModuleAccessRequest[]>([]);
+  const [complimentaryAccess,setComplimentaryAccess]=useState<ComplimentaryAccess[]>([]);
+  const [complimentaryModules,setComplimentaryModules]=useState<ComplimentaryModule[]>([]);
+  const [complimentaryCandidate,setComplimentaryCandidate]=useState<PlatformBusiness|null>(null);
+  const [complimentaryPlan,setComplimentaryPlan]=useState<"basic"|"pro">("pro");
+  const [complimentaryDuration,setComplimentaryDuration]=useState("90");
+  const [complimentaryExpires,setComplimentaryExpires]=useState("");
+  const [complimentaryReason,setComplimentaryReason]=useState("Beta tester");
+  const [complimentarySelectedModules,setComplimentarySelectedModules]=useState<string[]>(["pet_sitting","boarding_daycare"]);
+  const [savingComplimentary,setSavingComplimentary]=useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
@@ -65,13 +77,15 @@ export default function PlatformAdmin({
       setLoading(true);
       setMessage("");
 
-      const [overviewResult, businessesResult, requestsResult] = await Promise.all([
+      const [overviewResult, businessesResult, requestsResult, complimentaryResult, complimentaryModulesResult] = await Promise.all([
         supabase.rpc("get_platform_overview").single(),
         supabase.rpc("get_platform_businesses"),
         supabase.from("module_access_request").select("id, business_id, module_key, request_type, message, created_at").eq("status","pending").order("created_at"),
+        supabase.from("business_subscription").select("business_id, access_override_plan, access_override_expires_at, access_override_reason"),
+        supabase.from("complimentary_module_access").select("business_id, module_key"),
       ]);
 
-      const error = overviewResult.error || businessesResult.error || requestsResult.error;
+      const error = overviewResult.error || businessesResult.error || requestsResult.error || complimentaryResult.error || complimentaryModulesResult.error;
 
       if (error) {
         console.error(error);
@@ -82,6 +96,8 @@ export default function PlatformAdmin({
         );
         setBusinesses(businessesResult.data ?? []);
         setModuleRequests((requestsResult.data as ModuleAccessRequest[] | null) ?? []);
+        setComplimentaryAccess((complimentaryResult.data as ComplimentaryAccess[]|null)??[]);
+        setComplimentaryModules((complimentaryModulesResult.data as ComplimentaryModule[]|null)??[]);
       }
 
       setLoading(false);
@@ -89,6 +105,11 @@ export default function PlatformAdmin({
 
     void loadPlatformAdmin();
   }, []);
+
+  function activeComplimentary(businessId:string){const item=complimentaryAccess.find(row=>row.business_id===businessId);return Boolean(item?.access_override_reason&&(!item.access_override_expires_at||new Date(item.access_override_expires_at)>new Date()))}
+  function openComplimentary(business:PlatformBusiness){const existing=complimentaryAccess.find(item=>item.business_id===business.business_id);setComplimentaryCandidate(business);setComplimentaryPlan(existing?.access_override_plan??"pro");setComplimentaryDuration(existing?.access_override_expires_at?"custom":"90");setComplimentaryExpires(existing?.access_override_expires_at?.slice(0,10)??"");setComplimentaryReason(existing?.access_override_reason??"Beta tester");setComplimentarySelectedModules(complimentaryModules.filter(item=>item.business_id===business.business_id).map(item=>item.module_key))}
+  async function saveComplimentary(){if(!complimentaryCandidate||complimentaryReason.trim().length<3){setMessage("Enter a reason for complimentary access.");return}setSavingComplimentary(true);const now=new Date(),expires=complimentaryDuration==="never"?null:complimentaryDuration==="custom"?(complimentaryExpires?new Date(`${complimentaryExpires}T23:59:59`).toISOString():null):new Date(now.getTime()+Number(complimentaryDuration)*86400000).toISOString();const user=await supabase.auth.getUser();const grantedBy=user.data.user?.id??null;const subscription=await supabase.from("business_subscription").update({access_override_plan:complimentaryPlan,access_override_expires_at:expires,access_override_reason:complimentaryReason.trim(),access_override_granted_by:grantedBy,access_override_granted_at:now.toISOString(),updated_at:now.toISOString()}).eq("business_id",complimentaryCandidate.business_id);if(subscription.error){setMessage(subscription.error.message);setSavingComplimentary(false);return}await supabase.from("complimentary_module_access").delete().eq("business_id",complimentaryCandidate.business_id);if(complimentarySelectedModules.length){const modules=await supabase.from("complimentary_module_access").insert(complimentarySelectedModules.map(module_key=>({business_id:complimentaryCandidate.business_id,module_key,expires_at:expires,granted_by:grantedBy})));if(modules.error){setMessage(modules.error.message);setSavingComplimentary(false);return}}setComplimentaryAccess(current=>[...current.filter(item=>item.business_id!==complimentaryCandidate.business_id),{business_id:complimentaryCandidate.business_id,access_override_plan:complimentaryPlan,access_override_expires_at:expires,access_override_reason:complimentaryReason.trim()}]);setComplimentaryModules(current=>[...current.filter(item=>item.business_id!==complimentaryCandidate.business_id),...complimentarySelectedModules.map(module_key=>({business_id:complimentaryCandidate.business_id,module_key:module_key as ComplimentaryModule["module_key"]}))]);setMessage(`Complimentary ${complimentaryPlan} access granted to ${complimentaryCandidate.business_name}.`);setComplimentaryCandidate(null);setSavingComplimentary(false)}
+  async function revokeComplimentary(){if(!complimentaryCandidate)return;setSavingComplimentary(true);const cleared=await supabase.from("business_subscription").update({access_override_plan:null,access_override_expires_at:null,access_override_reason:null,access_override_granted_by:null,access_override_granted_at:null,updated_at:new Date().toISOString()}).eq("business_id",complimentaryCandidate.business_id);if(cleared.error)setMessage(cleared.error.message);else{await supabase.from("complimentary_module_access").delete().eq("business_id",complimentaryCandidate.business_id);setComplimentaryAccess(current=>current.filter(item=>item.business_id!==complimentaryCandidate.business_id));setComplimentaryModules(current=>current.filter(item=>item.business_id!==complimentaryCandidate.business_id));setMessage(`Complimentary access revoked for ${complimentaryCandidate.business_name}.`);setComplimentaryCandidate(null)}setSavingComplimentary(false)}
 
   function moduleName(key: ModuleAccessRequest["module_key"]) {
     return key === "pet_sitting" ? "Pet sitting" : key === "boarding_daycare" ? "Boarding & daycare" : "Veterinary";
@@ -383,7 +404,7 @@ export default function PlatformAdmin({
                       style={{ borderTop: "1px solid #d7e0dd" }}
                     >
                       <td style={{ padding: "16px 10px" }}>
-                        <strong>{business.business_name}</strong>
+                        <strong>{business.business_name}</strong>{activeComplimentary(business.business_id)&&<span style={{display:"block",marginTop:5,color:"#087341",fontWeight:800,fontSize:12}}>Complimentary access</span>}
                       </td>
                       <td style={{ padding: "16px 10px" }}>
                         {business.staff_count}
@@ -405,7 +426,7 @@ export default function PlatformAdmin({
                           : "None"}
                       </td>
                       <td style={{ padding: "16px 10px", textAlign: "right" }}>
-                        <button
+                        <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}><button type="button" className="secondary-button" onClick={()=>openComplimentary(business)}>{activeComplimentary(business.business_id)?"Manage complimentary":"Grant free access"}</button><button
                           type="button"
                           className="primary-button"
                           onClick={() => {
@@ -414,7 +435,7 @@ export default function PlatformAdmin({
                           }}
                         >
                           Support view
-                        </button>
+                        </button></div>
                       </td>
                     </tr>
                   ))}
@@ -424,6 +445,8 @@ export default function PlatformAdmin({
           )}
         </section>
       </main>
+
+      {complimentaryCandidate&&<div className="earnings-modal-backdrop" onClick={()=>setComplimentaryCandidate(null)}><section className="earnings-ledger" onClick={event=>event.stopPropagation()}><header><div><p className="eyebrow">Complimentary access</p><h3>{complimentaryCandidate.business_name}</h3><p>Bypass subscription billing for testing or a complimentary customer.</p></div><button onClick={()=>setComplimentaryCandidate(null)}>Close</button></header><div style={{display:"grid",gap:16,marginTop:20}}><label>Tester plan<select value={complimentaryPlan} onChange={event=>setComplimentaryPlan(event.target.value as "basic"|"pro")}><option value="pro">Pro · 1,000 SMS segments</option><option value="basic">Basic · 250 SMS segments</option></select></label><label>Duration<select value={complimentaryDuration} onChange={event=>setComplimentaryDuration(event.target.value)}><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option><option value="custom">Custom expiration</option><option value="never">Never expires</option></select></label>{complimentaryDuration==="custom"&&<label>Expiration date<input type="date" value={complimentaryExpires} onChange={event=>setComplimentaryExpires(event.target.value)}/></label>}<label>Reason<input value={complimentaryReason} onChange={event=>setComplimentaryReason(event.target.value)} placeholder="Beta tester"/></label><fieldset style={{border:"1px solid #d7e0dd",borderRadius:10,padding:14}}><legend>Complimentary add-on modules</legend>{[["pet_sitting","Pet sitting"],["boarding_daycare","Boarding & daycare"],["veterinary","Veterinary"]].map(([key,label])=><label key={key} style={{display:"flex",gap:8,alignItems:"center",marginTop:8}}><input type="checkbox" checked={complimentarySelectedModules.includes(key)} onChange={event=>setComplimentarySelectedModules(current=>event.target.checked?[...current,key]:current.filter(item=>item!==key))}/>{label}</label>)}</fieldset><div style={{display:"flex",gap:10,justifyContent:"space-between",flexWrap:"wrap"}}>{activeComplimentary(complimentaryCandidate.business_id)&&<button className="secondary-button" disabled={savingComplimentary} onClick={()=>void revokeComplimentary()}>Revoke access</button>}<button className="primary-button" disabled={savingComplimentary} onClick={()=>void saveComplimentary()}>{savingComplimentary?"Saving…":"Grant complimentary access"}</button></div></div></section></div>}
 
       {supportCandidate && (
         <div

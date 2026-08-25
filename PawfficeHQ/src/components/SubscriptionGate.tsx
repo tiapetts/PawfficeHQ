@@ -12,6 +12,9 @@ export type SubscriptionAccess = {
   sms_used: number;
   sms_limit: number;
   has_access: boolean;
+  is_complimentary: boolean;
+  access_override_expires_at: string | null;
+  access_override_reason: string | null;
 };
 
 type Props = { businessId: string; access: SubscriptionAccess; onRefresh: () => void };
