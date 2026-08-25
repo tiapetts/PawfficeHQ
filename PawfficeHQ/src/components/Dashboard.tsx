@@ -16,6 +16,9 @@ import ModuleWorkspace from "./ModuleWorkspace";
 import PetSitting from "./PetSitting";
 import PetSittingCalendarView from "./PetSittingCalendarView";
 import PetSittingReports from "./PetSittingReports";
+import BoardingDaycare from "./BoardingDaycare";
+import BoardingCalendar from "./BoardingCalendar";
+import BoardingServices from "./BoardingServices";
 import type { SubscriptionAccess } from "./SubscriptionGate";
 import { applyBusinessTheme } from "./Settings";
 import "./Responsive.css";
@@ -88,6 +91,8 @@ type ActivePage =
   | "pet_sitting_calendar"
   | "pet_sitting_reports"
   | "boarding_daycare_module"
+  | "boarding_calendar"
+  | "boarding_services"
   | "veterinary_module"
   | "settings";
 
@@ -99,6 +104,7 @@ function Dashboard({
   onSubscriptionRefresh,
 }: DashboardProps) {
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
+  const [requestedInvoiceId, setRequestedInvoiceId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [business, setBusiness] = useState<Business | null>(null);
   const [businessLogo, setBusinessLogo] = useState<string | null>(null);
@@ -119,6 +125,7 @@ function Dashboard({
   const [errorMessage, setErrorMessage] = useState("");
   const [enabledModules, setEnabledModules] = useState<Array<"grooming"|"pet_sitting"|"boarding_daycare"|"veterinary">>([]);
   const [expandedModules, setExpandedModules] = useState<Record<"grooming"|"pet_sitting"|"boarding_daycare"|"veterinary",boolean>>({grooming:true,pet_sitting:true,boarding_daycare:true,veterinary:true});
+  const [boardingDraftDate, setBoardingDraftDate] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -389,7 +396,7 @@ function Dashboard({
           <div className="core-nav-divider" />
           {enabledModules.includes("grooming")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.grooming} onClick={()=>setExpandedModules(current=>({...current,grooming:!current.grooming}))}><span>Grooming</span><span>⌄</span></button>{expandedModules.grooming&&<div className="module-nav-items"><button className={`nav-button ${activePage==="history"?"active":""}`} onClick={()=>openPage("history")}>Appointment history</button><button className={`nav-button ${activePage==="services"?"active":""}`} onClick={()=>openPage("services")}>Grooming services</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Grooming report cards</button></div>}</div>}
           {enabledModules.includes("pet_sitting")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.pet_sitting} onClick={()=>setExpandedModules(current=>({...current,pet_sitting:!current.pet_sitting}))}><span>Pet sitting</span><span>⌄</span></button>{expandedModules.pet_sitting&&<div className="module-nav-items"><button className={`nav-button ${activePage==="pet_sitting_module"?"active":""}`} onClick={()=>openPage("pet_sitting_module")}>Bookings & care plans</button><button className={`nav-button ${activePage==="pet_sitting_calendar"?"active":""}`} onClick={()=>openPage("pet_sitting_calendar")}>Visit calendar</button><button className={`nav-button ${activePage==="pet_sitting_reports"?"active":""}`} onClick={()=>openPage("pet_sitting_reports")}>Visit reports</button></div>}</div>}
-          {enabledModules.includes("boarding_daycare")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.boarding_daycare} onClick={()=>setExpandedModules(current=>({...current,boarding_daycare:!current.boarding_daycare}))}><span>Boarding & daycare</span><span>⌄</span></button>{expandedModules.boarding_daycare&&<div className="module-nav-items"><button className={`nav-button ${activePage==="boarding_daycare_module"?"active":""}`} onClick={()=>openPage("boarding_daycare_module")}>Reservations & occupancy</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Care reports</button></div>}</div>}
+          {enabledModules.includes("boarding_daycare")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.boarding_daycare} onClick={()=>setExpandedModules(current=>({...current,boarding_daycare:!current.boarding_daycare}))}><span>Boarding & daycare</span><span>⌄</span></button>{expandedModules.boarding_daycare&&<div className="module-nav-items"><button className={`nav-button ${activePage==="boarding_daycare_module"?"active":""}`} onClick={()=>openPage("boarding_daycare_module")}>Reservations & occupancy</button><button className={`nav-button ${activePage==="boarding_calendar"?"active":""}`} onClick={()=>openPage("boarding_calendar")}>Stay calendar</button><button className={`nav-button ${activePage==="boarding_services"?"active":""}`} onClick={()=>openPage("boarding_services")}>Boarding services</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Care reports</button></div>}</div>}
           {enabledModules.includes("veterinary")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.veterinary} onClick={()=>setExpandedModules(current=>({...current,veterinary:!current.veterinary}))}><span>Veterinary</span><span>⌄</span></button>{expandedModules.veterinary&&<div className="module-nav-items"><button className={`nav-button ${activePage==="veterinary_module"?"active":""}`} onClick={()=>openPage("veterinary_module")}>Encounters & records</button><button className={`nav-button ${activePage==="vaccinations"?"active":""}`} onClick={()=>openPage("vaccinations")}>Vaccinations</button></div>}</div>}
           <div className="core-nav-divider" />
           <button
@@ -424,11 +431,16 @@ function Dashboard({
 
       <main className="dashboard-main">
         {activePage === "calendar" ? (
-          <Calendar businessId={businessId} readOnly={readOnly} />
+          <Calendar businessId={businessId} readOnly={readOnly} onOpenInvoice={(invoiceId) => { setRequestedInvoiceId(invoiceId); setActivePage("invoices"); }} />
         ) : activePage === "history" ? (
-          <AppointmentHistory businessId={businessId} />
+          <AppointmentHistory businessId={businessId} onOpenInvoice={(invoiceId) => { setRequestedInvoiceId(invoiceId); setActivePage("invoices"); }} />
         ) : activePage === "invoices" ? (
-          <Invoices businessId={businessId} readOnly={readOnly} />
+          <Invoices
+            businessId={businessId}
+            readOnly={readOnly}
+            initialInvoiceId={requestedInvoiceId}
+            onInitialInvoiceUsed={() => setRequestedInvoiceId(null)}
+          />
         ) : activePage === "clients" ? (
           <Clients businessId={businessId} />
         ) : activePage === "pets" ? (
@@ -443,6 +455,12 @@ function Dashboard({
           <><header className="dashboard-header"><div><p className="eyebrow">Pet sitting</p><h2>Visit calendar</h2></div></header><PetSittingCalendarView businessId={businessId} focused /></>
         ) : activePage === "pet_sitting_reports" ? (
           <PetSittingReports businessId={businessId} />
+        ) : activePage === "boarding_daycare_module" ? (
+          <BoardingDaycare businessId={businessId} readOnly={readOnly} initialDate={boardingDraftDate} onInitialDateUsed={() => setBoardingDraftDate(null)} onOpenInvoice={(invoiceId) => { setRequestedInvoiceId(invoiceId); setActivePage("invoices"); }} />
+        ) : activePage === "boarding_calendar" ? (
+          <BoardingCalendar businessId={businessId} onNewReservation={(date) => {setBoardingDraftDate(date);openPage("boarding_daycare_module")}} />
+        ) : activePage === "boarding_services" ? (
+          <BoardingServices businessId={businessId} readOnly={readOnly} />
         ) : activePage.endsWith("_module") ? (
           <ModuleWorkspace moduleKey={activePage.replace("_module","") as "grooming"|"pet_sitting"|"boarding_daycare"|"veterinary"} />
         ) : activePage === "services" ? (
@@ -469,6 +487,7 @@ function Dashboard({
                 if (current.endsWith("_module") && !modules.includes(current.replace("_module","") as "grooming"|"pet_sitting"|"boarding_daycare"|"veterinary")) return "settings";
                 if (current === "pet_sitting_calendar" && !modules.includes("pet_sitting")) return "settings";
                 if (current === "pet_sitting_reports" && !modules.includes("pet_sitting")) return "settings";
+                if (current === "boarding_calendar" && !modules.includes("boarding_daycare")) return "settings";
                 if (!modules.includes("grooming") && ["history","services"].includes(current)) return "settings";
                 if (!modules.includes("veterinary") && current === "vaccinations") return "settings";
                 return current;

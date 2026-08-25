@@ -8,10 +8,13 @@ import {
 import { supabase } from "../lib/supabase";
 import "./Responsive.css";
 import "./Notifications.css";
+import "./CalendarClientSearch.css";
+import "./CalendarOverlap.css";
 
 type CalendarProps = {
   businessId: string;
   readOnly?: boolean;
+  onOpenInvoice?: (invoiceId: string) => void;
 };
 
 type Client = {
@@ -64,7 +67,11 @@ type AppointmentService = {
   staff_id: string | null;
 };
 
-function Calendar({ businessId, readOnly = false }: CalendarProps) {
+function Calendar({
+  businessId,
+  readOnly = false,
+  onOpenInvoice,
+}: CalendarProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [clientPets, setClientPets] = useState<ClientPet[]>([]);
@@ -75,9 +82,12 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
   const [appointmentServices, setAppointmentServices] = useState<
     AppointmentService[]
   >([]);
+  const [allowDoubleBooking, setAllowDoubleBooking] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
   const [clientId, setClientId] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [petId, setPetId] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [staffId, setStaffId] = useState("");
@@ -121,6 +131,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       servicesResult,
       staffResult,
       appointmentsResult,
+      settingsResult,
     ] = await Promise.all([
       supabase
         .from("CLIENT")
@@ -153,6 +164,9 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
         )
         .eq("business_id", businessId)
         .order("start_at"),
+      supabase.rpc("get_business_settings", {
+        p_business_id: businessId,
+      }),
     ]);
 
     const firstError = [
@@ -162,6 +176,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       servicesResult.error,
       staffResult.error,
       appointmentsResult.error,
+      settingsResult.error,
     ].find(Boolean);
 
     if (firstError) {
@@ -210,6 +225,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     setAppointments(loadedAppointments);
     setAppointmentPets(loadedAppointmentPets);
     setAppointmentServices(loadedAppointmentServices);
+    setAllowDoubleBooking(Boolean(settingsResult.data?.allow_double_booking));
     setLoading(false);
   }
 
@@ -234,6 +250,11 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
 
     return pets.filter((pet) => petIds.includes(pet.id));
   }, [clientId, clientPets, pets]);
+  const matchingClients = useMemo(() => {
+    const query = clientSearch.trim().toLowerCase();
+    if (!query) return clients.slice(0, 12);
+    return clients.filter((client) => `${client.FirstName} ${client.LastName}`.toLowerCase().includes(query)).slice(0, 12);
+  }, [clientSearch, clients]);
 
   const selectedService = services.find((service) => service.id === serviceId);
 
@@ -322,7 +343,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function appointmentInSlot(day: Date, minutesAfterMidnight: number) {
+  function appointmentsInSlot(day: Date, minutesAfterMidnight: number) {
     const slotStart = new Date(day);
     slotStart.setHours(
       Math.floor(minutesAfterMidnight / 60),
@@ -332,7 +353,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     );
     const slotEnd = new Date(slotStart.getTime() + 30 * 60_000);
 
-    const appointment = appointments.find((item) => {
+    return appointments.filter((item) => {
       if (item.status === "cancelled" || item.status === "void") {
         return false;
       }
@@ -340,15 +361,13 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       const start = new Date(item.start_at);
       const end = new Date(item.end_at);
       return start < slotEnd && end > slotStart;
+    }).map((appointment) => {
+      const appointmentStart = new Date(appointment.start_at);
+      return {
+        appointment,
+        isFirstSlot: appointmentStart >= slotStart && appointmentStart < slotEnd,
+      };
     });
-
-    if (!appointment) return null;
-
-    const appointmentStart = new Date(appointment.start_at);
-    return {
-      appointment,
-      isFirstSlot: appointmentStart >= slotStart && appointmentStart < slotEnd,
-    };
   }
 
   function formatSlotTime(minutesAfterMidnight: number) {
@@ -409,10 +428,14 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       return;
     }
 
-    if (conflicts && conflicts.length > 0) {
-      setMessage(
-        "That move would overlap another appointment. Choose another time.",
-      );
+    const movingPetId = appointmentPets.find((link) => link.appointment_id === appointment.id)?.pet_id;
+    const samePetConflict = Boolean(movingPetId && conflicts?.some((conflict) =>
+      appointmentPets.some((link) => link.appointment_id === conflict.id && link.pet_id === movingPetId),
+    ));
+    if (conflicts && conflicts.length > 0 && (!allowDoubleBooking || samePetConflict)) {
+      setMessage(samePetConflict
+        ? "That pet already has an overlapping appointment. Choose another time."
+        : "That move would overlap another appointment. Enable double-booking or choose another time.");
       setDraggingAppointmentId(null);
       return;
     }
@@ -535,24 +558,10 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
     return colors[status] ?? "#315f55";
   }
 
-  function statusCellColor(status: string) {
-    const colors: Record<string, string> = {
-      requested: "#f4eadb",
-      confirmed: "#dcece7",
-      checked_in: "#dcecf6",
-      in_progress: "#f8ebcd",
-      ready_for_pickup: "#d8eee8",
-      completed: "#e4e8e7",
-      cancelled: "#f6dddd",
-      no_show: "#eee0ea",
-      void: "#e5e7e6",
-    };
-
-    return colors[status] ?? "#dcece7";
-  }
-
   function resetForm() {
     setClientId("");
+    setClientSearch("");
+    setClientPickerOpen(false);
     setPetId("");
     setServiceId("");
     setStaffId("");
@@ -592,10 +601,13 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
       return;
     }
 
-    if (conflicts && conflicts.length > 0) {
-      setMessage(
-        "That time overlaps an existing appointment. Please choose another time.",
-      );
+    const samePetConflict = conflicts?.some((conflict) =>
+      appointmentPets.some((link) => link.appointment_id === conflict.id && String(link.pet_id) === petId),
+    );
+    if (conflicts && conflicts.length > 0 && (!allowDoubleBooking || samePetConflict)) {
+      setMessage(samePetConflict
+        ? "This pet already has an overlapping appointment. Choose another time."
+        : "That time overlaps an existing appointment. Enable double-booking or choose another time.");
       setSaving(false);
       return;
     }
@@ -704,31 +716,13 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
         );
       }
 
-      const returnUrl = `${window.location.origin}${window.location.pathname}`;
-      const { data, error } = await supabase.functions.invoke(
-        "create-stripe-checkout",
-        {
-          body: { invoiceId, returnUrl },
-        },
-      );
-
-      const checkoutData = data as { url?: string; error?: string } | null;
-
-      if (error || !checkoutData?.url) {
-        throw new Error(
-          checkoutData?.error ??
-            error?.message ??
-            "Stripe Checkout could not be opened.",
-        );
-      }
-
-      window.location.assign(checkoutData.url);
+      onOpenInvoice?.(invoiceId);
     } catch (error) {
       console.error("Appointment checkout error:", error);
       setMessage(
         error instanceof Error
           ? error.message
-          : "Stripe Checkout could not be opened.",
+          : "The invoice could not be opened.",
       );
       setPayingAppointmentId(null);
     }
@@ -769,23 +763,43 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
           </div>
 
           <form className="appointment-form" onSubmit={handleSubmit}>
-            <label>
+            <label className="calendar-client-search">
               Client
-              <select
-                value={clientId}
+              <input
+                type="search"
+                value={clientSearch}
+                autoComplete="off"
+                placeholder="Start typing a client name"
+                onFocus={() => setClientPickerOpen(true)}
+                onBlur={() => window.setTimeout(() => setClientPickerOpen(false), 120)}
                 onChange={(event) => {
-                  setClientId(event.target.value);
+                  setClientSearch(event.target.value);
+                  setClientId("");
                   setPetId("");
+                  setClientPickerOpen(true);
                 }}
                 required
-              >
-                <option value="">Choose a client</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.FirstName} {client.LastName}
-                  </option>
-                ))}
-              </select>
+              />
+              {clientPickerOpen && (
+                <div className="calendar-client-results">
+                  {matchingClients.length ? matchingClients.map((client) => (
+                    <button
+                      type="button"
+                      key={client.id}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setClientId(String(client.id));
+                        setClientSearch(`${client.FirstName} ${client.LastName}`);
+                        setPetId("");
+                        setClientPickerOpen(false);
+                      }}
+                    >
+                      <strong>{client.FirstName} {client.LastName}</strong>
+                    </button>
+                  )) : <p>No clients match “{clientSearch}”</p>}
+                </div>
+              )}
+              {clientSearch && !clientId && <small className="calendar-client-hint">Select a client from the results.</small>}
             </label>
 
             <label>
@@ -989,14 +1003,14 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                 {formatSlotTime(slot)}
               </div>,
               ...visibleDays.map((day) => {
-                const occupiedSlot = appointmentInSlot(day, slot);
+                const occupiedSlots = appointmentsInSlot(day, slot);
                 return (
                   <button
                     key={`${day.toISOString()}-${slot}`}
                     type="button"
                     onClick={() => {
-                      if (occupiedSlot) {
-                        setSelectedAppointment(occupiedSlot.appointment);
+                      if (occupiedSlots.length === 1) {
+                        setSelectedAppointment(occupiedSlots[0].appointment);
                       } else {
                         selectTimeSlot(day, slot);
                       }
@@ -1014,23 +1028,26 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                       border: 0,
                       borderRight: "1px solid #d7e0dd",
                       borderBottom: "1px solid #d7e0dd",
-                      background: occupiedSlot
-                        ? statusCellColor(occupiedSlot.appointment.status)
-                        : "#ffffff",
-                      cursor: occupiedSlot ? "default" : "pointer",
+                      background: "#ffffff",
+                      cursor: occupiedSlots.length ? "default" : "pointer",
                       textAlign: "left",
                       color: "#183b34",
                       opacity: 1,
                     }}
                     title={
-                      occupiedSlot
-                        ? "Drag this appointment to an open time"
+                      occupiedSlots.length
+                        ? `${occupiedSlots.length} appointment${occupiedSlots.length === 1 ? "" : "s"} in this time slot`
                         : "Create an appointment at this time"
                     }
                   >
-                    {occupiedSlot && (
+                    {occupiedSlots.length > 0 && <span className={`calendar-overlap-stack count-${occupiedSlots.length}`}>{occupiedSlots.map((occupiedSlot) => (
                       <span
+                        key={occupiedSlot.appointment.id}
                         draggable={!readOnly && occupiedSlot.isFirstSlot}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {event.stopPropagation();setSelectedAppointment(occupiedSlot.appointment)}}
+                        onKeyDown={(event) => {if(event.key==="Enter"||event.key===" "){event.preventDefault();setSelectedAppointment(occupiedSlot.appointment)}}}
                         onDragStart={(event) => {
                           if (readOnly || !occupiedSlot.isFirstSlot) return;
                           event.stopPropagation();
@@ -1080,7 +1097,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                           <span style={{ opacity: 0.8 }}>Continues</span>
                         )}
                       </span>
-                    )}
+                    ))}</span>}
                   </button>
                 );
               }),
@@ -1150,7 +1167,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                         disabled={payingAppointmentId !== null}
                       >
                         {payingAppointmentId === appointment.id
-                          ? "Opening Stripe..."
+                          ? "Opening invoice..."
                           : "Take payment"}
                       </button>
                     )}
@@ -1348,7 +1365,7 @@ function Calendar({ businessId, readOnly = false }: CalendarProps) {
                 }}
               >
                 {payingAppointmentId === selectedAppointment.id
-                  ? "Opening Stripe..."
+                  ? "Opening invoice..."
                   : "Take payment"}
               </button>
             )}

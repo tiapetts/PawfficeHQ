@@ -5,6 +5,8 @@ import "./Invoices.css";
 type InvoicesProps = {
   businessId: string;
   readOnly?: boolean;
+  initialInvoiceId?: string | null;
+  onInitialInvoiceUsed?: () => void;
 };
 
 type Invoice = {
@@ -133,6 +135,8 @@ const emptyRefundForm = {
 export default function Invoices({
   businessId,
   readOnly = false,
+  initialInvoiceId = null,
+  onInitialInvoiceUsed,
 }: InvoicesProps) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -165,6 +169,24 @@ export default function Invoices({
   const [message, setMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [receiptMessage, setReceiptMessage] = useState("");
+
+  useEffect(() => {
+    if (!initialInvoiceId) return;
+    setFilter("all");
+    setSearch("");
+    setExpandedInvoiceId(initialInvoiceId);
+    setPaymentInvoiceId(null);
+    onInitialInvoiceUsed?.();
+  }, [initialInvoiceId, onInitialInvoiceUsed]);
+
+  useEffect(() => {
+    if (!expandedInvoiceId || loading) return;
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(`invoice-${expandedInvoiceId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [expandedInvoiceId, loading]);
 
   async function loadInvoices() {
     setLoading(true);
@@ -838,7 +860,11 @@ export default function Invoices({
               const expanded = expandedInvoiceId === invoice.id;
 
               return (
-                <article className="invoice-card" key={invoice.id}>
+                <article
+                  className="invoice-card"
+                  id={`invoice-${invoice.id}`}
+                  key={invoice.id}
+                >
                   <button
                     type="button"
                     className="invoice-card-summary"
