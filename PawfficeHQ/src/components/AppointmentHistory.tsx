@@ -4,6 +4,7 @@ import "./AppointmentHistory.css";
 
 type AppointmentHistoryProps = {
   businessId: string;
+  onOpenInvoice?: (invoiceId: string) => void;
 };
 
 type Client = {
@@ -101,6 +102,7 @@ function endOfLocalDay(value: string) {
 
 export default function AppointmentHistory({
   businessId,
+  onOpenInvoice,
 }: AppointmentHistoryProps) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -523,31 +525,13 @@ export default function AppointmentHistory({
         );
       }
 
-      const returnUrl = `${window.location.origin}${window.location.pathname}`;
-      const { data, error } = await supabase.functions.invoke(
-        "create-stripe-checkout",
-        {
-          body: { invoiceId, returnUrl },
-        },
-      );
-
-      const checkoutData = data as { url?: string; error?: string } | null;
-
-      if (error || !checkoutData?.url) {
-        throw new Error(
-          checkoutData?.error ??
-            error?.message ??
-            "Stripe Checkout could not be opened.",
-        );
-      }
-
-      window.location.assign(checkoutData.url);
+      onOpenInvoice?.(invoiceId);
     } catch (error) {
       console.error("Appointment checkout error:", error);
       setMessage(
         error instanceof Error
           ? error.message
-          : "Stripe Checkout could not be opened.",
+          : "The invoice could not be opened.",
       );
       setPayingAppointmentId(null);
     }
@@ -979,7 +963,7 @@ export default function AppointmentHistory({
                           }
                         >
                           {payingAppointmentId === appointment.id
-                            ? "Opening Stripe..."
+                            ? "Opening invoice..."
                             : "Take payment"}
                         </button>
                       </div>

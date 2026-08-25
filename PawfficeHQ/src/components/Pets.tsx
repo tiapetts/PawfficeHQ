@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import ProfilePhoto from "./ProfilePhoto";
 import "./PetEditing.css";
+import "./RecordSearch.css";
 
 type PetsProps = { businessId: string; readOnly?: boolean };
 type PetId = number | string;
@@ -66,6 +67,7 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
   const [editingId, setEditingId] = useState<PetId | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [listMode, setListMode] = useState<"active" | "archived">("active");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -298,9 +300,13 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
     setMessage(`${pet.PetName} was restored.`);
   }
 
-  const visiblePets = pets.filter((pet) =>
-    listMode === "archived" ? pet.archived_at !== null : pet.archived_at === null,
-  );
+  const searchQuery = search.trim().toLowerCase();
+  const visiblePets = pets.filter((pet) => {
+    const inList = listMode === "archived" ? pet.archived_at !== null : pet.archived_at === null;
+    if (!inList || !searchQuery) return inList;
+    return [pet.PetName, pet.species, pet.PetBreed, getOwnerName(pet.id)]
+      .filter(Boolean).join(" ").toLowerCase().includes(searchQuery);
+  });
   const reportsForPet = (petId: PetId) => reportCards.filter((report) => String(report.pet_id) === String(petId));
 
   return (
@@ -440,6 +446,11 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
         </section>
       )}
 
+      <section className="record-search-bar">
+        <label><span>Search pets</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Pet, owner, species, or breed" /></label>
+        <strong>{visiblePets.length} {visiblePets.length === 1 ? "pet" : "pets"}</strong>
+        {search && <button className="secondary-button" type="button" onClick={() => setSearch("")}>Clear</button>}
+      </section>
       <div className="record-list-filter" role="group" aria-label="Pet status">
         <button type="button" className={listMode === "active" ? "active" : ""} onClick={() => setListMode("active")}>
           Active ({pets.filter((pet) => !pet.archived_at).length})
@@ -476,8 +487,8 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
       ) : visiblePets.length === 0 ? (
         <section className="dashboard-panel">
           <div className="empty-state">
-            <h3>{listMode === "archived" ? "No archived pets" : "No active pets yet"}</h3>
-            <p>{listMode === "archived" ? "Archived pet profiles will appear here." : "Add a pet and connect them to their owner."}</p>
+            <h3>{search ? "No matching pets" : listMode === "archived" ? "No archived pets" : "No active pets yet"}</h3>
+            <p>{search ? "Try another pet name, owner, species, or breed." : listMode === "archived" ? "Archived pet profiles will appear here." : "Add a pet and connect them to their owner."}</p>
           </div>
         </section>
       ) : (

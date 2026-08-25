@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import ClientImportExport from "./ClientImportExport";
+import PetImportExport from "./PetImportExport";
 import ProfilePhoto from "./ProfilePhoto";
 import "./ClientEditing.css";
+import "./RecordSearch.css";
 
 type ClientsProps = { businessId: string; readOnly?: boolean };
 type Client = {
@@ -53,6 +55,7 @@ export default function Clients({
   const [showForm, setShowForm] = useState(false);
   const [showMigration, setShowMigration] = useState(false);
   const [listMode, setListMode] = useState<"active" | "archived">("active");
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -210,9 +213,13 @@ export default function Clients({
     setMessage(`${client.FirstName} ${client.LastName} was restored.`);
   }
 
-  const visibleClients = clients.filter((client) =>
-    listMode === "archived" ? client.archived_at !== null : client.archived_at === null,
-  );
+  const searchQuery = search.trim().toLowerCase();
+  const visibleClients = clients.filter((client) => {
+    const inList = listMode === "archived" ? client.archived_at !== null : client.archived_at === null;
+    if (!inList || !searchQuery) return inList;
+    return [client.FirstName, client.LastName, client.EmailAddress, client.PhoneNumber, client.StreetAddress, client.ClientCity, client.ClientState, client.ClientZip]
+      .filter(Boolean).join(" ").toLowerCase().includes(searchQuery);
+  });
 
   return (
     <>
@@ -437,13 +444,21 @@ export default function Clients({
       )}
 
       {showMigration && !readOnly && (
-        <ClientImportExport
-          businessId={businessId}
-          clients={clients}
-          onImported={loadClients}
-        />
+        <>
+          <ClientImportExport
+            businessId={businessId}
+            clients={clients}
+            onImported={loadClients}
+          />
+          <PetImportExport businessId={businessId} />
+        </>
       )}
 
+      <section className="record-search-bar">
+        <label><span>Search clients</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, email, phone, or location" /></label>
+        <strong>{visibleClients.length} {visibleClients.length === 1 ? "client" : "clients"}</strong>
+        {search && <button className="secondary-button" type="button" onClick={() => setSearch("")}>Clear</button>}
+      </section>
       <div className="record-list-filter" role="group" aria-label="Client status">
         <button type="button" className={listMode === "active" ? "active" : ""} onClick={() => setListMode("active")}>
           Active ({clients.filter((client) => !client.archived_at).length})
@@ -458,8 +473,8 @@ export default function Clients({
           <p>Loading clients...</p>
         ) : visibleClients.length === 0 ? (
           <div className="empty-state">
-            <h3>{listMode === "archived" ? "No archived clients" : "No active clients yet"}</h3>
-            <p>{listMode === "archived" ? "Archived client profiles will appear here." : "Add your first client to begin their profile."}</p>
+            <h3>{search ? "No matching clients" : listMode === "archived" ? "No archived clients" : "No active clients yet"}</h3>
+            <p>{search ? "Try another name, email, phone number, or location." : listMode === "archived" ? "Archived client profiles will appear here." : "Add your first client to begin their profile."}</p>
           </div>
         ) : (
           <div className="client-list">
