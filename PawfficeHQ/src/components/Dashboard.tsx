@@ -153,6 +153,7 @@ function Dashboard({
         vaccinationsResult,
         modulesResult,
         moduleEntitlementsResult,
+        complimentaryModulesResult,
       ] = await Promise.all([
         supabase
           .from("business")
@@ -195,6 +196,7 @@ function Dashboard({
         supabase.from("pet_vaccination").select("id, pet_id, requirement_id, vaccine_name, expires_on").eq("business_id", businessId),
         supabase.from("business_module").select("module_key").eq("business_id",businessId).eq("is_enabled",true),
         supabase.from("business_module_entitlement").select("module_key, status, expires_at").eq("business_id",businessId).in("status",["active","trialing"]),
+        supabase.from("complimentary_module_access").select("module_key, expires_at").eq("business_id",businessId),
       ]);
 
       const firstError = [
@@ -210,6 +212,7 @@ function Dashboard({
         vaccinationsResult.error,
         modulesResult.error,
         moduleEntitlementsResult.error,
+        complimentaryModulesResult.error,
       ].find(Boolean);
 
       if (firstError) {
@@ -280,6 +283,7 @@ function Dashboard({
       }).length, 0);
       setVaccinationAlertCount(alertCount);
       const entitledKeys = new Set(((moduleEntitlementsResult.data as Array<{module_key:string;status:string;expires_at:string|null}>|null)??[]).filter(row=>!row.expires_at||new Date(row.expires_at)>new Date()).map(row=>row.module_key));
+      ((complimentaryModulesResult.data as Array<{module_key:string;expires_at:string|null}>|null)??[]).filter(row=>!row.expires_at||new Date(row.expires_at)>new Date()).forEach(row=>entitledKeys.add(row.module_key));
       setEnabledModules(((modulesResult.data as Array<{module_key:"grooming"|"pet_sitting"|"boarding_daycare"|"veterinary"}>|null)??[]).filter(row=>entitledKeys.has(row.module_key)).map(row=>row.module_key));
       setServices(servicesResult.data ?? []);
       setAppointmentPets(loadedAppointmentPets);
@@ -321,6 +325,7 @@ function Dashboard({
 
   function subscriptionLabel() {
     if (!subscriptionAccess) return null;
+    if (subscriptionAccess.is_complimentary) return `Complimentary ${subscriptionAccess.plan === "pro" ? "Pro" : "Basic"}`;
     if (subscriptionAccess.status === "trialing") {
       const remaining = subscriptionAccess.trial_end
         ? Math.max(0, Math.ceil((new Date(subscriptionAccess.trial_end).getTime() - Date.now()) / 86_400_000))

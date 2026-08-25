@@ -49,6 +49,7 @@ export default function Billing({ businessId, access, onRefresh }: Props) {
   const [action, setAction] = useState<Action>(null);
   const [message, setMessage] = useState("");
   const isTrial = access.status === "trialing";
+  const isComplimentary = access.is_complimentary;
   const daysLeft = access.trial_end
     ? Math.max(0, Math.ceil((new Date(access.trial_end).getTime() - Date.now()) / 86_400_000))
     : 0;
@@ -97,16 +98,18 @@ export default function Billing({ businessId, access, onRefresh }: Props) {
       <article className="billing-summary-card">
         <div>
           <span className={`billing-state ${isTrial ? "trial" : ""}`}>
-            {isTrial ? "14-day trial" : "Active subscription"}
+            {isComplimentary ? "Complimentary access" : isTrial ? "14-day trial" : "Active subscription"}
           </span>
           <h3>{access.plan === "pro" ? "Pro" : "Basic"}</h3>
           <p>
-            {isTrial
+            {isComplimentary
+              ? access.access_override_expires_at ? `Provided by Pawffice HQ · Ends ${formatDate(access.access_override_expires_at)}` : "Provided by Pawffice HQ · No expiration"
+              : isTrial
               ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left · Trial ends ${formatDate(access.trial_end)}`
               : `Renews ${formatDate(access.current_period_end)}`}
           </p>
         </div>
-        {!isTrial && (
+        {!isTrial && !isComplimentary && (
           <button className="primary-button" disabled={action !== null} onClick={() => void openPortal()}>
             {action === "portal" ? "Opening…" : "Manage billing"}
           </button>
@@ -120,11 +123,11 @@ export default function Billing({ businessId, access, onRefresh }: Props) {
         </article>
         <article className="billing-detail-card">
           <span>Membership status</span>
-          <strong>{isTrial ? "Trialing" : "Active"}</strong>
+          <strong>{isComplimentary ? "Complimentary" : isTrial ? "Trialing" : "Active"}</strong>
         </article>
       </div>
 
-      {isTrial && (
+      {isTrial && !isComplimentary && (
         <section className="trial-plan-actions">
           <h3>Ready to keep Pawffice HQ?</h3>
           <p>Choose a monthly plan now. Your trial remains available until checkout is complete.</p>
