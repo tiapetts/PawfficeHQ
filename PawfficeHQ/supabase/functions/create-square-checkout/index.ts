@@ -1,4 +1,5 @@
 import { admin, authenticatedBusiness, cors, json } from "../_shared/subscription.ts";
+import { getSquareConnection, squareBaseUrl } from "../_shared/square.ts";
 
 const version = "2026-08-19";
 const safeReturn = (value: string) => {
@@ -28,12 +29,12 @@ Deno.serve(async (request) => {
     const [paymentsResult, refundsResult, connectionResult, clientResult] = await Promise.all([
       admin.from("payment").select("id,amount,status").eq("invoice_id", invoiceId),
       admin.from("refund").select("payment_id,amount,status").eq("business_id", invoice.business_id),
-      admin.from("square_connection").select("access_token,location_id,environment,status").eq("business_id", invoice.business_id).maybeSingle(),
+      getSquareConnection(invoice.business_id),
       admin.from("CLIENT").select("EmailAddress,PhoneNumber").eq("id", invoice.client_id).maybeSingle(),
     ]);
     if (paymentsResult.error || refundsResult.error) throw new Error("Invoice balance could not be calculated.");
-    const connection = connectionResult.data;
-    if (!connection || connection.status !== "connected" || !connection.location_id) {
+    const connection = connectionResult;
+    if (!connection.location_id) {
       throw new Error("Connect Square in Settings before taking a Square payment.");
     }
 
@@ -47,10 +48,10 @@ Deno.serve(async (request) => {
     const checkoutId = crypto.randomUUID();
     const destination = safeReturn(returnUrl);
     destination.searchParams.set("square_payment", checkoutId);
-    const base = connection.environment === "production" ? "https://connect.squareup.com" : "https://connect.squareupsandbox.com";
+    const base = squareBaseUrl(connection.environment);
     const response = await fetch(`${base}/v2/online-checkout/payment-links`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${connection.access_token}`, "Square-Version": version, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${connection.accessToken}`, "Square-Version": version, "Content-Type": "application/json" },
       body: JSON.stringify({
         idempotency_key: checkoutId,
         description: `Pawffice HQ invoice ${invoice.invoice_number}`,
@@ -70,4 +71,3 @@ Deno.serve(async (request) => {
     return json({ error: error instanceof Error ? error.message : "Unable to start Square checkout." }, 400);
   }
 });
-
