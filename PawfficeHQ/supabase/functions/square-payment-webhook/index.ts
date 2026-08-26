@@ -41,6 +41,35 @@ Deno.serve(async (request) => {
     const seen = await admin.from("square_webhook_event").select("event_id").eq("event_id", event.event_id).maybeSingle();
     if (seen.data) return json({ received: true, duplicate: true });
 
+    if (event.type === "oauth.authorization.revoked") {
+      await admin.from("square_connection").update({ status: "revoked", access_token: null, refresh_token: null, access_token_encrypted: null, refresh_token_encrypted: null, last_token_error: "Square access was revoked by the seller.", updated_at: new Date().toISOString() }).eq("merchant_id", event.merchant_id);
+      await admin.from("square_webhook_event").insert({ event_id: event.event_id, event_type: event.type, merchant_id: event.merchant_id ?? null });
+      return json({ received: true, revoked: true });
+    }
+
+    if (["refund.created", "refund.updated"].includes(event.type)) {
+      const squareRefund = event.data?.object?.refund;
+      if (squareRefund?.id) {
+        const status = squareRefund.status === "COMPLETED" ? "succeeded" : squareRefund.status === "FAILED" || squareRefund.status === "REJECTED" ? "failed" : "pending";
+        const paymentResult = await admin.from("payment").select("id,business_id").eq("provider", "square").eq("provider_payment_id", squareRefund.payment_id).maybeSingle();
+        if (paymentResult.data) {
+          const saved = await admin.from("refund").upsert({
+            business_id: paymentResult.data.business_id,
+            payment_id: paymentResult.data.id,
+            amount: Number(squareRefund.amount_money?.amount ?? 0) / 100,
+            status,
+            reason: squareRefund.reason || null,
+            provider_refund_id: squareRefund.id,
+            refunded_at: status === "succeeded" ? squareRefund.updated_at ?? squareRefund.created_at ?? new Date().toISOString() : null,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "provider_refund_id" });
+          if (saved.error) throw saved.error;
+        }
+      }
+      await admin.from("square_webhook_event").insert({ event_id: event.event_id, event_type: event.type, merchant_id: event.merchant_id ?? null });
+      return json({ received: true, refund: true });
+    }
+
     if (!["payment.created", "payment.updated"].includes(event.type)) {
       await admin.from("square_webhook_event").insert({ event_id: event.event_id, event_type: event.type ?? "unknown", merchant_id: event.merchant_id ?? null });
       return json({ received: true, ignored: true });

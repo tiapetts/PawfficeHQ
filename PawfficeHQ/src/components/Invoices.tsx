@@ -660,8 +660,9 @@ export default function Invoices({
     setMessage("");
     setSuccessMessage("");
 
+    const refundProvider = payment.provider === "square" ? "Square" : "Stripe";
     const { data, error } = await supabase.functions.invoke(
-      "create-stripe-refund",
+      payment.provider === "square" ? "create-square-refund" : "create-stripe-refund",
       {
         body: {
           paymentId: refundPaymentId,
@@ -678,7 +679,7 @@ export default function Invoices({
     } | null;
 
     if (error || !refundData?.success) {
-      console.error("Stripe refund error:", error, refundData);
+      console.error(`${refundProvider} refund error:`, error, refundData);
       setMessage(
         refundData?.error ??
           error?.message ??
@@ -692,8 +693,32 @@ export default function Invoices({
     setRefundForm(emptyRefundForm);
     setSuccessMessage(
       refundData.status === "succeeded"
-        ? "Stripe refund completed successfully."
-        : "Stripe refund submitted and is pending.",
+        ? `${refundProvider} refund completed successfully.`
+        : `${refundProvider} refund submitted and is pending.`,
+    );
+    await loadInvoices();
+    setSaving(false);
+  }
+
+  async function syncSquareRefunds(paymentId: string) {
+    setSaving(true);
+    setMessage("");
+    setSuccessMessage("");
+    const { data, error } = await supabase.functions.invoke(
+      "sync-square-refunds",
+      { body: { paymentId } },
+    );
+    const result = data as { success?: boolean; synced?: number; error?: string } | null;
+    if (error || !result?.success) {
+      console.error("Square refund sync error:", error, result);
+      setMessage(result?.error ?? error?.message ?? "Square refunds could not be synchronized.");
+      setSaving(false);
+      return;
+    }
+    setSuccessMessage(
+      result.synced
+        ? `${result.synced} Square refund${result.synced === 1 ? "" : "s"} synchronized successfully.`
+        : "Square has no refunds to synchronize for this payment.",
     );
     await loadInvoices();
     setSaving(false);
@@ -1061,6 +1086,16 @@ export default function Invoices({
                               <strong>
                                 {money.format(Number(payment.amount))}
                               </strong>
+                              {!readOnly && payment.provider === "square" && (
+                                <button
+                                  type="button"
+                                  className="invoice-refund-button"
+                                  onClick={() => void syncSquareRefunds(payment.id)}
+                                  disabled={saving}
+                                >
+                                  Sync Square
+                                </button>
+                              )}
                               {!readOnly &&
                                 Boolean(payment.provider_payment_id) &&
                                 ["succeeded", "partially_refunded"].includes(
@@ -1281,8 +1316,9 @@ export default function Invoices({
                             <div>
                               <h4>Refund card payment</h4>
                               <p>
-                                The money will be returned through Stripe to the
-                                client’s original payment method.
+                                The money will be returned through {invoicePayments.find(
+                                  (payment) => payment.id === refundPaymentId,
+                                )?.provider === "square" ? "Square" : "Stripe"} to the client’s original payment method.
                               </p>
                             </div>
 

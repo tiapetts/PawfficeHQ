@@ -1,4 +1,5 @@
 import { admin, authenticatedBusiness, cors, json } from "../_shared/subscription.ts";
+import { getSquareConnection, squareBaseUrl } from "../_shared/square.ts";
 
 const version = "2026-08-19";
 
@@ -13,11 +14,9 @@ Deno.serve(async (request) => {
     await authenticatedBusiness(request, checkout.business_id);
     if (checkout.status === "completed") return json({ completed: true, invoiceId: checkout.invoice_id });
 
-    const connectionResult = await admin.from("square_connection").select("access_token,environment,status").eq("business_id", checkout.business_id).maybeSingle();
-    const connection = connectionResult.data;
-    if (!connection || connection.status !== "connected") throw new Error("Square is no longer connected.");
-    const base = connection.environment === "production" ? "https://connect.squareup.com" : "https://connect.squareupsandbox.com";
-    const orderResponse = await fetch(`${base}/v2/orders/${checkout.square_order_id}`, { headers: { Authorization: `Bearer ${connection.access_token}`, "Square-Version": version, "Content-Type": "application/json" } });
+    const connection = await getSquareConnection(checkout.business_id);
+    const base = squareBaseUrl(connection.environment);
+    const orderResponse = await fetch(`${base}/v2/orders/${checkout.square_order_id}`, { headers: { Authorization: `Bearer ${connection.accessToken}`, "Square-Version": version, "Content-Type": "application/json" } });
     const orderBody = await orderResponse.json();
     if (!orderResponse.ok || orderBody.errors) throw new Error(orderBody.errors?.[0]?.detail ?? "Square payment could not be verified.");
     const paymentId = orderBody.order?.tenders?.find((tender: Record<string, unknown>) => tender.type === "CARD")?.payment_id ?? orderBody.order?.tenders?.[0]?.payment_id;
@@ -25,7 +24,7 @@ Deno.serve(async (request) => {
     // creates a completed tender. The Payment object is the source of truth.
     if (!paymentId) return json({ completed: false, pending: true });
 
-    const paymentResponse = await fetch(`${base}/v2/payments/${paymentId}`, { headers: { Authorization: `Bearer ${connection.access_token}`, "Square-Version": version, "Content-Type": "application/json" } });
+    const paymentResponse = await fetch(`${base}/v2/payments/${paymentId}`, { headers: { Authorization: `Bearer ${connection.accessToken}`, "Square-Version": version, "Content-Type": "application/json" } });
     const paymentBody = await paymentResponse.json();
     const squarePayment = paymentBody.payment;
     if (!paymentResponse.ok || paymentBody.errors || squarePayment?.status !== "COMPLETED") return json({ completed: false, pending: true });

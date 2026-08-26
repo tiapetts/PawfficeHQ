@@ -108,8 +108,32 @@ export default function PlatformAdmin({
 
   function activeComplimentary(businessId:string){const item=complimentaryAccess.find(row=>row.business_id===businessId);return Boolean(item?.access_override_reason&&(!item.access_override_expires_at||new Date(item.access_override_expires_at)>new Date()))}
   function openComplimentary(business:PlatformBusiness){const existing=complimentaryAccess.find(item=>item.business_id===business.business_id);setComplimentaryCandidate(business);setComplimentaryPlan(existing?.access_override_plan??"pro");setComplimentaryDuration(existing?.access_override_expires_at?"custom":"90");setComplimentaryExpires(existing?.access_override_expires_at?.slice(0,10)??"");setComplimentaryReason(existing?.access_override_reason??"Beta tester");setComplimentarySelectedModules(complimentaryModules.filter(item=>item.business_id===business.business_id).map(item=>item.module_key))}
-  async function saveComplimentary(){if(!complimentaryCandidate||complimentaryReason.trim().length<3){setMessage("Enter a reason for complimentary access.");return}setSavingComplimentary(true);const now=new Date(),expires=complimentaryDuration==="never"?null:complimentaryDuration==="custom"?(complimentaryExpires?new Date(`${complimentaryExpires}T23:59:59`).toISOString():null):new Date(now.getTime()+Number(complimentaryDuration)*86400000).toISOString();const user=await supabase.auth.getUser();const grantedBy=user.data.user?.id??null;const subscription=await supabase.from("business_subscription").update({access_override_plan:complimentaryPlan,access_override_expires_at:expires,access_override_reason:complimentaryReason.trim(),access_override_granted_by:grantedBy,access_override_granted_at:now.toISOString(),updated_at:now.toISOString()}).eq("business_id",complimentaryCandidate.business_id);if(subscription.error){setMessage(subscription.error.message);setSavingComplimentary(false);return}await supabase.from("complimentary_module_access").delete().eq("business_id",complimentaryCandidate.business_id);if(complimentarySelectedModules.length){const modules=await supabase.from("complimentary_module_access").insert(complimentarySelectedModules.map(module_key=>({business_id:complimentaryCandidate.business_id,module_key,expires_at:expires,granted_by:grantedBy})));if(modules.error){setMessage(modules.error.message);setSavingComplimentary(false);return}}setComplimentaryAccess(current=>[...current.filter(item=>item.business_id!==complimentaryCandidate.business_id),{business_id:complimentaryCandidate.business_id,access_override_plan:complimentaryPlan,access_override_expires_at:expires,access_override_reason:complimentaryReason.trim()}]);setComplimentaryModules(current=>[...current.filter(item=>item.business_id!==complimentaryCandidate.business_id),...complimentarySelectedModules.map(module_key=>({business_id:complimentaryCandidate.business_id,module_key:module_key as ComplimentaryModule["module_key"]}))]);setMessage(`Complimentary ${complimentaryPlan} access granted to ${complimentaryCandidate.business_name}.`);setComplimentaryCandidate(null);setSavingComplimentary(false)}
-  async function revokeComplimentary(){if(!complimentaryCandidate)return;setSavingComplimentary(true);const cleared=await supabase.from("business_subscription").update({access_override_plan:null,access_override_expires_at:null,access_override_reason:null,access_override_granted_by:null,access_override_granted_at:null,updated_at:new Date().toISOString()}).eq("business_id",complimentaryCandidate.business_id);if(cleared.error)setMessage(cleared.error.message);else{await supabase.from("complimentary_module_access").delete().eq("business_id",complimentaryCandidate.business_id);setComplimentaryAccess(current=>current.filter(item=>item.business_id!==complimentaryCandidate.business_id));setComplimentaryModules(current=>current.filter(item=>item.business_id!==complimentaryCandidate.business_id));setMessage(`Complimentary access revoked for ${complimentaryCandidate.business_name}.`);setComplimentaryCandidate(null)}setSavingComplimentary(false)}
+  async function saveComplimentary(){
+    if(!complimentaryCandidate||complimentaryReason.trim().length<3){setMessage("Enter a reason for complimentary access.");return}
+    setSavingComplimentary(true);
+    const now=new Date();
+    const expires=complimentaryDuration==="never"?null:complimentaryDuration==="custom"?(complimentaryExpires?new Date(`${complimentaryExpires}T23:59:59`).toISOString():null):new Date(now.getTime()+Number(complimentaryDuration)*86400000).toISOString();
+    if(complimentaryDuration==="custom"&&!expires){setMessage("Choose a custom expiration date.");setSavingComplimentary(false);return}
+    const result=await supabase.rpc("grant_complimentary_access",{p_business_id:complimentaryCandidate.business_id,p_plan:complimentaryPlan,p_expires_at:expires,p_reason:complimentaryReason.trim(),p_modules:complimentarySelectedModules});
+    if(result.error){setMessage(result.error.message);setSavingComplimentary(false);return}
+    setComplimentaryAccess(current=>[...current.filter(item=>item.business_id!==complimentaryCandidate.business_id),{business_id:complimentaryCandidate.business_id,access_override_plan:complimentaryPlan,access_override_expires_at:expires,access_override_reason:complimentaryReason.trim()}]);
+    setComplimentaryModules(current=>[...current.filter(item=>item.business_id!==complimentaryCandidate.business_id),...complimentarySelectedModules.map(module_key=>({business_id:complimentaryCandidate.business_id,module_key:module_key as ComplimentaryModule["module_key"]}))]);
+    setMessage(`Complimentary ${complimentaryPlan} access granted to ${complimentaryCandidate.business_name}.`);
+    setComplimentaryCandidate(null);
+    setSavingComplimentary(false);
+  }
+  async function revokeComplimentary(){
+    if(!complimentaryCandidate)return;
+    setSavingComplimentary(true);
+    const cleared=await supabase.rpc("revoke_complimentary_access",{p_business_id:complimentaryCandidate.business_id});
+    if(cleared.error)setMessage(cleared.error.message);else{
+      setComplimentaryAccess(current=>current.filter(item=>item.business_id!==complimentaryCandidate.business_id));
+      setComplimentaryModules(current=>current.filter(item=>item.business_id!==complimentaryCandidate.business_id));
+      setMessage(`Complimentary access revoked for ${complimentaryCandidate.business_name}.`);
+      setComplimentaryCandidate(null);
+    }
+    setSavingComplimentary(false);
+  }
 
   function moduleName(key: ModuleAccessRequest["module_key"]) {
     return key === "pet_sitting" ? "Pet sitting" : key === "boarding_daycare" ? "Boarding & daycare" : "Veterinary";
