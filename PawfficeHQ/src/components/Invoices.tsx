@@ -165,10 +165,55 @@ export default function Invoices({
   const [checkoutInvoiceId, setCheckoutInvoiceId] = useState<string | null>(
     null,
   );
+  const [squareConnected, setSquareConnected] = useState(false);
   const [emailingReceipt, setEmailingReceipt] = useState(false);
   const [message, setMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [receiptMessage, setReceiptMessage] = useState("");
+
+  useEffect(() => {
+    async function loadSquareStatus() {
+      const { data } = await supabase
+        .rpc("get_square_connection_status", { p_business_id: businessId })
+        .maybeSingle();
+      setSquareConnected(Boolean((data as { is_connected?: boolean } | null)?.is_connected));
+    }
+    void loadSquareStatus();
+  }, [businessId]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkoutId = params.get("square_payment");
+    if (!checkoutId) return;
+    params.delete("square_payment");
+    window.history.replaceState(
+      {},
+      "",
+      `${window.location.pathname}${params.size ? `?${params}` : ""}`,
+    );
+    async function verifySquarePayment() {
+      setMessage("");
+      setSuccessMessage("Confirming Square payment…");
+      const { data, error } = await supabase.functions.invoke(
+        "verify-square-checkout",
+        { body: { checkoutId } },
+      );
+      const result = data as { completed?: boolean; pending?: boolean; error?: string } | null;
+      if (error || result?.error) {
+        setSuccessMessage("");
+        setMessage(result?.error ?? error?.message ?? "Square payment could not be verified.");
+        return;
+      }
+      if (!result?.completed) {
+        setSuccessMessage("");
+        setMessage("Square has not completed this payment. No payment was recorded.");
+        return;
+      }
+      setSuccessMessage("Square payment recorded successfully.");
+      await loadInvoices();
+    }
+    void verifySquarePayment();
+  }, []);
 
   useEffect(() => {
     if (!initialInvoiceId) return;
@@ -526,6 +571,24 @@ export default function Invoices({
       return;
     }
 
+    window.location.assign(checkoutData.url);
+  }
+
+  async function openSquareCheckout(invoiceId: string) {
+    setCheckoutInvoiceId(invoiceId);
+    setMessage("");
+    setSuccessMessage("");
+    const returnUrl = `${window.location.origin}${window.location.pathname}`;
+    const { data, error } = await supabase.functions.invoke(
+      "create-square-checkout",
+      { body: { invoiceId, returnUrl } },
+    );
+    const checkoutData = data as { url?: string; error?: string } | null;
+    if (error || !checkoutData?.url) {
+      setMessage(checkoutData?.error ?? error?.message ?? "Square Checkout could not be opened.");
+      setCheckoutInvoiceId(null);
+      return;
+    }
     window.location.assign(checkoutData.url);
   }
 
@@ -1085,8 +1148,21 @@ export default function Invoices({
                                 >
                                   {checkoutInvoiceId === invoice.id
                                     ? "Opening Stripe..."
-                                    : "Pay online"}
+                                    : "Pay with Stripe"}
                                 </button>
+
+                                {squareConnected && (
+                                  <button
+                                    type="button"
+                                    className="primary-button"
+                                    onClick={() => void openSquareCheckout(invoice.id)}
+                                    disabled={checkoutInvoiceId !== null}
+                                  >
+                                    {checkoutInvoiceId === invoice.id
+                                      ? "Opening Square..."
+                                      : "Pay with Square"}
+                                  </button>
+                                )}
 
                                 <button
                                   type="button"

@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import BusinessModules from "./BusinessModules";
+import SquareConnection from "./SquareConnection";
 import "./Settings.css";
 
 type SettingsProps = {
@@ -707,6 +708,7 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
 
       <div className="settings-layout">
         <BusinessModules businessId={businessId} readOnly={readOnly} onChanged={onModulesChanged} />
+        <SquareConnection businessId={businessId} readOnly={readOnly} />
         <section className="dashboard-panel settings-section">
           <div>
             <p className="eyebrow">Profile</p>

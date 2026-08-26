@@ -1,0 +1,26 @@
+PAWFFICE HQ — SQUARE SANDBOX CHECKOUT
+
+1. Copy and run this migration in Supabase SQL Editor:
+   supabase/migrations/202608250005_square_checkout.sql
+
+2. Deploy the updated/new functions from the inner PawfficeHQ folder:
+   npx supabase@latest functions deploy start-square-oauth
+   npx supabase@latest functions deploy create-square-checkout
+   npx supabase@latest functions deploy verify-square-checkout
+
+3. Run the local production build:
+   npm run build
+
+4. In Pawffice HQ Settings, disconnect Square and reconnect it once. This
+   approves the new ORDERS_READ and ORDERS_WRITE permissions required for
+   Square-hosted checkout.
+
+5. Open an unpaid invoice and choose Pay with Square.
+
+Square Sandbox success card:
+   Card: 4111 1111 1111 1111
+   CVV: 111
+   Expiration: any future month/year
+   Postal code: a valid US postal code (for example 94103)
+
+No real card or money is used while SQUARE_ENVIRONMENT is sandbox.

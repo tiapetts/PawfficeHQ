@@ -1,0 +1,28 @@
+PAWFFICE HQ — SQUARE PAYMENT WEBHOOK
+
+Webhook URL:
+https://kvplhxmgkgnnrdzuikkm.supabase.co/functions/v1/square-payment-webhook
+
+1. Rerun this complete migration in Supabase SQL Editor. It is safe to rerun:
+   supabase/migrations/202608250005_square_checkout.sql
+
+2. Deploy the public webhook function:
+   npx supabase@latest functions deploy square-payment-webhook --no-verify-jwt
+
+3. In Square Developer Console:
+   - Open the PawfficeHq application.
+   - Select Sandbox.
+   - Open Webhooks.
+   - Add a webhook subscription using the exact URL above.
+   - Subscribe to payment.created and payment.updated.
+   - Save the subscription.
+   - Copy its Signature Key. Do not share or commit this key.
+
+4. Save both webhook values as Supabase secrets. Replace the placeholder:
+   npx supabase@latest secrets set SQUARE_WEBHOOK_SIGNATURE_KEY="PASTE_SIGNATURE_KEY_HERE" SQUARE_WEBHOOK_URL="https://kvplhxmgkgnnrdzuikkm.supabase.co/functions/v1/square-payment-webhook"
+
+5. In Square, use Send Test Event for payment.updated. A 200 response confirms
+   that Square can reach the function and the signature is valid.
+
+The webhook records only completed payments linked to a Pawffice-created Square
+checkout. Other payments in the connected seller account are safely ignored.
