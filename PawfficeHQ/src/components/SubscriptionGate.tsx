@@ -79,8 +79,8 @@ export default function SubscriptionGate({ businessId, access, onRefresh }: Prop
     <main className="subscription-page">
       <section className="subscription-panel">
         <span className="subscription-kicker">Pawffice HQ membership</span>
-        <h1>{access.status === "past_due" ? "Your payment needs attention" : "Choose your plan"}</h1>
-        <p>Your business data is safe. Select a plan or update billing to restore access.</p>
+        <h1>{access.status === "suspended" ? "Business access is suspended" : access.status === "past_due" ? "Your payment needs attention" : "Choose your plan"}</h1>
+        <p>{access.status === "suspended" ? "Your records remain safe. Contact Pawffice HQ support to restore access." : "Your business data is safe. Select a plan or update billing to restore access."}</p>
         <div className="plan-grid">
           <article className="plan-card">
             <h2>Basic</h2><p className="plan-price"><strong>$39</strong> / month</p>

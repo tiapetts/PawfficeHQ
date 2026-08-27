@@ -1,0 +1,18 @@
+BUSINESS ARCHIVING
+
+1. Extract this package over the inner PawfficeHQ project folder and allow replacement.
+
+2. In Supabase SQL Editor, run:
+   supabase/migrations/202608260004_business_archiving.sql
+
+3. Build and start locally:
+   npm run build
+   npm run dev
+
+4. In Platform Admin, test Archive only on a disposable test business.
+   Confirm it moves from Active to Archived and can still access Pawffice.
+
+5. Restore it, then test Archive and suspend.
+   Confirm it moves to Archived and the business receives the suspended-access screen.
+
+6. Test Restore to active and Restore access as separate actions.
