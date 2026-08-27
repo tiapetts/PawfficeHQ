@@ -18,10 +18,9 @@ type StaffProfile = {
 
 function App() {
   const [needsPassword, setNeedsPassword] = useState(
-    () =>
-      new URLSearchParams(window.location.hash.slice(1)).get("type") ===
-      "invite",
+    () => ["invite","recovery"].includes(new URLSearchParams(window.location.hash.slice(1)).get("type") ?? ""),
   );
+  const [isPasswordRecovery,setIsPasswordRecovery]=useState(()=>new URLSearchParams(window.location.hash.slice(1)).get("type")==="recovery");
   const [session, setSession] = useState<Session | null>(null);
   const [staff, setStaff] = useState<StaffProfile | null>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
@@ -134,6 +133,11 @@ function App() {
 
       setSession(newSession);
 
+      if(event==="PASSWORD_RECOVERY"){
+        setIsPasswordRecovery(true);
+        setNeedsPassword(true);
+      }
+
       if (!newSession) {
         setStaff(null);
         setIsPlatformAdmin(false);
@@ -164,7 +168,7 @@ function App() {
   }
 
   if (needsPassword) {
-    return <SetPassword onComplete={() => setNeedsPassword(false)} />;
+    return <SetPassword recovery={isPasswordRecovery} onComplete={() => {setNeedsPassword(false);setIsPasswordRecovery(false)}} />;
   }
 
   if (profileError) {
