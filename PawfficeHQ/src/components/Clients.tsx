@@ -42,6 +42,8 @@ const emptyForm = {
   booking_deposit_reason: "",
 };
 type ClientForm = typeof emptyForm;
+const emptyPetForm = { PetName: "", species: "", PetBreed: "", PetDOB: "", PetWeight: "" };
+type HouseholdPetForm = typeof emptyPetForm;
 const selection =
   "id, FirstName, LastName, PhoneNumber, EmailAddress, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip, booking_deposit_required, booking_deposit_type, booking_deposit_value, booking_deposit_reason, profile_photo_path, archived_at, archive_reason";
 
@@ -51,6 +53,7 @@ export default function Clients({
 }: ClientsProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [form, setForm] = useState<ClientForm>(emptyForm);
+  const [householdPets, setHouseholdPets] = useState<HouseholdPetForm[]>([{ ...emptyPetForm }]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showMigration, setShowMigration] = useState(false);
@@ -90,6 +93,7 @@ export default function Clients({
   function openNew() {
     setEditingId(null);
     setForm(emptyForm);
+    setHouseholdPets([{ ...emptyPetForm }]);
     setMessage("");
     setSuccess(false);
     setShowForm(true);
@@ -98,6 +102,7 @@ export default function Clients({
 
   function openEdit(client: Client) {
     setEditingId(client.id);
+    setHouseholdPets([{ ...emptyPetForm }]);
     setForm({
       FirstName: client.FirstName,
       LastName: client.LastName,
@@ -126,6 +131,19 @@ export default function Clients({
     setShowForm(false);
     setEditingId(null);
     setForm(emptyForm);
+    setHouseholdPets([{ ...emptyPetForm }]);
+  }
+
+  function updateHouseholdPet<K extends keyof HouseholdPetForm>(index: number, field: K, value: HouseholdPetForm[K]) {
+    setHouseholdPets((current) => current.map((pet, petIndex) => petIndex === index ? { ...pet, [field]: value } : pet));
+  }
+
+  function addHouseholdPet() {
+    setHouseholdPets((current) => [...current, { ...emptyPetForm }]);
+  }
+
+  function removeHouseholdPet(index: number) {
+    setHouseholdPets((current) => current.length === 1 ? [{ ...emptyPetForm }] : current.filter((_, petIndex) => petIndex !== index));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -155,14 +173,33 @@ export default function Clients({
         : null,
     };
 
-    const query = editingId
-      ? supabase
-          .from("CLIENT")
-          .update(values)
-          .eq("id", editingId)
-          .eq("business_id", businessId)
-      : supabase.from("CLIENT").insert(values);
-    const { error } = await query;
+    const enteredPets = householdPets.filter((pet) => Object.values(pet).some((value) => value.trim() !== ""));
+    if (enteredPets.some((pet) => !pet.PetName.trim() || !pet.species.trim())) {
+      setSaving(false);
+      setMessage("Each pet needs a name and species, or leave the pet section blank.");
+      return;
+    }
+
+    const { error } = editingId
+      ? await supabase.rpc("update_client_household", {
+          p_business_id: businessId,
+          p_client_id: editingId,
+          p_client: values,
+          p_pets: enteredPets.map((pet) => ({
+            PetName: pet.PetName.trim(), species: pet.species,
+            PetBreed: pet.PetBreed.trim() || null, PetDOB: pet.PetDOB || null,
+            PetWeight: pet.PetWeight ? Number(pet.PetWeight) : null,
+          })),
+        })
+      : await supabase.rpc("create_client_household", {
+          p_business_id: businessId,
+          p_client: values,
+          p_pets: enteredPets.map((pet) => ({
+            PetName: pet.PetName.trim(), species: pet.species,
+            PetBreed: pet.PetBreed.trim() || null, PetDOB: pet.PetDOB || null,
+            PetWeight: pet.PetWeight ? Number(pet.PetWeight) : null,
+          })),
+        });
     setSaving(false);
     if (error) {
       console.error(error);
@@ -172,7 +209,7 @@ export default function Clients({
     closeForm();
     await loadClients();
     setSuccess(true);
-    setMessage(wasEditing ? "Client changes saved." : "Client added.");
+    setMessage(wasEditing ? enteredPets.length ? `Client updated and ${enteredPets.length} ${enteredPets.length === 1 ? "pet was" : "pets were"} added.` : "Client changes saved." : enteredPets.length ? `Household added with ${enteredPets.length} ${enteredPets.length === 1 ? "pet" : "pets"}.` : "Client added.");
   }
 
   async function archiveClient(client: Client) {
@@ -241,7 +278,7 @@ export default function Clients({
               className="primary-button"
               onClick={showForm ? closeForm : openNew}
             >
-              {showForm ? "Cancel" : "+ Add client"}
+              {showForm ? "Cancel" : "+ Add household"}
             </button>
           </div>
         )}
@@ -260,9 +297,9 @@ export default function Clients({
           <div className="client-form-title">
             <div>
               <p className="eyebrow">
-                {editingId ? "Client profile" : "New contact"}
+                {editingId ? "Client profile" : "Household onboarding"}
               </p>
-              <h3>{editingId ? "Edit client" : "New client"}</h3>
+              <h3>{editingId ? "Edit client" : "New client & pets"}</h3>
             </div>
             {editingId && <span>Client #{editingId}</span>}
           </div>
@@ -354,6 +391,33 @@ export default function Clients({
                 onChange={(e) => updateField("ClientZip", e.target.value)}
               />
             </label>
+            <div className="full-width household-pets-section">
+                <div className="household-pets-heading">
+                  <div>
+                    <p className="eyebrow">Pet profiles</p>
+                    <h4>{editingId ? "Add another pet to this client" : "Add this client’s pets"}</h4>
+                    <span>{editingId ? "Existing pets stay unchanged. Add one or several new pet profiles here." : "Optional—you can add one pet, several pets, or none."}</span>
+                  </div>
+                  <button className="secondary-button" type="button" onClick={addHouseholdPet}>+ Add another pet</button>
+                </div>
+                <div className="household-pet-list">
+                  {householdPets.map((pet, index) => (
+                    <section className="household-pet-card" key={index}>
+                      <div className="household-pet-card-heading">
+                        <strong>Pet {index + 1}</strong>
+                        <button type="button" onClick={() => removeHouseholdPet(index)}>Clear / remove</button>
+                      </div>
+                      <div className="household-pet-fields">
+                        <label>Pet name<input value={pet.PetName} onChange={(e) => updateHouseholdPet(index, "PetName", e.target.value)} /></label>
+                        <label>Species<select value={pet.species} onChange={(e) => updateHouseholdPet(index, "species", e.target.value)}><option value="">Choose species</option><option value="Dog">Dog</option><option value="Cat">Cat</option><option value="Other">Other</option></select></label>
+                        <label>Breed<input value={pet.PetBreed} onChange={(e) => updateHouseholdPet(index, "PetBreed", e.target.value)} /></label>
+                        <label>Date of birth<input type="date" value={pet.PetDOB} onChange={(e) => updateHouseholdPet(index, "PetDOB", e.target.value)} /></label>
+                        <label>Weight (lbs)<input type="number" min="0" step="0.1" value={pet.PetWeight} onChange={(e) => updateHouseholdPet(index, "PetWeight", e.target.value)} /></label>
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              </div>
             <div className="full-width client-deposit-settings">
               <label className="client-deposit-toggle">
                 <input
@@ -436,7 +500,7 @@ export default function Clients({
                   ? "Saving…"
                   : editingId
                     ? "Save changes"
-                    : "Save client"}
+                    : "Save household"}
               </button>
             </div>
           </form>
