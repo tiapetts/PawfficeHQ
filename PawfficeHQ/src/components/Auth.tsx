@@ -7,7 +7,14 @@ export default function Auth() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [isSigningUp, setIsSigningUp] = useState(false);
-  const [message, setMessage] = useState("");
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [showEmailHelp, setShowEmailHelp] = useState(false);
+  const [message, setMessage] = useState(() => {
+    const hash = new URLSearchParams(window.location.hash.slice(1));
+    const query = new URLSearchParams(window.location.search);
+    const recoveryError = hash.get("error_description") ?? query.get("error_description");
+    return recoveryError ? `That password-reset link is invalid or expired. Request a new link below. (${recoveryError.replaceAll("+", " ")})` : "";
+  });
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -15,7 +22,16 @@ export default function Auth() {
     setLoading(true);
     setMessage("");
 
-    if (isSigningUp) {
+    if (isResettingPassword) {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/`,
+      });
+      if (error) {
+        setMessage(error.message);
+      } else {
+        setMessage("If an account uses that email address, a secure password-reset link is on its way. Check your spam folder too.");
+      }
+    } else if (isSigningUp) {
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -53,16 +69,18 @@ export default function Auth() {
       <section className="auth-card">
         <h1>Pawffice HQ</h1>
 
-        <h2>{isSigningUp ? "Create your account" : "Welcome back"}</h2>
+        <h2>{isResettingPassword ? "Reset your password" : isSigningUp ? "Create your account" : "Welcome back"}</h2>
 
         <p>
-          {isSigningUp
+          {isResettingPassword
+            ? "Enter your login email and we’ll send you a secure reset link."
+            : isSigningUp
             ? "Start managing your pet-care business."
             : "Sign in to your business dashboard."}
         </p>
 
         <form onSubmit={handleSubmit}>
-          {isSigningUp && (
+          {isSigningUp && !isResettingPassword && (
             <>
               <label htmlFor="firstName">First name</label>
               <input
@@ -95,21 +113,23 @@ export default function Auth() {
             required
           />
 
-          <label htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            autoComplete={isSigningUp ? "new-password" : "current-password"}
-            minLength={6}
-            required
-          />
+          {!isResettingPassword && <><label htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete={isSigningUp ? "new-password" : "current-password"}
+              minLength={8}
+              required
+            /></>}
 
           <button type="submit" disabled={loading}>
             {loading
               ? "Please wait..."
-              : isSigningUp
+              : isResettingPassword
+                ? "Send reset link"
+                : isSigningUp
                 ? "Create account"
                 : "Sign in"}
           </button>
@@ -117,18 +137,25 @@ export default function Auth() {
 
         {message && <p className="auth-message">{message}</p>}
 
-        <button
+        {!isSigningUp && !isResettingPassword && <div className="auth-help-actions"><button type="button" className="text-button" onClick={()=>{setIsResettingPassword(true);setShowEmailHelp(false);setMessage("")}}>Forgot password?</button><button type="button" className="text-button" onClick={()=>{setShowEmailHelp(current=>!current);setMessage("")}}>Forgot which email you used?</button></div>}
+
+        {showEmailHelp&&<div className="auth-help-note" role="status"><strong>Your email address is your Pawffice login.</strong><span>Search your inboxes for “Pawffice HQ,” or contact your business owner or Pawffice HQ support. For security, we cannot reveal whether an email has an account.</span></div>}
+
+        {isResettingPassword&&<button type="button" className="text-button" onClick={()=>{setIsResettingPassword(false);setMessage("")}}>Back to sign in</button>}
+
+        {!isResettingPassword&&<button
           type="button"
           className="text-button"
           onClick={() => {
             setIsSigningUp(!isSigningUp);
+            setShowEmailHelp(false);
             setMessage("");
           }}
         >
           {isSigningUp
             ? "Already have an account? Sign in"
             : "Need an account? Sign up"}
-        </button>
+        </button>}
       </section>
     </main>
   );

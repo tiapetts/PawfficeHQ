@@ -2,9 +2,9 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 
-type SetPasswordProps = { onComplete: () => void };
+type SetPasswordProps = { onComplete: () => void; recovery?: boolean };
 
-function SetPassword({ onComplete }: SetPasswordProps) {
+function SetPassword({ onComplete, recovery = false }: SetPasswordProps) {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [saving, setSaving] = useState(false);
@@ -38,8 +38,8 @@ function SetPassword({ onComplete }: SetPasswordProps) {
     <main className="auth-page">
       <section className="auth-card">
         <h1>Pawffice HQ</h1>
-        <h2>Welcome to the team!</h2>
-        <p>Choose a password to finish setting up your staff account.</p>
+        <h2>{recovery ? "Create a new password" : "Welcome to the team!"}</h2>
+        <p>{recovery ? "Choose a new password for your Pawffice HQ account." : "Choose a password to finish setting up your staff account."}</p>
         {errorMessage && (
           <p className="error-message" role="alert">
             {errorMessage}
@@ -67,7 +67,7 @@ function SetPassword({ onComplete }: SetPasswordProps) {
             />
           </label>
           <button type="submit" disabled={saving}>
-            {saving ? "Saving…" : "Create password"}
+            {saving ? "Saving…" : recovery ? "Update password" : "Create password"}
           </button>
         </form>
       </section>
