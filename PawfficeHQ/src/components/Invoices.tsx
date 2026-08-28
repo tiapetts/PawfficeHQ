@@ -12,7 +12,11 @@ type InvoicesProps = {
 type Invoice = {
   id: string;
   appointment_id: string | null;
-  client_id: number;
+  client_id: number | null;
+  pet_id: number | null;
+  walk_in_name: string | null;
+  walk_in_email: string | null;
+  walk_in_phone: string | null;
   invoice_number: string;
   status: string;
   currency: string;
@@ -101,6 +105,10 @@ type AppointmentPet = {
   appointment_id: string;
   pet_id: number;
 };
+type ClientPet = { client_id: number; pet_id: number };
+type Service = { id: string; name: string; base_price: number };
+type StandaloneLine = { description: string; quantity: string; unitPrice: string; serviceId: string };
+const emptyStandaloneLine: StandaloneLine = { description: "", quantity: "1", unitPrice: "", serviceId: "" };
 
 type InvoiceFilter = "all" | "unpaid" | "draft" | "paid" | "void";
 
@@ -146,9 +154,21 @@ export default function Invoices({
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [appointmentPets, setAppointmentPets] = useState<AppointmentPet[]>([]);
+  const [clientPets, setClientPets] = useState<ClientPet[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [businessSettings, setBusinessSettings] =
     useState<BusinessSettings | null>(null);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState("");
+  const [createMode, setCreateMode] = useState<"standalone" | "appointment">("standalone");
+  const [customerMode, setCustomerMode] = useState<"client" | "walkin">("client");
+  const [standaloneClientId, setStandaloneClientId] = useState("");
+  const [standalonePetId, setStandalonePetId] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [walkIn, setWalkIn] = useState({ name: "", email: "", phone: "" });
+  const [standaloneLines, setStandaloneLines] = useState<StandaloneLine[]>([{ ...emptyStandaloneLine }]);
+  const [standaloneDiscount, setStandaloneDiscount] = useState("");
+  const [standaloneTax, setStandaloneTax] = useState("");
+  const [standaloneNotes, setStandaloneNotes] = useState("");
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(
     null,
   );
@@ -244,11 +264,13 @@ export default function Invoices({
       petsResult,
       appointmentPetsResult,
       settingsResult,
+      clientPetsResult,
+      servicesResult,
     ] = await Promise.all([
       supabase
         .from("invoice")
         .select(
-          "id, appointment_id, client_id, invoice_number, status, currency, subtotal, discount_total, tax_total, total, notes, issued_at, due_at, paid_at, created_at",
+          "id, appointment_id, client_id, pet_id, walk_in_name, walk_in_email, walk_in_phone, invoice_number, status, currency, subtotal, discount_total, tax_total, total, notes, issued_at, due_at, paid_at, created_at",
         )
         .eq("business_id", businessId)
         .order("created_at", { ascending: false }),
@@ -266,6 +288,8 @@ export default function Invoices({
       supabase.from("PET").select("id, PetName").eq("business_id", businessId),
       supabase.from("appointment_pet").select("appointment_id, pet_id"),
       supabase.rpc("get_business_settings", { p_business_id: businessId }),
+      supabase.from("client_pet").select("client_id, pet_id"),
+      supabase.from("service").select("id, name, base_price").eq("business_id", businessId).eq("is_active", true).order("name"),
     ]);
 
     const firstError = [
@@ -275,6 +299,8 @@ export default function Invoices({
       petsResult.error,
       appointmentPetsResult.error,
       settingsResult.error,
+      clientPetsResult.error,
+      servicesResult.error,
     ].find(Boolean);
 
     if (firstError) {
@@ -348,6 +374,8 @@ export default function Invoices({
     setClients(clientsResult.data ?? []);
     setPets(petsResult.data ?? []);
     setAppointmentPets(appointmentPetsResult.data ?? []);
+    setClientPets(clientPetsResult.data ?? []);
+    setServices(servicesResult.data ?? []);
     setBusinessSettings(
       (settingsResult.data as BusinessSettings | null) ?? null,
     );
@@ -361,6 +389,16 @@ export default function Invoices({
   function getClientName(clientId: number) {
     const client = clients.find((item) => item.id === clientId);
     return client ? `${client.FirstName} ${client.LastName}` : "Unknown client";
+  }
+
+  function getInvoiceClientName(invoice: Invoice) {
+    return invoice.client_id ? getClientName(invoice.client_id) : invoice.walk_in_name || "Walk-in customer";
+  }
+
+  function getInvoicePetName(invoice: Invoice) {
+    if (invoice.appointment_id) return getAppointmentPetName(invoice.appointment_id);
+    if (!invoice.pet_id) return "No pet selected";
+    return pets.find((pet) => pet.id === invoice.pet_id)?.PetName ?? "Unknown pet";
   }
 
   function getAppointmentPetName(appointmentId: string) {
@@ -464,7 +502,8 @@ export default function Invoices({
           : "";
         const searchable = [
           invoice.invoice_number,
-          getClientName(invoice.client_id),
+          getInvoiceClientName(invoice),
+          getInvoicePetName(invoice),
           appointmentPet,
           statusLabels[invoice.status] ?? invoice.status,
         ]
@@ -522,6 +561,48 @@ export default function Invoices({
     setSuccessMessage("Draft invoice created.");
     await loadInvoices();
     setSaving(false);
+  }
+
+  function updateStandaloneLine(index: number, changes: Partial<StandaloneLine>) {
+    setStandaloneLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, ...changes } : line));
+  }
+
+  function resetStandaloneForm() {
+    setStandaloneClientId(""); setStandalonePetId(""); setClientSearch("");
+    setWalkIn({ name: "", email: "", phone: "" });
+    setStandaloneLines([{ ...emptyStandaloneLine }]);
+    setStandaloneDiscount(""); setStandaloneTax(""); setStandaloneNotes("");
+  }
+
+  async function createStandaloneInvoice(issueNow: boolean) {
+    const validLines = standaloneLines.filter((line) => line.description.trim() && Number(line.quantity) > 0 && Number(line.unitPrice) >= 0);
+    const newInvoiceTotal = Math.max(validLines.reduce((sum, line) => sum + Number(line.quantity) * Number(line.unitPrice), 0) - Number(standaloneDiscount || 0) + Number(standaloneTax || 0), 0);
+    if (validLines.length === 0) { setMessage("Add at least one complete invoice item."); return; }
+    if (customerMode === "client" && !standaloneClientId) { setMessage("Choose a client or switch to Walk-in customer."); return; }
+    if (customerMode === "walkin" && !walkIn.name.trim()) { setMessage("Enter the walk-in customer’s name."); return; }
+    setSaving(true); setMessage(""); setSuccessMessage("");
+    const { data, error } = await supabase.rpc("create_standalone_invoice", {
+      p_business_id: businessId,
+      p_client_id: customerMode === "client" ? Number(standaloneClientId) : null,
+      p_pet_id: customerMode === "client" && standalonePetId ? Number(standalonePetId) : null,
+      p_walk_in_name: customerMode === "walkin" ? walkIn.name.trim() : null,
+      p_walk_in_email: customerMode === "walkin" ? walkIn.email.trim() || null : null,
+      p_walk_in_phone: customerMode === "walkin" ? walkIn.phone.trim() || null : null,
+      p_items: validLines.map((line) => ({ service_id: line.serviceId || null, description: line.description.trim(), quantity: Number(line.quantity), unit_price: Number(line.unitPrice) })),
+      p_discount_total: Number(standaloneDiscount || 0),
+      p_tax_total: Number(standaloneTax || 0),
+      p_notes: standaloneNotes.trim() || null,
+      p_issue_now: issueNow,
+    });
+    setSaving(false);
+    if (error) { setMessage(error.message); return; }
+    resetStandaloneForm(); setShowCreateForm(false); setExpandedInvoiceId(String(data));
+    if (issueNow) {
+      setPaymentInvoiceId(String(data));
+      setPaymentForm({ ...emptyPaymentForm, amount: newInvoiceTotal.toFixed(2) });
+    }
+    setSuccessMessage(issueNow ? "Invoice created and ready for payment." : "Draft invoice created.");
+    await loadInvoices();
   }
 
   async function issueInvoice(invoiceId: string) {
@@ -831,16 +912,49 @@ export default function Invoices({
 
       {showCreateForm && !readOnly && (
         <section className="dashboard-panel invoice-create-panel">
-          <div>
-            <p className="eyebrow">New invoice</p>
-            <h3>Create from appointment</h3>
-            <p>
-              The booked service and its booking-time price will be copied into
-              the invoice.
-            </p>
+          <div className="invoice-create-heading">
+            <div><p className="eyebrow">New invoice</p><h3>{createMode === "standalone" ? "Standalone or walk-in invoice" : "Create from appointment"}</h3></div>
+            <div className="invoice-create-tabs">
+              <button type="button" className={createMode === "standalone" ? "active" : ""} onClick={() => setCreateMode("standalone")}>Standalone / walk-in</button>
+              <button type="button" className={createMode === "appointment" ? "active" : ""} onClick={() => setCreateMode("appointment")}>From appointment</button>
+            </div>
           </div>
 
-          {availableAppointments.length === 0 ? (
+          {createMode === "standalone" ? (
+            <form className="standalone-invoice-form" onSubmit={(event) => { event.preventDefault(); void createStandaloneInvoice(false); }}>
+              <div className="standalone-customer-mode">
+                <button type="button" className={customerMode === "client" ? "active" : ""} onClick={() => setCustomerMode("client")}>Saved client</button>
+                <button type="button" className={customerMode === "walkin" ? "active" : ""} onClick={() => { setCustomerMode("walkin"); setStandaloneClientId(""); setStandalonePetId(""); }}>Walk-in customer</button>
+              </div>
+              {customerMode === "client" ? (
+                <div className="standalone-customer-fields">
+                  <label>Find client<input type="search" value={clientSearch} onChange={(event) => setClientSearch(event.target.value)} placeholder="Type a client name, email, or phone" /></label>
+                  <label>Client<select required value={standaloneClientId} onChange={(event) => { setStandaloneClientId(event.target.value); setStandalonePetId(""); }}><option value="">Choose client</option>{clients.filter((client) => [client.FirstName, client.LastName, client.EmailAddress, client.PhoneNumber].filter(Boolean).join(" ").toLowerCase().includes(clientSearch.trim().toLowerCase())).map((client) => <option value={client.id} key={client.id}>{client.FirstName} {client.LastName}</option>)}</select></label>
+                  <label>Pet (optional)<select value={standalonePetId} disabled={!standaloneClientId} onChange={(event) => setStandalonePetId(event.target.value)}><option value="">No pet selected</option>{clientPets.filter((link) => String(link.client_id) === standaloneClientId).map((link) => pets.find((pet) => pet.id === link.pet_id)).filter((pet): pet is Pet => Boolean(pet)).map((pet) => <option key={pet.id} value={pet.id}>{pet.PetName}</option>)}</select></label>
+                </div>
+              ) : (
+                <div className="standalone-customer-fields">
+                  <label>Customer name<input required value={walkIn.name} onChange={(event) => setWalkIn({ ...walkIn, name: event.target.value })} placeholder="Walk-in customer" /></label>
+                  <label>Email (optional)<input type="email" value={walkIn.email} onChange={(event) => setWalkIn({ ...walkIn, email: event.target.value })} /></label>
+                  <label>Phone (optional)<input type="tel" value={walkIn.phone} onChange={(event) => setWalkIn({ ...walkIn, phone: event.target.value })} /></label>
+                </div>
+              )}
+              <div className="standalone-lines">
+                <div className="standalone-section-heading"><h4>Invoice items</h4><button className="secondary-button" type="button" onClick={() => setStandaloneLines((current) => [...current, { ...emptyStandaloneLine }])}>+ Add line</button></div>
+                {standaloneLines.map((line, index) => <div className="standalone-line" key={index}>
+                  <label>Service (optional)<select value={line.serviceId} onChange={(event) => { const service = services.find((item) => item.id === event.target.value); updateStandaloneLine(index, { serviceId: event.target.value, description: service?.name ?? line.description, unitPrice: service ? String(service.base_price) : line.unitPrice }); }}><option value="">Custom item</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
+                  <label>Description<input required value={line.description} onChange={(event) => updateStandaloneLine(index, { description: event.target.value })} /></label>
+                  <label>Quantity<input required type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateStandaloneLine(index, { quantity: event.target.value })} /></label>
+                  <label>Unit price<input required type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateStandaloneLine(index, { unitPrice: event.target.value })} /></label>
+                  <strong>{money.format(Number(line.quantity || 0) * Number(line.unitPrice || 0))}</strong>
+                  <button type="button" onClick={() => setStandaloneLines((current) => current.length === 1 ? [{ ...emptyStandaloneLine }] : current.filter((_, lineIndex) => lineIndex !== index))}>Remove</button>
+                </div>)}
+              </div>
+              <div className="standalone-adjustments"><label>Discount<input type="number" min="0" step="0.01" value={standaloneDiscount} onChange={(event) => setStandaloneDiscount(event.target.value)} /></label><label>Tax<input type="number" min="0" step="0.01" value={standaloneTax} onChange={(event) => setStandaloneTax(event.target.value)} /></label><label className="standalone-notes">Notes<textarea rows={3} value={standaloneNotes} onChange={(event) => setStandaloneNotes(event.target.value)} /></label></div>
+              <div className="standalone-total"><span>Invoice total</span><strong>{money.format(Math.max(standaloneLines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0) - Number(standaloneDiscount || 0) + Number(standaloneTax || 0), 0))}</strong></div>
+              <div className="standalone-actions"><button type="submit" className="secondary-button" disabled={saving}>{saving ? "Saving…" : "Save draft"}</button><button type="button" className="primary-button" disabled={saving} onClick={() => void createStandaloneInvoice(true)}>Create & take payment</button></div>
+            </form>
+          ) : availableAppointments.length === 0 ? (
             <p>Every eligible appointment already has an invoice.</p>
           ) : (
             <form className="invoice-create-form" onSubmit={createInvoice}>
@@ -965,11 +1079,9 @@ export default function Invoices({
                       <span className="invoice-number">
                         {invoice.invoice_number}
                       </span>
-                      <h3>{getClientName(invoice.client_id)}</h3>
+                      <h3>{getInvoiceClientName(invoice)}</h3>
                       <p>
-                        {invoice.appointment_id
-                          ? getAppointmentPetName(invoice.appointment_id)
-                          : "No appointment attached"}
+                        {getInvoicePetName(invoice)}
                         {" · "}
                         {new Date(invoice.created_at).toLocaleDateString()}
                       </p>
@@ -1488,7 +1600,7 @@ export default function Invoices({
                 <strong>
                   {receiptClient
                     ? `${receiptClient.FirstName} ${receiptClient.LastName}`
-                    : "Client"}
+                    : receiptInvoice.walk_in_name || "Walk-in customer"}
                 </strong>
                 {receiptClient?.EmailAddress && (
                   <p>{receiptClient.EmailAddress}</p>
@@ -1496,13 +1608,13 @@ export default function Invoices({
                 {receiptClient?.PhoneNumber && (
                   <p>{receiptClient.PhoneNumber}</p>
                 )}
+                {!receiptClient && receiptInvoice.walk_in_email && <p>{receiptInvoice.walk_in_email}</p>}
+                {!receiptClient && receiptInvoice.walk_in_phone && <p>{receiptInvoice.walk_in_phone}</p>}
               </div>
               <div>
                 <span>Pet</span>
                 <strong>
-                  {receiptInvoice.appointment_id
-                    ? getAppointmentPetName(receiptInvoice.appointment_id)
-                    : "Not listed"}
+                  {getInvoicePetName(receiptInvoice)}
                 </strong>
               </div>
             </section>

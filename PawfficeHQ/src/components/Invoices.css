@@ -24,6 +24,24 @@
     margin-bottom: 1.4rem;
 }
 
+.invoice-create-heading { grid-column: 1 / -1; display: flex; align-items: end; justify-content: space-between; gap: 1rem; }
+.invoice-create-tabs, .standalone-customer-mode { display: flex; gap: .5rem; }
+.invoice-create-tabs button, .standalone-customer-mode button { padding: .65rem .9rem; border: 1px solid #adbfba; border-radius: 999px; background: #fff; color: #245348; font: inherit; font-weight: 800; cursor: pointer; }
+.invoice-create-tabs button.active, .standalone-customer-mode button.active { border-color: #0077b6; background: #0077b6; color: #fff; }
+.standalone-invoice-form { grid-column: 1 / -1; display: grid; gap: 1.25rem; }
+.standalone-customer-fields, .standalone-adjustments { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.standalone-invoice-form label { display: grid; gap: .4rem; color: #173d36; font-weight: 700; }
+.standalone-invoice-form input, .standalone-invoice-form select, .standalone-invoice-form textarea { width: 100%; box-sizing: border-box; padding: .7rem .8rem; border: 1px solid #adbfba; border-radius: 10px; background: #fff; color: #173d36; font: inherit; }
+.standalone-lines { display: grid; gap: .75rem; padding-top: 1rem; border-top: 1px solid #d6e0dd; }
+.standalone-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.standalone-section-heading h4 { margin: 0; }
+.standalone-line { display: grid; grid-template-columns: .8fr 1.4fr .4fr .55fr auto auto; gap: .75rem; align-items: end; padding: 1rem; border: 1px solid #d6e0dd; border-radius: 12px; background: #f8fbfa; }
+.standalone-line>strong { padding-bottom: .75rem; white-space: nowrap; }
+.standalone-line>button { margin-bottom: .35rem; border: 0; background: transparent; color: #a63c30; font: inherit; font-weight: 800; cursor: pointer; }
+.standalone-notes { grid-column: 1 / -1; }
+.standalone-total { display: flex; justify-content: flex-end; gap: 1.5rem; font-size: 1.25rem; }
+.standalone-actions { display: flex; justify-content: flex-end; gap: .75rem; }
+
 .invoice-create-panel h3,
 .invoice-create-panel p {
     margin: 0.25rem 0;
@@ -511,9 +529,14 @@
     .invoice-payment-form {
         grid-template-columns: 1fr 1fr;
     }
+
+    .standalone-line { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 650px) {
+    .invoice-create-heading, .standalone-actions { align-items: stretch; flex-direction: column; }
+    .invoice-create-tabs, .standalone-customer-mode { display: grid; grid-template-columns: 1fr; }
+    .standalone-customer-fields, .standalone-adjustments, .standalone-line { grid-template-columns: 1fr; }
     .invoice-summary-grid {
         grid-template-columns: 1fr;
     }
