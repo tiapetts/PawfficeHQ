@@ -68,3 +68,18 @@
   .hours-time-range { grid-template-columns: 1fr; align-items: stretch; }
   .hours-time-range > span { display: none; }
 }
+.client-reminder-settings {
+  display: grid;
+  gap: 18px;
+  margin-top: 24px;
+  padding: 22px;
+  border: 1px solid var(--border-color, #d9e4e8);
+  border-radius: 16px;
+  background: #f8fcfd;
+}
+
+.client-reminder-settings h4 { margin: 4px 0; }
+.client-reminder-toggle { display: flex; align-items: flex-start; gap: 12px; }
+.client-reminder-toggle input { margin-top: 4px; }
+.client-reminder-toggle span { display: grid; gap: 3px; }
+.client-reminder-toggle.compact { align-self: end; padding-bottom: 10px; }

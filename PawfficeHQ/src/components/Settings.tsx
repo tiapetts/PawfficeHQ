@@ -47,6 +47,10 @@ type NotificationSettings = {
   reminder_minutes_before: number;
   daily_digest_enabled: boolean;
   daily_digest_time: string;
+  client_sms_reminders_enabled: boolean;
+  initial_reminder_hours: 24 | 48;
+  one_hour_reminder_enabled: boolean;
+  reminder_message_template: string;
 };
 
 type PushState =
@@ -138,6 +142,11 @@ const defaultNotificationSettings: NotificationSettings = {
   reminder_minutes_before: 60,
   daily_digest_enabled: false,
   daily_digest_time: "08:00",
+  client_sms_reminders_enabled: false,
+  initial_reminder_hours: 24,
+  one_hour_reminder_enabled: true,
+  reminder_message_template:
+    "Hi {client_first_name}, this is {business_name}. {pet_names} has an appointment on {appointment_date} at {appointment_time}. Reply C to confirm.",
 };
 
 function urlBase64ToUint8Array(value: string) {
@@ -240,7 +249,7 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
       const { data, error } = await supabase
         .from("business_notification_settings")
         .select(
-          "push_enabled, new_request_enabled, appointment_reminder_enabled, appointment_status_enabled, payment_enabled, reminder_minutes_before, daily_digest_enabled, daily_digest_time",
+          "push_enabled, new_request_enabled, appointment_reminder_enabled, appointment_status_enabled, payment_enabled, reminder_minutes_before, daily_digest_enabled, daily_digest_time, client_sms_reminders_enabled, initial_reminder_hours, one_hour_reminder_enabled, reminder_message_template",
         )
         .eq("business_id", businessId)
         .maybeSingle();
@@ -1102,6 +1111,59 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
                       )
                     }
                   />
+                </label>
+              </div>
+
+              <div className="client-reminder-settings">
+                <div>
+                  <p className="eyebrow">Client text reminders</p>
+                  <h4>Appointment confirmation by text</h4>
+                  <p className="settings-help">
+                    Clients can reply C to confirm. Texts are only sent to
+                    client profiles with SMS consent recorded.
+                  </p>
+                </div>
+                <label className="client-reminder-toggle">
+                  <input
+                    type="checkbox"
+                    disabled={readOnly}
+                    checked={notificationSettings.client_sms_reminders_enabled}
+                    onChange={(event) => updateNotification("client_sms_reminders_enabled", event.target.checked)}
+                  />
+                  <span><strong>Send automatic client reminders</strong><small>Send the first reminder before each eligible appointment.</small></span>
+                </label>
+                <div className="settings-form-grid">
+                  <label>
+                    First reminder
+                    <select
+                      disabled={readOnly || !notificationSettings.client_sms_reminders_enabled}
+                      value={notificationSettings.initial_reminder_hours}
+                      onChange={(event) => updateNotification("initial_reminder_hours", Number(event.target.value) as 24 | 48)}
+                    >
+                      <option value={24}>24 hours before</option>
+                      <option value={48}>48 hours before</option>
+                    </select>
+                  </label>
+                  <label className="client-reminder-toggle compact">
+                    <input
+                      type="checkbox"
+                      disabled={readOnly || !notificationSettings.client_sms_reminders_enabled}
+                      checked={notificationSettings.one_hour_reminder_enabled}
+                      onChange={(event) => updateNotification("one_hour_reminder_enabled", event.target.checked)}
+                    />
+                    <span><strong>One-hour reminder</strong><small>Send a second text one hour before the appointment.</small></span>
+                  </label>
+                </div>
+                <label>
+                  First reminder message
+                  <textarea
+                    rows={4}
+                    maxLength={600}
+                    disabled={readOnly || !notificationSettings.client_sms_reminders_enabled}
+                    value={notificationSettings.reminder_message_template}
+                    onChange={(event) => updateNotification("reminder_message_template", event.target.value)}
+                  />
+                  <small>Available: {"{client_first_name}"}, {"{business_name}"}, {"{pet_names}"}, {"{appointment_date}"}, {"{appointment_time}"}. Keep “Reply C to confirm” in the message.</small>
                 </label>
               </div>
 
