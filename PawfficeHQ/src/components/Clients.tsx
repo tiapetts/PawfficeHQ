@@ -25,6 +25,8 @@ type Client = {
   profile_photo_path: string | null;
   archived_at: string | null;
   archive_reason: string | null;
+  sms_consent: boolean;
+  sms_consent_at: string | null;
 };
 const emptyForm = {
   FirstName: "",
@@ -40,12 +42,13 @@ const emptyForm = {
   booking_deposit_type: "fixed" as "fixed" | "percentage",
   booking_deposit_value: "",
   booking_deposit_reason: "",
+  sms_consent: false,
 };
 type ClientForm = typeof emptyForm;
 const emptyPetForm = { PetName: "", species: "", PetBreed: "", PetDOB: "", PetWeight: "" };
 type HouseholdPetForm = typeof emptyPetForm;
 const selection =
-  "id, FirstName, LastName, PhoneNumber, EmailAddress, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip, booking_deposit_required, booking_deposit_type, booking_deposit_value, booking_deposit_reason, profile_photo_path, archived_at, archive_reason";
+  "id, FirstName, LastName, PhoneNumber, EmailAddress, StreetAddress, AptNumber, ClientCity, ClientState, ClientZip, booking_deposit_required, booking_deposit_type, booking_deposit_value, booking_deposit_reason, profile_photo_path, archived_at, archive_reason, sms_consent, sms_consent_at";
 
 export default function Clients({
   businessId,
@@ -120,6 +123,7 @@ export default function Clients({
           ? String(client.booking_deposit_value)
           : "",
       booking_deposit_reason: client.booking_deposit_reason ?? "",
+      sms_consent: client.sms_consent,
     });
     setMessage("");
     setSuccess(false);
@@ -180,7 +184,7 @@ export default function Clients({
       return;
     }
 
-    const { error } = editingId
+    const { data: householdData, error } = editingId
       ? await supabase.rpc("update_client_household", {
           p_business_id: businessId,
           p_client_id: editingId,
@@ -205,6 +209,18 @@ export default function Clients({
       console.error(error);
       setMessage(error.message);
       return;
+    }
+    const savedClientId = editingId ?? Number(householdData?.[0]?.client_id);
+    if (savedClientId) {
+      const { error: consentError } = await supabase
+        .from("CLIENT")
+        .update({ sms_consent: form.sms_consent })
+        .eq("id", savedClientId)
+        .eq("business_id", businessId);
+      if (consentError) {
+        setMessage(`The household was saved, but SMS consent could not be updated: ${consentError.message}`);
+        return;
+      }
     }
     closeForm();
     await loadClients();
@@ -350,6 +366,17 @@ export default function Clients({
                 value={form.EmailAddress}
                 onChange={(e) => updateField("EmailAddress", e.target.value)}
               />
+            </label>
+            <label className="full-width client-sms-consent">
+              <input
+                type="checkbox"
+                checked={form.sms_consent}
+                onChange={(e) => updateField("sms_consent", e.target.checked)}
+              />
+              <span>
+                <strong>Client consented to appointment text messages</strong>
+                <small>Required before PawfficeHQ can send automatic reminders or accept text confirmation.</small>
+              </span>
             </label>
             <label className="full-width">
               Street address

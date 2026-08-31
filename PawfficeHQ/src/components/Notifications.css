@@ -66,3 +66,13 @@
     width: 100%;
   }
 }
+.confirmation-status {
+  margin: 16px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff8e8;
+  color: #76530c;
+  font-weight: 700;
+}
+
+.confirmation-status.confirmed { background: #e9f8f2; color: #176447; }

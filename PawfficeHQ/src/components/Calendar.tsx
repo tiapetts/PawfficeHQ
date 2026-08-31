@@ -54,6 +54,7 @@ type Appointment = {
   status: string;
   client_notes: string | null;
   internal_notes: string | null;
+  client_confirmed_at: string | null;
 };
 
 type AppointmentPet = {
@@ -113,6 +114,7 @@ function Calendar({
   const [notificationBody, setNotificationBody] = useState("");
   const [confirmSmsConsent, setConfirmSmsConsent] = useState(false);
   const [sendingNotification, setSendingNotification] = useState(false);
+  const [sendingReminder, setSendingReminder] = useState(false);
   const [payingAppointmentId, setPayingAppointmentId] = useState<string | null>(
     null,
   );
@@ -160,7 +162,7 @@ function Calendar({
       supabase
         .from("appointment")
         .select(
-          "id, client_id, start_at, end_at, status, client_notes, internal_notes",
+          "id, client_id, start_at, end_at, status, client_notes, internal_notes, client_confirmed_at",
         )
         .eq("business_id", businessId)
         .order("start_at"),
@@ -499,7 +501,7 @@ function Calendar({
       .eq("id", selectedAppointment.id)
       .eq("business_id", businessId)
       .select(
-        "id, client_id, start_at, end_at, status, client_notes, internal_notes",
+        "id, client_id, start_at, end_at, status, client_notes, internal_notes, client_confirmed_at",
       )
       .single();
 
@@ -555,6 +557,23 @@ function Calendar({
     setShowNotification(false);
     setSelectedAppointment(null);
     await loadCalendar();
+  }
+
+  async function sendAppointmentReminder() {
+    if (!selectedAppointment) return;
+    setSendingReminder(true);
+    setMessage("");
+    const { data, error } = await supabase.functions.invoke(
+      "process-appointment-reminders",
+      { body: { appointmentId: selectedAppointment.id } },
+    );
+    setSendingReminder(false);
+    const sent = data?.results?.some((result: { status: string }) => result.status === "sent");
+    if (error || data?.error || !sent) {
+      setMessage(data?.error ?? data?.results?.[0]?.reason ?? error?.message ?? "The reminder could not be sent. Check the client phone number and SMS consent.");
+      return;
+    }
+    setMessage("Appointment reminder sent by text.");
   }
 
   function formatStatus(status: string) {
@@ -1362,6 +1381,12 @@ function Calendar({
               </div>
             </div>
 
+            <p className={selectedAppointment.client_confirmed_at ? "confirmation-status confirmed" : "confirmation-status"}>
+              {selectedAppointment.client_confirmed_at
+                ? `Client confirmed by text ${new Date(selectedAppointment.client_confirmed_at).toLocaleString()}`
+                : "Awaiting client text confirmation"}
+            </p>
+
             <div style={{ marginBottom: 22 }}>
               <p className="eyebrow">Client notes</p>
               <p>{selectedAppointment.client_notes || "No client notes."}</p>
@@ -1413,6 +1438,18 @@ function Calendar({
                 </div>
               )}
             </div>
+
+            {!readOnly && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void sendAppointmentReminder()}
+                disabled={sendingReminder}
+                style={{ width: "100%", marginTop: 16 }}
+              >
+                {sendingReminder ? "Sending reminder…" : "Send text reminder now"}
+              </button>
+            )}
 
             {!readOnly && (
               <button
