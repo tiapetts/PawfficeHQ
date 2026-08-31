@@ -42,12 +42,26 @@
 .settings-switches input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--brand-accent); }
 .settings-switches span { display: grid; gap: 4px; }
 .settings-switches small { color: #607b76; }
+.notification-preferences { display: grid; gap: 20px; }
+.notification-device-status { margin: 0; }
+.notification-device-actions, .notification-save-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.notification-preferences > .form-actions { justify-content: flex-start; margin: 0; }
+.notification-preferences > .settings-switches,
+.notification-preferences > .settings-form-grid { margin: 0; }
+.notification-preferences .settings-switches > label { min-height: 84px; align-items: center; }
+.notification-preferences .settings-switches input { flex: 0 0 20px; margin-top: 0; }
+.notification-preferences .settings-form-grid { padding-top: 2px; }
 @media (max-width: 720px) {
   .settings-form-grid, .color-grid { grid-template-columns: 1fr; }
   .settings-full { grid-column: 1; }
   .theme-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hours-row { grid-template-columns: 1fr; gap: 10px; }
   .hours-time-range { grid-template-columns: 1fr auto 1fr; }
+  .notification-preferences { gap: 16px; }
+  .notification-preferences .settings-switches > label { min-height: 0; padding: 14px; }
+  .notification-device-actions > button,
+  .notification-save-actions > button,
+  .notification-preferences > .form-actions > button { width: 100%; }
 }
 @media (max-width: 460px) {
   .theme-grid { grid-template-columns: 1fr; }

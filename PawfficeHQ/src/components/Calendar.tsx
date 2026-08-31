@@ -253,7 +253,11 @@ function Calendar({
   const matchingClients = useMemo(() => {
     const query = clientSearch.trim().toLowerCase();
     if (!query) return clients.slice(0, 12);
-    return clients.filter((client) => `${client.FirstName} ${client.LastName}`.toLowerCase().includes(query)).slice(0, 12);
+    return clients
+      .filter((client) =>
+        `${client.FirstName} ${client.LastName}`.toLowerCase().includes(query),
+      )
+      .slice(0, 12);
   }, [clientSearch, clients]);
 
   const selectedService = services.find((service) => service.id === serviceId);
@@ -353,21 +357,24 @@ function Calendar({
     );
     const slotEnd = new Date(slotStart.getTime() + 30 * 60_000);
 
-    return appointments.filter((item) => {
-      if (item.status === "cancelled" || item.status === "void") {
-        return false;
-      }
+    return appointments
+      .filter((item) => {
+        if (item.status === "cancelled" || item.status === "void") {
+          return false;
+        }
 
-      const start = new Date(item.start_at);
-      const end = new Date(item.end_at);
-      return start < slotEnd && end > slotStart;
-    }).map((appointment) => {
-      const appointmentStart = new Date(appointment.start_at);
-      return {
-        appointment,
-        isFirstSlot: appointmentStart >= slotStart && appointmentStart < slotEnd,
-      };
-    });
+        const start = new Date(item.start_at);
+        const end = new Date(item.end_at);
+        return start < slotEnd && end > slotStart;
+      })
+      .map((appointment) => {
+        const appointmentStart = new Date(appointment.start_at);
+        return {
+          appointment,
+          isFirstSlot:
+            appointmentStart >= slotStart && appointmentStart < slotEnd,
+        };
+      });
   }
 
   function formatSlotTime(minutesAfterMidnight: number) {
@@ -428,14 +435,28 @@ function Calendar({
       return;
     }
 
-    const movingPetId = appointmentPets.find((link) => link.appointment_id === appointment.id)?.pet_id;
-    const samePetConflict = Boolean(movingPetId && conflicts?.some((conflict) =>
-      appointmentPets.some((link) => link.appointment_id === conflict.id && link.pet_id === movingPetId),
-    ));
-    if (conflicts && conflicts.length > 0 && (!allowDoubleBooking || samePetConflict)) {
-      setMessage(samePetConflict
-        ? "That pet already has an overlapping appointment. Choose another time."
-        : "That move would overlap another appointment. Enable double-booking or choose another time.");
+    const movingPetId = appointmentPets.find(
+      (link) => link.appointment_id === appointment.id,
+    )?.pet_id;
+    const samePetConflict = Boolean(
+      movingPetId &&
+      conflicts?.some((conflict) =>
+        appointmentPets.some(
+          (link) =>
+            link.appointment_id === conflict.id && link.pet_id === movingPetId,
+        ),
+      ),
+    );
+    if (
+      conflicts &&
+      conflicts.length > 0 &&
+      (!allowDoubleBooking || samePetConflict)
+    ) {
+      setMessage(
+        samePetConflict
+          ? "That pet already has an overlapping appointment. Choose another time."
+          : "That move would overlap another appointment. Enable double-booking or choose another time.",
+      );
       setDraggingAppointmentId(null);
       return;
     }
@@ -602,12 +623,21 @@ function Calendar({
     }
 
     const samePetConflict = conflicts?.some((conflict) =>
-      appointmentPets.some((link) => link.appointment_id === conflict.id && String(link.pet_id) === petId),
+      appointmentPets.some(
+        (link) =>
+          link.appointment_id === conflict.id && String(link.pet_id) === petId,
+      ),
     );
-    if (conflicts && conflicts.length > 0 && (!allowDoubleBooking || samePetConflict)) {
-      setMessage(samePetConflict
-        ? "This pet already has an overlapping appointment. Choose another time."
-        : "That time overlaps an existing appointment. Enable double-booking or choose another time.");
+    if (
+      conflicts &&
+      conflicts.length > 0 &&
+      (!allowDoubleBooking || samePetConflict)
+    ) {
+      setMessage(
+        samePetConflict
+          ? "This pet already has an overlapping appointment. Choose another time."
+          : "That time overlaps an existing appointment. Enable double-booking or choose another time.",
+      );
       setSaving(false);
       return;
     }
@@ -771,7 +801,9 @@ function Calendar({
                 autoComplete="off"
                 placeholder="Start typing a client name"
                 onFocus={() => setClientPickerOpen(true)}
-                onBlur={() => window.setTimeout(() => setClientPickerOpen(false), 120)}
+                onBlur={() =>
+                  window.setTimeout(() => setClientPickerOpen(false), 120)
+                }
                 onChange={(event) => {
                   setClientSearch(event.target.value);
                   setClientId("");
@@ -782,24 +814,36 @@ function Calendar({
               />
               {clientPickerOpen && (
                 <div className="calendar-client-results">
-                  {matchingClients.length ? matchingClients.map((client) => (
-                    <button
-                      type="button"
-                      key={client.id}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => {
-                        setClientId(String(client.id));
-                        setClientSearch(`${client.FirstName} ${client.LastName}`);
-                        setPetId("");
-                        setClientPickerOpen(false);
-                      }}
-                    >
-                      <strong>{client.FirstName} {client.LastName}</strong>
-                    </button>
-                  )) : <p>No clients match “{clientSearch}”</p>}
+                  {matchingClients.length ? (
+                    matchingClients.map((client) => (
+                      <button
+                        type="button"
+                        key={client.id}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          setClientId(String(client.id));
+                          setClientSearch(
+                            `${client.FirstName} ${client.LastName}`,
+                          );
+                          setPetId("");
+                          setClientPickerOpen(false);
+                        }}
+                      >
+                        <strong>
+                          {client.FirstName} {client.LastName}
+                        </strong>
+                      </button>
+                    ))
+                  ) : (
+                    <p>No clients match “{clientSearch}”</p>
+                  )}
                 </div>
               )}
-              {clientSearch && !clientId && <small className="calendar-client-hint">Select a client from the results.</small>}
+              {clientSearch && !clientId && (
+                <small className="calendar-client-hint">
+                  Select a client from the results.
+                </small>
+              )}
             </label>
 
             <label>
@@ -1040,64 +1084,84 @@ function Calendar({
                         : "Create an appointment at this time"
                     }
                   >
-                    {occupiedSlots.length > 0 && <span className={`calendar-overlap-stack count-${occupiedSlots.length}`}>{occupiedSlots.map((occupiedSlot) => (
+                    {occupiedSlots.length > 0 && (
                       <span
-                        key={occupiedSlot.appointment.id}
-                        draggable={!readOnly && occupiedSlot.isFirstSlot}
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {event.stopPropagation();setSelectedAppointment(occupiedSlot.appointment)}}
-                        onKeyDown={(event) => {if(event.key==="Enter"||event.key===" "){event.preventDefault();setSelectedAppointment(occupiedSlot.appointment)}}}
-                        onDragStart={(event) => {
-                          if (readOnly || !occupiedSlot.isFirstSlot) return;
-                          event.stopPropagation();
-                          event.dataTransfer.effectAllowed = "move";
-                          event.dataTransfer.setData(
-                            "text/plain",
-                            occupiedSlot.appointment.id,
-                          );
-                          setDraggingAppointmentId(occupiedSlot.appointment.id);
-                        }}
-                        onDragEnd={() => setDraggingAppointmentId(null)}
-                        style={{
-                          display: "block",
-                          height: "100%",
-                          minHeight: 44,
-                          padding: "6px 7px",
-                          borderRadius: occupiedSlot.isFirstSlot
-                            ? "6px 6px 0 0"
-                            : 0,
-                          background: statusColor(
-                            occupiedSlot.appointment.status,
-                          ),
-                          color: "white",
-                          fontSize: 12,
-                          lineHeight: 1.25,
-                          cursor:
-                            !readOnly && occupiedSlot.isFirstSlot
-                              ? "grab"
-                              : occupiedSlot.isFirstSlot
-                                ? "pointer"
-                                : "default",
-                        }}
+                        className={`calendar-overlap-stack count-${occupiedSlots.length}`}
                       >
-                        {occupiedSlot.isFirstSlot ? (
-                          <>
-                            <strong>
-                              {petName(occupiedSlot.appointment.id)}
-                            </strong>
-                            <br />
-                            {serviceName(occupiedSlot.appointment.id)}
-                            <br />
-                            <span style={{ opacity: 0.85 }}>
-                              {formatStatus(occupiedSlot.appointment.status)}
-                            </span>
-                          </>
-                        ) : (
-                          <span style={{ opacity: 0.8 }}>Continues</span>
-                        )}
+                        {occupiedSlots.map((occupiedSlot) => (
+                          <span
+                            key={occupiedSlot.appointment.id}
+                            draggable={!readOnly && occupiedSlot.isFirstSlot}
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedAppointment(occupiedSlot.appointment);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setSelectedAppointment(
+                                  occupiedSlot.appointment,
+                                );
+                              }
+                            }}
+                            onDragStart={(event) => {
+                              if (readOnly || !occupiedSlot.isFirstSlot) return;
+                              event.stopPropagation();
+                              event.dataTransfer.effectAllowed = "move";
+                              event.dataTransfer.setData(
+                                "text/plain",
+                                occupiedSlot.appointment.id,
+                              );
+                              setDraggingAppointmentId(
+                                occupiedSlot.appointment.id,
+                              );
+                            }}
+                            onDragEnd={() => setDraggingAppointmentId(null)}
+                            style={{
+                              display: "block",
+                              height: "100%",
+                              minHeight: 44,
+                              padding: "6px 7px",
+                              borderRadius: occupiedSlot.isFirstSlot
+                                ? "6px 6px 0 0"
+                                : 0,
+                              background: statusColor(
+                                occupiedSlot.appointment.status,
+                              ),
+                              color: "white",
+                              fontSize: 12,
+                              lineHeight: 1.25,
+                              cursor:
+                                !readOnly && occupiedSlot.isFirstSlot
+                                  ? "grab"
+                                  : occupiedSlot.isFirstSlot
+                                    ? "pointer"
+                                    : "default",
+                            }}
+                          >
+                            {occupiedSlot.isFirstSlot ? (
+                              <>
+                                <strong>
+                                  {petName(occupiedSlot.appointment.id)}
+                                </strong>
+                                <br />
+                                {serviceName(occupiedSlot.appointment.id)}
+                                <br />
+                                <span style={{ opacity: 0.85 }}>
+                                  {formatStatus(
+                                    occupiedSlot.appointment.status,
+                                  )}
+                                </span>
+                              </>
+                            ) : (
+                              <span style={{ opacity: 0.8 }}>Continues</span>
+                            )}
+                          </span>
+                        ))}
                       </span>
-                    ))}</span>}
+                    )}
                   </button>
                 );
               }),
@@ -1106,7 +1170,7 @@ function Calendar({
         </div>
       </section>
 
-      <section className="dashboard-panel">
+      <section className="dashboard-panel upcoming-panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Schedule</p>
