@@ -1,0 +1,291 @@
+/* Final shared layout pass. Keep this import after feature styles. */
+:root {
+  --ui-space-1: 0.5rem;
+  --ui-space-2: 0.75rem;
+  --ui-space-3: 1rem;
+  --ui-space-4: 1.5rem;
+  --ui-space-5: 2rem;
+  --ui-control-height: 44px;
+  --ui-radius: 9px;
+  --ui-focus: color-mix(in srgb, var(--brand-accent, #0077b6) 22%, transparent);
+}
+
+/* Consistent, accessible controls across feature modules. */
+.primary-button,
+.secondary-button,
+.archive-button,
+.client-edit-button,
+.pet-edit-button,
+.history-clear-button,
+.history-approve-button,
+.history-danger-button,
+.history-secondary-button,
+.invoice-secondary-button,
+.invoice-danger-button,
+.invoice-refund-button,
+.billing-refresh {
+  display: inline-flex;
+  min-height: var(--ui-control-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-1);
+  padding: 0.65rem 1rem;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+/* Action groups need breathing room and must wrap before buttons collide. */
+:is(
+  .form-actions,
+  .record-actions,
+  .staff-form-actions,
+  .staff-card-actions,
+  .client-header-actions,
+  .boarding-card-actions,
+  .sitting-card-actions,
+  .visit-actions,
+  .report-actions,
+  .vaccination-actions,
+  .notification-actions,
+  .invoice-actions,
+  .invoice-payment-actions,
+  .invoice-refund-actions,
+  .standalone-actions,
+  .receipt-screen-actions,
+  .profile-photo-actions,
+  .client-migration-actions,
+  .trial-plan-actions
+) {
+  gap: var(--ui-space-2);
+}
+
+:is(
+  .form-actions,
+  .record-actions,
+  .client-header-actions,
+  .boarding-card-actions,
+  .sitting-card-actions,
+  .visit-actions,
+  .report-actions,
+  .vaccination-actions,
+  .notification-actions,
+  .invoice-actions,
+  .invoice-payment-actions,
+  .invoice-refund-actions,
+  .standalone-actions,
+  .receipt-screen-actions,
+  .client-migration-actions
+) {
+  flex-wrap: wrap;
+}
+
+/* Standard separation between page sections and cards. */
+.dashboard-header {
+  margin-bottom: var(--ui-space-4);
+}
+
+:is(
+  .client-form-panel,
+  .sitting-form-panel,
+  .report-form-panel,
+  .invoice-create-panel,
+  .invoice-list-panel,
+  .revenue-panel,
+  .subscription-panel,
+  .boarding-calendar-panel,
+  .pet-import-panel,
+  .client-migration-panel
+) {
+  margin-bottom: var(--ui-space-4);
+}
+
+:is(
+  .summary-grid,
+  .history-summary-grid,
+  .invoice-summary-grid,
+  .revenue-summary-grid,
+  .boarding-summary,
+  .sitting-overview
+) {
+  gap: var(--ui-space-3);
+  margin-bottom: var(--ui-space-4);
+}
+
+:is(
+  .pet-grid,
+  .staff-grid,
+  .service-grid,
+  .report-grid,
+  .boarding-grid,
+  .boarding-space-grid,
+  .sitting-grid,
+  .module-grid,
+  .plan-grid
+) {
+  gap: var(--ui-space-3);
+}
+
+.dashboard-panel {
+  min-width: 0;
+}
+
+:is(.panel-heading, .invoice-create-heading, .standalone-section-heading, .boarding-space-heading, .sitting-results-heading, .revenue-heading, .pet-import-heading, .client-migration-heading, .receipt-table-heading) {
+  gap: var(--ui-space-3);
+  margin-bottom: var(--ui-space-3);
+}
+
+/* Prevent native margins from creating uneven vertical rhythm. */
+:is(.dashboard-panel, .pet-card, .staff-card, .report-card, .boarding-card, .sitting-booking) > :first-child {
+  margin-top: 0;
+}
+
+:is(.dashboard-panel, .pet-card, .staff-card, .report-card, .boarding-card, .sitting-booking) > :last-child {
+  margin-bottom: 0;
+}
+
+/* Search, filter, and toolbar rows stay readable as their controls wrap. */
+:is(
+  .history-toolbar,
+  .invoice-toolbar,
+  .report-toolbar,
+  .earnings-toolbar,
+  .boarding-calendar-toolbar,
+  .boarding-controls,
+  .sitting-booking-controls
+) {
+  gap: var(--ui-space-3);
+}
+
+:is(.record-list-filter, .history-filter-tabs, .invoice-filter-tabs, .sitting-filter-tabs, .earnings-range) {
+  gap: var(--ui-space-1);
+}
+
+/* Form fields align consistently even when feature forms use different grids. */
+:is(
+  .client-form,
+  .appointment-form,
+  .staff-form-grid,
+  .settings-form-grid,
+  .boarding-form,
+  .sitting-form,
+  .report-form,
+  .vaccination-form,
+  .standalone-invoice-form,
+  .invoice-payment-form,
+  .invoice-refund-form
+) {
+  row-gap: var(--ui-space-3);
+  column-gap: var(--ui-space-4);
+}
+
+:is(
+  .client-form,
+  .appointment-form,
+  .staff-form,
+  .settings-form-grid,
+  .boarding-form,
+  .sitting-form,
+  .report-form,
+  .vaccination-form,
+  .standalone-invoice-form,
+  .invoice-payment-form,
+  .invoice-refund-form
+) :is(input:not([type="checkbox"]):not([type="radio"]), select) {
+  min-height: 46px;
+}
+
+textarea {
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .dashboard-main {
+    padding: 1.25rem 1rem 2rem !important;
+  }
+
+  .dashboard-header {
+    margin-bottom: 1.25rem;
+  }
+
+  .dashboard-panel,
+  .history-panel,
+  .invoice-create-panel,
+  .invoice-list-panel {
+    padding: 1rem !important;
+  }
+
+  :is(
+    .form-actions,
+    .record-actions,
+    .staff-form-actions,
+    .staff-card-actions,
+    .client-header-actions,
+    .boarding-card-actions,
+    .sitting-card-actions,
+    .visit-actions,
+    .report-actions,
+    .vaccination-actions,
+    .notification-actions,
+    .invoice-actions,
+    .invoice-payment-actions,
+    .invoice-refund-actions,
+    .standalone-actions,
+    .receipt-screen-actions,
+    .profile-photo-actions,
+    .client-migration-actions
+  ) > button,
+  :is(.form-actions, .client-header-actions, .receipt-screen-actions) > .primary-button,
+  :is(.form-actions, .client-header-actions, .receipt-screen-actions) > .secondary-button {
+    width: 100%;
+  }
+
+  :is(.invoice-create-heading, .standalone-section-heading, .boarding-space-heading, .sitting-results-heading, .revenue-heading, .pet-import-heading, .client-migration-heading, .receipt-table-heading) {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  :is(.history-filter-tabs, .invoice-filter-tabs, .record-list-filter) {
+    width: 100%;
+  }
+
+  :is(.history-filter-tabs, .invoice-filter-tabs, .record-list-filter) button {
+    min-height: 42px;
+  }
+}
+
+@media (max-width: 480px) {
+  :is(.summary-grid, .history-summary-grid, .invoice-summary-grid, .revenue-summary-grid) {
+    grid-template-columns: 1fr !important;
+  }
+
+  :is(.boarding-summary, .sitting-overview) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .auth-page {
+    padding: 1rem;
+  }
+
+  .auth-card {
+    padding: 1.5rem;
+  }
+}

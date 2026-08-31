@@ -913,8 +913,8 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
           {notificationLoading ? (
             <p>Loading notification settings…</p>
           ) : (
-            <div>
-              <p>
+            <div className="notification-preferences">
+              <p className="notification-device-status">
                 <strong>Device status: {pushStateLabel()}</strong>
               </p>
 
@@ -944,14 +944,16 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
                 pushState !== "enabled" &&
                 pushState !== "unsupported" &&
                 pushState !== "blocked" && (
-                  <button
-                    type="button"
-                    className="primary-button"
-                    disabled={pushChanging}
-                    onClick={() => void enablePushNotifications()}
-                  >
-                    {pushChanging ? "Enabling…" : "Enable on this device"}
-                  </button>
+                  <div className="notification-device-actions">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={pushChanging}
+                      onClick={() => void enablePushNotifications()}
+                    >
+                      {pushChanging ? "Enabling…" : "Enable on this device"}
+                    </button>
+                  </div>
                 )}
 
               {pushState === "blocked" && (
@@ -1104,16 +1106,18 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
               </div>
 
               {!readOnly && (
-                <button
-                  type="button"
-                  className="primary-button"
-                  disabled={notificationSaving}
-                  onClick={() => void saveNotificationSettings()}
-                >
-                  {notificationSaving
-                    ? "Saving…"
-                    : "Save notification preferences"}
-                </button>
+                <div className="notification-save-actions">
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={notificationSaving}
+                    onClick={() => void saveNotificationSettings()}
+                  >
+                    {notificationSaving
+                      ? "Saving…"
+                      : "Save notification preferences"}
+                  </button>
+                </div>
               )}
             </div>
           )}

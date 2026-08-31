@@ -8,6 +8,7 @@ import PlatformAdmin from "./components/PlatformAdmin";
 import SetPassword from "./components/SetPassword";
 import SubscriptionGate, { type SubscriptionAccess } from "./components/SubscriptionGate";
 import "./App.css";
+import "./UiPolish.css";
 
 type StaffProfile = {
   id: string;
