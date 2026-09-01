@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
+import ProfilePhoto from "./ProfilePhoto";
 import "./VeterinaryWorkspace.css";
 
 type Props = { businessId: string; readOnly?: boolean };
-type Pet = { id: number; PetName: string; species: string; PetBreed: string | null; PetDOB: string | null; PetWeight: number | null };
+type Pet = { id: number; PetName: string; species: string; PetBreed: string | null; PetDOB: string | null; PetWeight: number | null; profile_photo_path: string | null };
 type Client = { id: number; FirstName: string; LastName: string; PhoneNumber: string | null; EmailAddress: string | null };
 type ClientPet = { client_id: number; pet_id: number; is_primary: boolean };
 type Profile = { pet_id: number; sex: string | null; reproductive_status: string | null; color_markings: string | null; microchip_number: string | null; deceased_at: string | null };
@@ -64,7 +65,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const end = new Date(start); end.setDate(end.getDate() + 1);
     const [petResult, clientResult, linkResult, profileResult, alertResult, problemResult, encounterResult, amendmentResult, appointmentResult, serviceResult] = await Promise.all([
-      supabase.from("PET").select("id, PetName, species, PetBreed, PetDOB, PetWeight").eq("business_id", businessId).is("archived_at", null).order("PetName"),
+      supabase.from("PET").select("id, PetName, species, PetBreed, PetDOB, PetWeight, profile_photo_path").eq("business_id", businessId).is("archived_at", null).order("PetName"),
       supabase.from("CLIENT").select("id, FirstName, LastName, PhoneNumber, EmailAddress").eq("business_id", businessId).is("archived_at", null),
       supabase.from("client_pet").select("client_id, pet_id, is_primary"),
       supabase.from("vet_patient_profile").select("pet_id, sex, reproductive_status, color_markings, microchip_number, deceased_at").eq("business_id", businessId),
@@ -253,6 +254,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
       <main className="vet-chart">
         {!selectedPet ? <section className="dashboard-panel empty-state"><h3>No patient selected</h3><p>Add a pet or choose a chart to begin.</p></section> : <>
           <section className="dashboard-panel vet-chart-header">
+            <ProfilePhoto businessId={businessId} entity="pets" table="PET" recordId={selectedPet.id} photoPath={selectedPet.profile_photo_path} initials={selectedPet.PetName.slice(0, 1).toUpperCase()} label={selectedPet.PetName} compact />
             <div><p className="eyebrow">Patient chart</p><h2>{selectedPet.PetName}</h2><p>{[selectedPet.species, selectedPet.PetBreed, age(selectedPet)].filter(Boolean).join(" · ")}</p></div>
             <div><strong>{ownerFor(selectedPet.id) ? `${ownerFor(selectedPet.id)!.FirstName} ${ownerFor(selectedPet.id)!.LastName}` : "No owner linked"}</strong><span>{ownerFor(selectedPet.id)?.PhoneNumber ?? "No phone"}</span><span>{ownerFor(selectedPet.id)?.EmailAddress ?? "No email"}</span></div>
             <button className="secondary-button vet-print" onClick={() => window.print()}>Print chart</button>
