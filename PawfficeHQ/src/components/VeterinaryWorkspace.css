@@ -19,9 +19,10 @@
 .vet-patient-list button > b { align-items: center; background: #b33a3a; border-radius: 50%; color: white; display: flex; height: 22px; justify-content: center; width: 22px; }
 .vet-patient-avatar { align-items: center; background: #d9eeeb; border-radius: 50%; color: #175c59; display: flex; font-weight: 900; height: 38px; justify-content: center; }
 .vet-chart { display: grid; gap: 1rem; min-width: 0; }
-.vet-chart-header { align-items: center; display: grid; gap: 1rem; grid-template-columns: 1fr auto auto; }
+.vet-chart-header { align-items: center; display: grid; gap: 1rem; grid-template-columns: auto 1fr auto auto; }
+.vet-chart-header .profile-photo-control.compact .profile-photo-frame { height: 78px; width: 78px; }
 .vet-chart-header h2 { margin: .1rem 0; }
-.vet-chart-header > div:nth-child(2) span { color: #71818d; display: block; font-size: .85rem; }
+.vet-chart-header > div:nth-child(3) span { color: #71818d; display: block; font-size: .85rem; }
 .vet-alert-strip { display: grid; gap: .5rem; }
 .vet-alert-strip article { align-items: center; border-left: 5px solid #d5942b; border-radius: 10px; display: flex; justify-content: space-between; padding: .7rem 1rem; }
 .vet-alert-strip article.critical { background: #fff0f0; border-color: #b93636; }
@@ -81,12 +82,34 @@
   .vet-vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vet-today-list article { grid-template-columns: 70px 1fr; }
   .vet-today-list article > span, .vet-today-list article > button { justify-self: start; }
-  .vet-chart-header { grid-template-columns: 1fr; }
+  .vet-chart-header { grid-template-columns: auto 1fr; }
+  .vet-chart-header > div:nth-child(3), .vet-chart-header .vet-print { grid-column: 1 / -1; }
   .vet-print { justify-self: start; }
   .vet-encounter-card > header { display: grid; }
 }
 @media print {
-  .vet-patient-list, .vet-summary, .vet-today, .vet-header button, .vet-print, .vet-record-actions, .vet-mini-form, .vet-profile-form button { display: none !important; }
-  .vet-workspace { display: block; }
-  .vet-chart { width: 100%; }
+  body:has(.vet-chart) * { visibility: hidden !important; }
+  body:has(.vet-chart) .vet-chart,
+  body:has(.vet-chart) .vet-chart * { visibility: visible !important; }
+  body:has(.vet-chart) .vet-chart { position: absolute; inset: 0; display: block; width: 100%; color: #111; }
+  body:has(.vet-chart) .vet-patient-list,
+  body:has(.vet-chart) .vet-summary,
+  body:has(.vet-chart) .vet-today,
+  body:has(.vet-chart) .vet-header,
+  body:has(.vet-chart) .vet-print,
+  body:has(.vet-chart) .vet-record-actions,
+  body:has(.vet-chart) .vet-mini-form,
+  body:has(.vet-chart) .vet-profile-form button,
+  body:has(.vet-chart) .vet-amendment-form { display: none !important; }
+  body:has(.vet-chart) .vet-chart > * { break-inside: avoid; margin-bottom: 12px; box-shadow: none; }
+  body:has(.vet-chart) .vet-encounter-card { break-inside: avoid; }
+  body:has(.vet-chart) details:not([open]) > :not(summary) { display: grid !important; }
+  body:has(.vet-chart) .vet-profile-form { display: grid !important; }
+  body:has(.vet-chart) input,
+  body:has(.vet-chart) select,
+  body:has(.vet-chart) textarea { border: 0; padding: 2px 0; color: #111; background: transparent; }
+  body:has(.vet-chart) .vet-chart-header { grid-template-columns: auto 1fr auto; }
+  body:has(.vet-chart) .vet-chart-header .profile-photo-frame { height: 90px; width: 90px; }
+  body:has(.vet-chart) .vet-chart-header .profile-photo-frame img { display: block; height: 100%; object-fit: cover; width: 100%; }
+  @page { margin: .45in; }
 }
