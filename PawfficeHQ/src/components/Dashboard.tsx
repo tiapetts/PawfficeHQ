@@ -10,6 +10,7 @@ import Staff from "./Staff";
 import Settings from "./Settings";
 import Billing from "./Billing";
 import Vaccinations, { vaccinationState } from "./Vaccinations";
+import VeterinaryWorkspace from "./VeterinaryWorkspace";
 import RevenueOverview from "./RevenueOverview";
 import ReportCards from "./ReportCards";
 import ModuleWorkspace from "./ModuleWorkspace";
@@ -474,6 +475,8 @@ function Dashboard({
           <BoardingCalendar businessId={businessId} onNewReservation={(date) => {setBoardingDraftDate(date);openPage("boarding_daycare_module")}} />
         ) : activePage === "boarding_services" ? (
           <BoardingServices businessId={businessId} readOnly={readOnly} />
+        ) : activePage === "veterinary_module" ? (
+          <VeterinaryWorkspace businessId={businessId} readOnly={readOnly} />
         ) : activePage.endsWith("_module") ? (
           <ModuleWorkspace moduleKey={activePage.replace("_module","") as "grooming"|"pet_sitting"|"boarding_daycare"|"veterinary"} />
         ) : activePage === "services" ? (
