@@ -55,6 +55,7 @@
 .vet-encounter-card h3 { margin: .4rem 0 .2rem; text-transform: capitalize; }
 .vet-encounter-card header p { color: #71818d; margin: 0; }
 .vet-record-actions { display: flex; gap: .5rem; }
+.vet-record-actions { flex-wrap: wrap; justify-content: flex-end; }
 .vet-record-status.finalized, .vet-record-status.amended { background: #dff3ed; color: #206957; }
 .vet-vital-readout { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
 .vet-vital-readout span { background: #f2f6f8; border-radius: 8px; color: #61717b; padding: .45rem .6rem; }
@@ -64,6 +65,18 @@
 .vet-soap-readout section > b { color: #197369; display: block; margin-bottom: .3rem; }
 .vet-diagnoses { display: flex; flex-wrap: wrap; gap: .4rem; margin: .8rem 0; }
 .vet-diagnoses span { background: #e9f3ff; border-radius: 999px; color: #245f87; padding: .35rem .65rem; }
+.vet-care-delivered { border-top: 1px solid #dfe8ec; margin-top: .9rem; padding-top: .8rem; }
+.vet-care-delivered > strong { color: #254e60; display: block; margin-bottom: .55rem; }
+.vet-care-delivered > div { display: grid; gap: .5rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.vet-care-delivered article { background: #f2faf7; border: 1px solid #d4e9e2; border-radius: 9px; padding: .65rem .75rem; }
+.vet-care-delivered.vaccines article { background: #f2f8ff; border-color: #d6e5f3; }
+.vet-care-delivered article > div { align-items: start; display: flex; gap: .5rem; justify-content: space-between; }
+.vet-care-delivered article span { color: #687987; font-size: .75rem; text-transform: capitalize; }
+.vet-care-delivered article p { color: #465f6c; margin: .25rem 0 0; }
+.vet-care-delivered article small { color: #687987; display: block; margin-top: .25rem; }
+.vet-clinical-entry-form { background: #f7fbfc; border: 1px solid #cfe0e7; border-radius: 12px; margin-top: 1rem; padding: 1rem; }
+.vet-clinical-entry-form .panel-heading h4 { margin: .15rem 0 0; }
+.vet-clinical-entry-form .panel-heading > button { background: transparent; border: 0; color: #526d7a; cursor: pointer; font-size: 1.5rem; }
 .vet-instructions, .vet-amendment { background: #f7fafb; border-radius: 10px; margin-top: .8rem; padding: .8rem; }
 .vet-amendment { border-left: 4px solid #4d8b7e; display: grid; gap: .25rem; }
 .vet-amendment span { color: #6b7b85; font-size: .82rem; }
@@ -86,6 +99,8 @@
   .vet-chart-header > div:nth-child(3), .vet-chart-header .vet-print { grid-column: 1 / -1; }
   .vet-print { justify-self: start; }
   .vet-encounter-card > header { display: grid; }
+  .vet-record-actions { justify-content: flex-start; }
+  .vet-care-delivered > div { grid-template-columns: 1fr; }
 }
 @media print {
   body:has(.vet-chart) * { visibility: hidden !important; }
@@ -100,7 +115,8 @@
   body:has(.vet-chart) .vet-record-actions,
   body:has(.vet-chart) .vet-mini-form,
   body:has(.vet-chart) .vet-profile-form button,
-  body:has(.vet-chart) .vet-amendment-form { display: none !important; }
+  body:has(.vet-chart) .vet-amendment-form,
+  body:has(.vet-chart) .vet-clinical-entry-form { display: none !important; }
   body:has(.vet-chart) .vet-chart > * { break-inside: avoid; margin-bottom: 12px; box-shadow: none; }
   body:has(.vet-chart) .vet-encounter-card { break-inside: avoid; }
   body:has(.vet-chart) details:not([open]) > :not(summary) { display: grid !important; }
