@@ -74,6 +74,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [summaryView, setSummaryView] = useState<"today"|"drafts"|"alerts"|"followups"|null>(null);
   const [renderedAt] = useState(() => Date.now());
 
   async function loadData(preferredPetId?: number | null) {
@@ -159,8 +160,9 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
   const selectedProblems = problems.filter((problem) => problem.pet_id === selectedPetId);
   const selectedEncounters = encounters.filter((encounter) => encounter.pet_id === selectedPetId && encounter.status !== "entered_in_error");
   const selectedErrorEncounters = encounters.filter((encounter) => encounter.pet_id === selectedPetId && encounter.status === "entered_in_error");
-  const draftCount = encounters.filter((encounter) => encounter.status === "draft").length;
-  const followUps = encounters.filter((encounter) => encounter.follow_up_on && encounter.follow_up_on >= new Date().toISOString().slice(0, 10)).length;
+  const draftEncounters = encounters.filter((encounter) => encounter.status === "draft");
+  const activeAlerts = alerts.filter((alert) => alert.is_active);
+  const followUpEncounters = encounters.filter((encounter) => encounter.status !== "entered_in_error" && encounter.follow_up_on && encounter.follow_up_on >= new Date().toISOString().slice(0, 10));
 
   function ownerFor(petId: number) {
     const link = clientPets.find((item) => item.pet_id === petId && item.is_primary) ?? clientPets.find((item) => item.pet_id === petId);
@@ -180,6 +182,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
     const profile = profiles.find((item) => item.pet_id === petId);
     setProfileForm(profile ? { sex: profile.sex ?? "unknown", reproductive_status: profile.reproductive_status ?? "unknown", color_markings: profile.color_markings ?? "", microchip_number: profile.microchip_number ?? "" } : blankProfile);
   }
+  function openSummaryRecord(petId:number, encounterId?:string){choosePet(petId);requestAnimationFrame(()=>requestAnimationFrame(()=>document.getElementById(encounterId?`vet-encounter-${encounterId}`:"vet-chart-header")?.scrollIntoView({behavior:"smooth",block:"start"})))}
   function startEncounter(appointment?: Appointment, appointmentPet?: Pet) {
     const pet = appointmentPet ?? selectedPet;
     if (!pet) return;
@@ -324,11 +327,17 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
     <header className="dashboard-header vet-header"><div><p className="eyebrow">Veterinary module</p><h2>Clinical workspace</h2><p>Today&apos;s patients, SOAP encounters, and protected medical records.</p></div>{!readOnly && selectedPet && <button className="primary-button" onClick={() => startEncounter()}>+ New encounter</button>}</header>
     {message && <p className={message.toLowerCase().includes("saved") || message.toLowerCase().includes("finalized") || message.toLowerCase().includes("added") ? "pet-success" : "error-message"} role="status">{message}</p>}
     <section className="vet-summary">
-      <article><span>Veterinary patients today</span><strong>{todayPatientCount}</strong><small>One chart row per scheduled pet</small></article>
-      <article><span>Open drafts</span><strong>{draftCount}</strong><small>Notes waiting for finalization</small></article>
-      <article><span>Active alerts</span><strong>{alerts.filter((item) => item.is_active).length}</strong><small>Allergies, handling, and medical</small></article>
-      <article><span>Upcoming follow-ups</span><strong>{followUps}</strong><small>Rechecks and recommended care</small></article>
+      <button type="button" disabled={todayPatientCount===0} aria-pressed={summaryView==="today"} onClick={()=>setSummaryView(current=>current==="today"?null:"today")}><span>Veterinary patients today</span><strong>{todayPatientCount}</strong><small>View scheduled patient charts</small></button>
+      <button type="button" disabled={draftEncounters.length===0} aria-pressed={summaryView==="drafts"} onClick={()=>setSummaryView(current=>current==="drafts"?null:"drafts")}><span>Open drafts</span><strong>{draftEncounters.length}</strong><small>Open notes waiting for finalization</small></button>
+      <button type="button" disabled={activeAlerts.length===0} aria-pressed={summaryView==="alerts"} onClick={()=>setSummaryView(current=>current==="alerts"?null:"alerts")}><span>Active alerts</span><strong>{activeAlerts.length}</strong><small>Find allergies, handling, and medical alerts</small></button>
+      <button type="button" disabled={followUpEncounters.length===0} aria-pressed={summaryView==="followups"} onClick={()=>setSummaryView(current=>current==="followups"?null:"followups")}><span>Upcoming follow-ups</span><strong>{followUpEncounters.length}</strong><small>Open rechecks and recommended care</small></button>
     </section>
+    {summaryView&&<section className="dashboard-panel vet-summary-results"><div className="panel-heading"><div><p className="eyebrow">Quick access</p><h3>{summaryView==="today"?"Veterinary patients today":summaryView==="drafts"?"Open encounter drafts":summaryView==="alerts"?"Active medical alerts":"Upcoming follow-ups"}</h3></div><button className="secondary-button" onClick={()=>setSummaryView(null)}>Close</button></div><div>
+      {summaryView==="today"&&todayAppointments.flatMap(appointment=>petsForAppointment(appointment.id).map(pet=><button key={`${appointment.id}-${pet.id}`} onClick={()=>openSummaryRecord(pet.id)}><span><strong>{pet.PetName}</strong><small>{ownerFor(pet.id)?`${ownerFor(pet.id)!.FirstName} ${ownerFor(pet.id)!.LastName}`:"No owner linked"}</small></span><b>{new Date(appointment.start_at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</b></button>))}
+      {summaryView==="drafts"&&draftEncounters.map(encounter=>{const pet=pets.find(item=>item.id===encounter.pet_id);return <button key={encounter.id} onClick={()=>openSummaryRecord(encounter.pet_id,encounter.id)}><span><strong>{pet?.PetName??"Patient"}</strong><small>{encounter.chief_complaint??encounter.visit_type.replaceAll("_"," ")}</small></span><b>Open draft</b></button>})}
+      {summaryView==="alerts"&&activeAlerts.map(alert=>{const pet=pets.find(item=>item.id===alert.pet_id);return <button key={alert.id} onClick={()=>openSummaryRecord(alert.pet_id)}><span><strong>{pet?.PetName??"Patient"}</strong><small>{alert.alert_type}: {alert.description}</small></span><b>{alert.severity}</b></button>})}
+      {summaryView==="followups"&&followUpEncounters.map(encounter=>{const pet=pets.find(item=>item.id===encounter.pet_id);return <button key={encounter.id} onClick={()=>openSummaryRecord(encounter.pet_id,encounter.id)}><span><strong>{pet?.PetName??"Patient"}</strong><small>{encounter.chief_complaint??encounter.visit_type.replaceAll("_"," ")}</small></span><b>{new Date(encounter.follow_up_on!+"T00:00:00").toLocaleDateString()}</b></button>})}
+    </div></section>}
 
     <section className="dashboard-panel vet-today">
       <div className="panel-heading"><div><p className="eyebrow">Clinical board</p><h3>Today&apos;s patients</h3></div><span>{todayPatientCount} scheduled</span></div>
@@ -349,7 +358,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
 
       <main className="vet-chart">
         {!selectedPet ? <section className="dashboard-panel empty-state"><h3>No patient selected</h3><p>Add a pet or choose a chart to begin.</p></section> : <>
-          <section className="dashboard-panel vet-chart-header">
+          <section className="dashboard-panel vet-chart-header" id="vet-chart-header">
             <ProfilePhoto businessId={businessId} entity="pets" table="PET" recordId={selectedPet.id} photoPath={selectedPet.profile_photo_path} initials={selectedPet.PetName.slice(0, 1).toUpperCase()} label={selectedPet.PetName} compact />
             <div><p className="eyebrow">Patient chart</p><h2>{selectedPet.PetName}</h2><p>{[selectedPet.species, selectedPet.PetBreed, age(selectedPet)].filter(Boolean).join(" · ")}</p></div>
             <div><strong>{ownerFor(selectedPet.id) ? `${ownerFor(selectedPet.id)!.FirstName} ${ownerFor(selectedPet.id)!.LastName}` : "No owner linked"}</strong><span>{ownerFor(selectedPet.id)?.PhoneNumber ?? "No phone"}</span><span>{ownerFor(selectedPet.id)?.EmailAddress ?? "No email"}</span></div>
@@ -397,7 +406,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
 
           <section className="dashboard-panel vet-history">
             <div className="panel-heading"><div><p className="eyebrow">Medical timeline</p><h3>Clinical encounters</h3></div><strong>{selectedEncounters.length} records</strong></div>
-            {selectedEncounters.length === 0 ? <div className="empty-state"><h3>No encounters yet</h3><p>Start the first clinical record for {selectedPet.PetName}.</p></div> : selectedEncounters.map((encounter) => <article className={`vet-encounter-card ${encounter.status}`} key={encounter.id}>
+            {selectedEncounters.length === 0 ? <div className="empty-state"><h3>No encounters yet</h3><p>Start the first clinical record for {selectedPet.PetName}.</p></div> : selectedEncounters.map((encounter) => <article className={`vet-encounter-card ${encounter.status}`} id={`vet-encounter-${encounter.id}`} key={encounter.id}>
               <header><div><span className={`vet-record-status ${encounter.status}`}>{encounter.status}</span><h3>{encounter.visit_type.replaceAll("_", " ")}</h3><p>{new Date(encounter.created_at).toLocaleString()} {encounter.chief_complaint ? `· ${encounter.chief_complaint}` : ""}</p></div><div className="vet-record-actions">
                 {encounter.status !== "entered_in_error" && <button className="secondary-button" onClick={() => printClientInstructions(encounter)}>Take-home instructions</button>}
                 {encounter.status === "draft" && !readOnly && <>
