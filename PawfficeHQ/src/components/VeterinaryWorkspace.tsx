@@ -156,7 +156,8 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
   const selectedProfile = profiles.find((profile) => profile.pet_id === selectedPetId);
   const selectedAlerts = alerts.filter((alert) => alert.pet_id === selectedPetId && alert.is_active);
   const selectedProblems = problems.filter((problem) => problem.pet_id === selectedPetId);
-  const selectedEncounters = encounters.filter((encounter) => encounter.pet_id === selectedPetId);
+  const selectedEncounters = encounters.filter((encounter) => encounter.pet_id === selectedPetId && encounter.status !== "entered_in_error");
+  const selectedErrorEncounters = encounters.filter((encounter) => encounter.pet_id === selectedPetId && encounter.status === "entered_in_error");
   const draftCount = encounters.filter((encounter) => encounter.status === "draft").length;
   const followUps = encounters.filter((encounter) => encounter.follow_up_on && encounter.follow_up_on >= new Date().toISOString().slice(0, 10)).length;
 
@@ -419,6 +420,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
               {amendmentFor === encounter.id && <form className="vet-amendment-form" onSubmit={addAmendment}><label>Reason<input required value={amendmentForm.reason} onChange={(event) => setAmendmentForm({ ...amendmentForm, reason: event.target.value })} placeholder="Why is this amendment necessary?" /></label><label>Amendment<textarea required rows={4} value={amendmentForm.text} onChange={(event) => setAmendmentForm({ ...amendmentForm, text: event.target.value })} /></label><div><button type="button" className="secondary-button" onClick={() => setAmendmentFor(null)}>Cancel</button><button className="primary-button" disabled={saving}>Save amendment</button></div></form>}
             </article>)}
           </section>
+          {selectedErrorEncounters.length > 0 && <details className="dashboard-panel vet-error-history"><summary>{selectedErrorEncounters.length} corrected record{selectedErrorEncounters.length === 1 ? "" : "s"} retained for audit</summary><p>These records are excluded from this patient&apos;s medical timeline and printed chart.</p>{selectedErrorEncounters.map((encounter) => <article key={encounter.id}><strong>Entered in error {encounter.entered_in_error_at ? new Date(encounter.entered_in_error_at).toLocaleString() : ""}</strong><span>{encounter.entered_in_error_reason}</span></article>)}</details>}
         </>}
       </main>
     </div>

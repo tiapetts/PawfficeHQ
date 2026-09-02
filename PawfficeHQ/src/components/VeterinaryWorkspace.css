@@ -67,6 +67,10 @@
 .vet-correction-form label { display: grid; gap: .35rem; }
 .vet-correction-form > div:last-child { display: flex; gap: .5rem; justify-content: flex-end; }
 .vet-encounter-patient { background: #eaf7f7; border-left: 4px solid #00b4d8; margin: .65rem 0 0; padding: .55rem .7rem; }
+.vet-error-history { border-color: #e4c7c7; color: #6f3a3a; }
+.vet-error-history summary { cursor: pointer; font-weight: 800; }
+.vet-error-history > p { color: #765f5f; }
+.vet-error-history article { border-top: 1px solid #ead6d6; display: grid; gap: .25rem; padding: .65rem 0; }
 .vet-vital-readout { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
 .vet-vital-readout span { background: #f2f6f8; border-radius: 8px; color: #61717b; padding: .45rem .6rem; }
 .vet-vital-readout b { color: #193f53; }
@@ -127,7 +131,8 @@
   body:has(.vet-chart) .vet-profile-form button,
   body:has(.vet-chart) .vet-amendment-form,
   body:has(.vet-chart) .vet-clinical-entry-form,
-  body:has(.vet-chart) .vet-correction-form { display: none !important; }
+  body:has(.vet-chart) .vet-correction-form,
+  body:has(.vet-chart) .vet-error-history { display: none !important; }
   body:has(.vet-chart) .vet-chart > * { break-inside: avoid; margin-bottom: 12px; box-shadow: none; }
   body:has(.vet-chart) .vet-encounter-card { break-inside: avoid; }
   body:has(.vet-chart) details:not([open]) > :not(summary) { display: grid !important; }
