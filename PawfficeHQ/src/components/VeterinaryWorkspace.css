@@ -51,12 +51,22 @@
 .vet-history { display: grid; gap: .9rem; }
 .vet-encounter-card { border: 1px solid #dce6eb; border-left: 5px solid #d8a23b; border-radius: 12px; padding: 1rem; }
 .vet-encounter-card.finalized, .vet-encounter-card.amended { border-left-color: #30816f; }
+.vet-encounter-card.entered_in_error { border-left-color: #b43c3c; background: #fffafa; }
 .vet-encounter-card > header { align-items: start; display: flex; gap: 1rem; justify-content: space-between; }
 .vet-encounter-card h3 { margin: .4rem 0 .2rem; text-transform: capitalize; }
 .vet-encounter-card header p { color: #71818d; margin: 0; }
 .vet-record-actions { display: flex; gap: .5rem; }
 .vet-record-actions { flex-wrap: wrap; justify-content: flex-end; }
 .vet-record-status.finalized, .vet-record-status.amended { background: #dff3ed; color: #206957; }
+.vet-record-status.entered_in_error { background: #fde5e5; color: #9b2525; }
+.correction-button { border-color: #c77777; color: #8c2929; }
+.vet-entered-in-error { background: #fdecec; border: 1px solid #efbaba; border-radius: 10px; color: #7e2424; margin: .8rem 0; padding: .8rem; }
+.vet-entered-in-error p { margin: .3rem 0; }
+.vet-correction-form { background: #fff8f2; border: 1px solid #e5c3a9; border-radius: 12px; display: grid; gap: .75rem; margin-top: 1rem; padding: 1rem; }
+.vet-correction-form h4, .vet-correction-form p { margin: .2rem 0; }
+.vet-correction-form label { display: grid; gap: .35rem; }
+.vet-correction-form > div:last-child { display: flex; gap: .5rem; justify-content: flex-end; }
+.vet-encounter-patient { background: #eaf7f7; border-left: 4px solid #00b4d8; margin: .65rem 0 0; padding: .55rem .7rem; }
 .vet-vital-readout { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0; }
 .vet-vital-readout span { background: #f2f6f8; border-radius: 8px; color: #61717b; padding: .45rem .6rem; }
 .vet-vital-readout b { color: #193f53; }
@@ -116,7 +126,8 @@
   body:has(.vet-chart) .vet-mini-form,
   body:has(.vet-chart) .vet-profile-form button,
   body:has(.vet-chart) .vet-amendment-form,
-  body:has(.vet-chart) .vet-clinical-entry-form { display: none !important; }
+  body:has(.vet-chart) .vet-clinical-entry-form,
+  body:has(.vet-chart) .vet-correction-form { display: none !important; }
   body:has(.vet-chart) .vet-chart > * { break-inside: avoid; margin-bottom: 12px; box-shadow: none; }
   body:has(.vet-chart) .vet-encounter-card { break-inside: avoid; }
   body:has(.vet-chart) details:not([open]) > :not(summary) { display: grid !important; }

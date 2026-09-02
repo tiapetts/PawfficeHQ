@@ -15,7 +15,7 @@ type Encounter = {
   subjective: string | null; objective: string | null; assessment: string | null; plan: string | null; client_instructions: string | null;
   weight_kg: number | null; temperature_f: number | null; pulse_bpm: number | null; respiration_bpm: number | null;
   body_condition_score: number | null; pain_score: number | null; diagnoses: string[]; follow_up_on: string | null;
-  created_at: string; finalized_at: string | null;
+  created_at: string; finalized_at: string | null; entered_in_error_reason: string | null; entered_in_error_at: string | null; corrected_encounter_id: string | null;
 };
 type Amendment = { id: string; encounter_id: string; amendment_text: string; reason: string; created_at: string };
 type Appointment = { id: string; client_id: number; start_at: string; end_at: string; status: string };
@@ -34,7 +34,7 @@ const blankEncounter = {
 const blankProfile = { sex: "unknown", reproductive_status: "unknown", color_markings: "", microchip_number: "" };
 const blankTreatment = { treatment_type: "treatment", name: "", dose: "", route: "", administration_site: "", quantity: "", notes: "" };
 const blankVaccine = { requirement_id: "", vaccine_name: "", administered_on: new Date().toISOString().slice(0, 10), expires_on: "", provider: "", lot_number: "", administration_site: "" };
-const encounterColumns = "id, pet_id, appointment_id, visit_type, chief_complaint, status, subjective, objective, assessment, plan, client_instructions, weight_kg, temperature_f, pulse_bpm, respiration_bpm, body_condition_score, pain_score, diagnoses, follow_up_on, created_at, finalized_at";
+const encounterColumns = "id, pet_id, appointment_id, visit_type, chief_complaint, status, subjective, objective, assessment, plan, client_instructions, weight_kg, temperature_f, pulse_bpm, respiration_bpm, body_condition_score, pain_score, diagnoses, follow_up_on, created_at, finalized_at, entered_in_error_reason, entered_in_error_at, corrected_encounter_id";
 
 export default function VeterinaryWorkspace({ businessId, readOnly = false }: Props) {
   const [pets, setPets] = useState<Pet[]>([]);
@@ -59,6 +59,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
   const [alertForm, setAlertForm] = useState({ alert_type: "allergy", severity: "important", description: "" });
   const [problemForm, setProblemForm] = useState({ name: "", onset_on: "", notes: "" });
   const [encounterForm, setEncounterForm] = useState(blankEncounter);
+  const [encounterPetId, setEncounterPetId] = useState<number | null>(null);
   const [editingEncounterId, setEditingEncounterId] = useState<string | null>(null);
   const [amendmentFor, setAmendmentFor] = useState<string | null>(null);
   const [amendmentForm, setAmendmentForm] = useState({ reason: "", text: "" });
@@ -67,6 +68,8 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
   const [treatmentForm, setTreatmentForm] = useState(blankTreatment);
   const [vaccineFor, setVaccineFor] = useState<string | null>(null);
   const [vaccineForm, setVaccineForm] = useState(blankVaccine);
+  const [correctionFor, setCorrectionFor] = useState<string | null>(null);
+  const [correctionForm, setCorrectionForm] = useState({ pet_id: "", reason: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -148,6 +151,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
   }, [pets, clients, clientPets, search]);
   const veterinaryServiceIds = useMemo(() => new Set(services.filter((service) => service.category.toLowerCase() === "veterinary").map((service) => service.id)), [services]);
   const todayAppointments = useMemo(() => appointments.filter((appointment) => appointmentServices.some((link) => link.appointment_id === appointment.id && veterinaryServiceIds.has(link.service_id))), [appointments, appointmentServices, veterinaryServiceIds]);
+  const todayPatientCount = todayAppointments.reduce((total, appointment) => total + Math.max(1, appointmentPets.filter((link) => link.appointment_id === appointment.id).length), 0);
   const selectedPet = pets.find((pet) => pet.id === selectedPetId) ?? null;
   const selectedProfile = profiles.find((profile) => profile.pet_id === selectedPetId);
   const selectedAlerts = alerts.filter((alert) => alert.pet_id === selectedPetId && alert.is_active);
@@ -160,9 +164,9 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
     const link = clientPets.find((item) => item.pet_id === petId && item.is_primary) ?? clientPets.find((item) => item.pet_id === petId);
     return clients.find((client) => client.id === link?.client_id);
   }
-  function petForAppointment(appointmentId: string) {
-    const link = appointmentPets.find((item) => item.appointment_id === appointmentId);
-    return pets.find((pet) => pet.id === link?.pet_id);
+  function petsForAppointment(appointmentId: string) {
+    const petIds = appointmentPets.filter((item) => item.appointment_id === appointmentId).map((item) => item.pet_id);
+    return pets.filter((pet) => petIds.includes(pet.id));
   }
   function age(pet: Pet) {
     if (!pet.PetDOB) return "Age unknown";
@@ -174,15 +178,15 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
     const profile = profiles.find((item) => item.pet_id === petId);
     setProfileForm(profile ? { sex: profile.sex ?? "unknown", reproductive_status: profile.reproductive_status ?? "unknown", color_markings: profile.color_markings ?? "", microchip_number: profile.microchip_number ?? "" } : blankProfile);
   }
-  function startEncounter(appointment?: Appointment) {
-    const pet = appointment ? petForAppointment(appointment.id) : selectedPet;
+  function startEncounter(appointment?: Appointment, appointmentPet?: Pet) {
+    const pet = appointmentPet ?? selectedPet;
     if (!pet) return;
     choosePet(pet.id); setEncounterForm({ ...blankEncounter, appointment_id: appointment?.id ?? "", weight_kg: pet.PetWeight ? String((Number(pet.PetWeight) * 0.453592).toFixed(2)) : "" });
-    setEditingEncounterId(null); setShowEncounterForm(true);
+    setEncounterPetId(pet.id); setEditingEncounterId(null); setShowEncounterForm(true);
   }
   function editEncounter(encounter: Encounter) {
     if (encounter.status !== "draft") return;
-    setEditingEncounterId(encounter.id); setShowEncounterForm(true);
+    choosePet(encounter.pet_id); setEncounterPetId(encounter.pet_id); setEditingEncounterId(encounter.id); setShowEncounterForm(true);
     setEncounterForm({
       visit_type: encounter.visit_type, chief_complaint: encounter.chief_complaint ?? "", subjective: encounter.subjective ?? "", objective: encounter.objective ?? "",
       assessment: encounter.assessment ?? "", plan: encounter.plan ?? "", client_instructions: encounter.client_instructions ?? "",
@@ -218,9 +222,9 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
     if (error) setMessage(error.message); else await loadData(selectedPetId);
   }
   async function saveEncounter(event: FormEvent) {
-    event.preventDefault(); if (!selectedPetId) return; setSaving(true); setMessage("");
+    event.preventDefault(); if (!encounterPetId) return; setSaving(true); setMessage("");
     const payload = {
-      business_id: businessId, pet_id: selectedPetId, appointment_id: encounterForm.appointment_id || null, visit_type: encounterForm.visit_type,
+      business_id: businessId, pet_id: encounterPetId, appointment_id: encounterForm.appointment_id || null, visit_type: encounterForm.visit_type,
       chief_complaint: encounterForm.chief_complaint.trim() || null, subjective: encounterForm.subjective.trim() || null, objective: encounterForm.objective.trim() || null,
       assessment: encounterForm.assessment.trim() || null, plan: encounterForm.plan.trim() || null, client_instructions: encounterForm.client_instructions.trim() || null,
       weight_kg: numberOrNull(encounterForm.weight_kg), temperature_f: numberOrNull(encounterForm.temperature_f), pulse_bpm: numberOrNull(encounterForm.pulse_bpm),
@@ -231,7 +235,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
       ? await supabase.from("vet_encounter").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", editingEncounterId).eq("business_id", businessId)
       : await supabase.from("vet_encounter").insert(payload);
     setSaving(false); if (result.error) return setMessage(result.error.message);
-    setShowEncounterForm(false); setEditingEncounterId(null); setEncounterForm(blankEncounter); setMessage("Clinical encounter saved as a draft."); await loadData(selectedPetId);
+    setShowEncounterForm(false); setEditingEncounterId(null); setEncounterPetId(null); setEncounterForm(blankEncounter); setMessage("Clinical encounter saved as a draft."); await loadData(encounterPetId);
   }
   async function finalizeEncounter(encounter: Encounter) {
     if (!window.confirm("Finalize this medical record? The original note will become read-only and future changes must be added as amendments.")) return;
@@ -244,12 +248,30 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
     setSaving(false); if (error) return setMessage(error.message); setAmendmentFor(null); setAmendmentForm({ reason: "", text: "" }); setMessage("Amendment added without changing the original note."); await loadData(selectedPetId);
   }
 
+  async function correctEncounterPatient(event: FormEvent) {
+    event.preventDefault();
+    if (!correctionFor || !correctionForm.pet_id) return;
+    const correctPetId = Number(correctionForm.pet_id);
+    setSaving(true); setMessage("");
+    const { error } = await supabase.rpc("correct_vet_encounter_patient", {
+      p_encounter_id: correctionFor,
+      p_correct_pet_id: correctPetId,
+      p_reason: correctionForm.reason.trim(),
+    });
+    setSaving(false);
+    if (error) return setMessage(error.message);
+    setCorrectionFor(null); setCorrectionForm({ pet_id: "", reason: "" });
+    setMessage("Original record marked entered in error. A reviewable draft was created under the correct patient.");
+    await loadData(correctPetId);
+  }
+
   async function addTreatment(event: FormEvent) {
     event.preventDefault();
-    if (!treatmentFor || !selectedPetId) return;
+    const encounter = encounters.find((item) => item.id === treatmentFor);
+    if (!treatmentFor || !encounter) return;
     setSaving(true); setMessage("");
     const { error } = await supabase.from("vet_treatment").insert({
-      business_id: businessId, pet_id: selectedPetId, encounter_id: treatmentFor,
+      business_id: businessId, pet_id: encounter.pet_id, encounter_id: treatmentFor,
       treatment_type: treatmentForm.treatment_type, name: treatmentForm.name.trim(),
       dose: treatmentForm.dose.trim() || null, route: treatmentForm.route.trim() || null,
       administration_site: treatmentForm.administration_site.trim() || null,
@@ -257,16 +279,17 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
     });
     setSaving(false);
     if (error) return setMessage(error.message);
-    setTreatmentFor(null); setTreatmentForm(blankTreatment); setMessage("Treatment added to the encounter."); await loadData(selectedPetId);
+    setTreatmentFor(null); setTreatmentForm(blankTreatment); setMessage("Treatment added to the encounter."); await loadData(encounter.pet_id);
   }
 
   async function addAdministeredVaccine(event: FormEvent) {
     event.preventDefault();
-    if (!vaccineFor || !selectedPetId) return;
+    const encounter = encounters.find((item) => item.id === vaccineFor);
+    if (!vaccineFor || !encounter) return;
     const requirement = vaccineRequirements.find((item) => item.id === vaccineForm.requirement_id);
     setSaving(true); setMessage("");
     const { error } = await supabase.from("pet_vaccination").insert({
-      business_id: businessId, pet_id: selectedPetId, encounter_id: vaccineFor,
+      business_id: businessId, pet_id: encounter.pet_id, encounter_id: vaccineFor,
       requirement_id: vaccineForm.requirement_id || null,
       vaccine_name: requirement?.name ?? vaccineForm.vaccine_name.trim(),
       administered_on: vaccineForm.administered_on, expires_on: vaccineForm.expires_on,
@@ -277,7 +300,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
     });
     setSaving(false);
     if (error) return setMessage(error.message);
-    setVaccineFor(null); setVaccineForm(blankVaccine); setMessage("Administered vaccine added to the medical record."); await loadData(selectedPetId);
+    setVaccineFor(null); setVaccineForm(blankVaccine); setMessage("Administered vaccine added to the medical record."); await loadData(encounter.pet_id);
   }
 
   function printClientInstructions(encounter: Encounter) {
@@ -299,17 +322,17 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
     <header className="dashboard-header vet-header"><div><p className="eyebrow">Veterinary module</p><h2>Clinical workspace</h2><p>Today&apos;s patients, SOAP encounters, and protected medical records.</p></div>{!readOnly && selectedPet && <button className="primary-button" onClick={() => startEncounter()}>+ New encounter</button>}</header>
     {message && <p className={message.toLowerCase().includes("saved") || message.toLowerCase().includes("finalized") || message.toLowerCase().includes("added") ? "pet-success" : "error-message"} role="status">{message}</p>}
     <section className="vet-summary">
-      <article><span>Veterinary visits today</span><strong>{todayAppointments.length}</strong><small>Scheduled clinical appointments</small></article>
+      <article><span>Veterinary patients today</span><strong>{todayPatientCount}</strong><small>One chart row per scheduled pet</small></article>
       <article><span>Open drafts</span><strong>{draftCount}</strong><small>Notes waiting for finalization</small></article>
       <article><span>Active alerts</span><strong>{alerts.filter((item) => item.is_active).length}</strong><small>Allergies, handling, and medical</small></article>
       <article><span>Upcoming follow-ups</span><strong>{followUps}</strong><small>Rechecks and recommended care</small></article>
     </section>
 
     <section className="dashboard-panel vet-today">
-      <div className="panel-heading"><div><p className="eyebrow">Clinical board</p><h3>Today&apos;s patients</h3></div><span>{todayAppointments.length} scheduled</span></div>
-      <div className="vet-today-list">{todayAppointments.length === 0 ? <p className="settings-help">No veterinary appointments are scheduled today.</p> : todayAppointments.map((appointment) => {
-        const pet = petForAppointment(appointment.id), owner = clients.find((client) => client.id === appointment.client_id);
-        return <article key={appointment.id}><time>{new Date(appointment.start_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time><div><strong>{pet?.PetName ?? "Patient"}</strong><span>{owner ? `${owner.FirstName} ${owner.LastName}` : "Owner unavailable"}</span></div><span className={`vet-visit-status ${appointment.status}`}>{appointment.status.replaceAll("_", " ")}</span>{!readOnly && <button className="secondary-button" onClick={() => startEncounter(appointment)}>Open chart</button>}</article>;
+      <div className="panel-heading"><div><p className="eyebrow">Clinical board</p><h3>Today&apos;s patients</h3></div><span>{todayPatientCount} scheduled</span></div>
+      <div className="vet-today-list">{todayAppointments.length === 0 ? <p className="settings-help">No veterinary appointments are scheduled today.</p> : todayAppointments.flatMap((appointment) => {
+        const linkedPets = petsForAppointment(appointment.id), owner = clients.find((client) => client.id === appointment.client_id);
+        return (linkedPets.length ? linkedPets : [null]).map((pet, index) => <article key={`${appointment.id}-${pet?.id ?? index}`}><time>{new Date(appointment.start_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time><div><strong>{pet?.PetName ?? "Patient not linked"}</strong><span>{owner ? `${owner.FirstName} ${owner.LastName}` : "Owner unavailable"}</span></div><span className={`vet-visit-status ${appointment.status}`}>{appointment.status.replaceAll("_", " ")}</span>{!readOnly && pet && <button className="secondary-button" onClick={() => startEncounter(appointment, pet)}>Open {pet.PetName}&apos;s chart</button>}</article>);
       })}</div>
     </section>
 
@@ -358,7 +381,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
           </div>
 
           {showEncounterForm && !readOnly && <section className="dashboard-panel vet-encounter-form">
-            <div className="panel-heading"><div><p className="eyebrow">{editingEncounterId ? "Draft medical record" : "New medical record"}</p><h3>{editingEncounterId ? "Continue encounter" : "Clinical encounter"}</h3></div><button className="secondary-button" type="button" onClick={() => { setShowEncounterForm(false); setEditingEncounterId(null); }}>Close</button></div>
+            <div className="panel-heading"><div><p className="eyebrow">{editingEncounterId ? "Draft medical record" : "New medical record"}</p><h3>{editingEncounterId ? "Continue encounter" : "Clinical encounter"}</h3><p className="vet-encounter-patient">Patient: <strong>{pets.find((pet) => pet.id === encounterPetId)?.PetName ?? "Select a patient"}</strong> · This record will remain attached to this patient.</p></div><button className="secondary-button" type="button" onClick={() => { setShowEncounterForm(false); setEditingEncounterId(null); setEncounterPetId(null); }}>Close</button></div>
             <form onSubmit={saveEncounter}>
               <div className="vet-form-grid"><label>Visit type<select value={encounterForm.visit_type} onChange={(event) => setEncounterForm({ ...encounterForm, visit_type: event.target.value })}><option value="wellness">Wellness exam</option><option value="sick">Sick visit</option><option value="urgent">Urgent visit</option><option value="recheck">Recheck</option><option value="vaccine">Vaccine visit</option><option value="surgery">Procedure / surgery</option><option value="other">Other</option></select></label><label>Linked appointment<select value={encounterForm.appointment_id} onChange={(event) => setEncounterForm({ ...encounterForm, appointment_id: event.target.value })}><option value="">Not linked</option>{appointments.filter((item) => appointmentPets.some((link) => link.appointment_id === item.id && link.pet_id === selectedPetId)).map((item) => <option value={item.id} key={item.id}>{new Date(item.start_at).toLocaleString()}</option>)}</select></label><label className="full">Chief complaint<input value={encounterForm.chief_complaint} onChange={(event) => setEncounterForm({ ...encounterForm, chief_complaint: event.target.value })} placeholder="Reason for today's visit" /></label></div>
               <fieldset><legend>Vitals</legend><div className="vet-vitals"><label>Weight (kg)<input type="number" min="0.01" step="0.01" value={encounterForm.weight_kg} onChange={(event) => setEncounterForm({ ...encounterForm, weight_kg: event.target.value })} /></label><label>Temperature °F<input type="number" min="80" max="115" step="0.1" value={encounterForm.temperature_f} onChange={(event) => setEncounterForm({ ...encounterForm, temperature_f: event.target.value })} /></label><label>Pulse / min<input type="number" min="0" max="400" value={encounterForm.pulse_bpm} onChange={(event) => setEncounterForm({ ...encounterForm, pulse_bpm: event.target.value })} /></label><label>Respiration / min<input type="number" min="0" max="300" value={encounterForm.respiration_bpm} onChange={(event) => setEncounterForm({ ...encounterForm, respiration_bpm: event.target.value })} /></label><label>Body condition (1–9)<input type="number" min="1" max="9" step="0.5" value={encounterForm.body_condition_score} onChange={(event) => setEncounterForm({ ...encounterForm, body_condition_score: event.target.value })} /></label><label>Pain score (0–10)<input type="number" min="0" max="10" value={encounterForm.pain_score} onChange={(event) => setEncounterForm({ ...encounterForm, pain_score: event.target.value })} /></label></div></fieldset>
@@ -372,15 +395,16 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
             <div className="panel-heading"><div><p className="eyebrow">Medical timeline</p><h3>Clinical encounters</h3></div><strong>{selectedEncounters.length} records</strong></div>
             {selectedEncounters.length === 0 ? <div className="empty-state"><h3>No encounters yet</h3><p>Start the first clinical record for {selectedPet.PetName}.</p></div> : selectedEncounters.map((encounter) => <article className={`vet-encounter-card ${encounter.status}`} key={encounter.id}>
               <header><div><span className={`vet-record-status ${encounter.status}`}>{encounter.status}</span><h3>{encounter.visit_type.replaceAll("_", " ")}</h3><p>{new Date(encounter.created_at).toLocaleString()} {encounter.chief_complaint ? `· ${encounter.chief_complaint}` : ""}</p></div><div className="vet-record-actions">
-                <button className="secondary-button" onClick={() => printClientInstructions(encounter)}>Take-home instructions</button>
+                {encounter.status !== "entered_in_error" && <button className="secondary-button" onClick={() => printClientInstructions(encounter)}>Take-home instructions</button>}
                 {encounter.status === "draft" && !readOnly && <>
                   <button className="secondary-button" onClick={() => { setTreatmentFor(encounter.id); setVaccineFor(null); }}>+ Treatment</button>
                   <button className="secondary-button" onClick={() => { setVaccineFor(encounter.id); setTreatmentFor(null); }}>+ Vaccine</button>
                   <button className="secondary-button" onClick={() => editEncounter(encounter)}>Edit draft</button>
                   <button className="primary-button" disabled={saving} onClick={() => void finalizeEncounter(encounter)}>Finalize & lock</button>
                 </>}
-                {encounter.status !== "draft" && !readOnly && <button className="secondary-button" onClick={() => setAmendmentFor(encounter.id)}>Add amendment</button>}
+                {(["finalized", "amended"].includes(encounter.status)) && !readOnly && <><button className="secondary-button" onClick={() => setAmendmentFor(encounter.id)}>Add amendment</button><button className="secondary-button correction-button" onClick={() => { setCorrectionFor(encounter.id); setCorrectionForm({ pet_id: "", reason: "" }); }}>Wrong patient?</button></>}
               </div></header>
+              {encounter.status === "entered_in_error" && <div className="vet-entered-in-error"><strong>Entered in error — do not use for clinical care</strong><p>{encounter.entered_in_error_reason}</p>{encounter.entered_in_error_at && <small>Corrected {new Date(encounter.entered_in_error_at).toLocaleString()} · Original preserved for audit</small>}</div>}
               <div className="vet-vital-readout">{encounter.weight_kg != null && <span>Weight <b>{encounter.weight_kg} kg</b></span>}{encounter.temperature_f != null && <span>Temp <b>{encounter.temperature_f} °F</b></span>}{encounter.pulse_bpm != null && <span>Pulse <b>{encounter.pulse_bpm}</b></span>}{encounter.respiration_bpm != null && <span>Resp <b>{encounter.respiration_bpm}</b></span>}{encounter.body_condition_score != null && <span>BCS <b>{encounter.body_condition_score}/9</b></span>}{encounter.pain_score != null && <span>Pain <b>{encounter.pain_score}/10</b></span>}</div>
               <div className="vet-soap-readout"><section><b>S</b><div>{encounter.subjective || "Not recorded"}</div></section><section><b>O</b><div>{encounter.objective || "Not recorded"}</div></section><section><b>A</b><div>{encounter.assessment || "Not recorded"}</div></section><section><b>P</b><div>{encounter.plan || "Not recorded"}</div></section></div>
               {encounter.diagnoses.length > 0 && <div className="vet-diagnoses">{encounter.diagnoses.map((diagnosis) => <span key={diagnosis}>{diagnosis}</span>)}</div>}
@@ -389,6 +413,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
               {encounter.client_instructions && <div className="vet-instructions"><strong>Client instructions</strong><p>{encounter.client_instructions}</p></div>}
               {treatmentFor === encounter.id && <form className="vet-clinical-entry-form" onSubmit={addTreatment}><div className="panel-heading"><div><p className="eyebrow">Care delivered</p><h4>Add treatment or procedure</h4></div><button type="button" onClick={() => setTreatmentFor(null)}>×</button></div><div className="vet-form-grid"><label>Type<select value={treatmentForm.treatment_type} onChange={(event) => setTreatmentForm({ ...treatmentForm, treatment_type: event.target.value })}><option value="treatment">Treatment</option><option value="procedure">Procedure</option><option value="injection">Injection</option><option value="diagnostic">Diagnostic</option><option value="supportive_care">Supportive care</option><option value="other">Other</option></select></label><label>Name<input required value={treatmentForm.name} onChange={(event) => setTreatmentForm({ ...treatmentForm, name: event.target.value })} placeholder="Fluid therapy, nail trim, ear cleaning…" /></label><label>Dose / amount<input value={treatmentForm.dose} onChange={(event) => setTreatmentForm({ ...treatmentForm, dose: event.target.value })} placeholder="250 mL" /></label><label>Route<input value={treatmentForm.route} onChange={(event) => setTreatmentForm({ ...treatmentForm, route: event.target.value })} placeholder="SQ, IM, IV, topical…" /></label><label>Site<input value={treatmentForm.administration_site} onChange={(event) => setTreatmentForm({ ...treatmentForm, administration_site: event.target.value })} placeholder="Right shoulder" /></label><label>Quantity<input value={treatmentForm.quantity} onChange={(event) => setTreatmentForm({ ...treatmentForm, quantity: event.target.value })} /></label><label className="full">Notes<textarea rows={3} value={treatmentForm.notes} onChange={(event) => setTreatmentForm({ ...treatmentForm, notes: event.target.value })} /></label></div><button className="primary-button" disabled={saving}>{saving ? "Saving…" : "Add to encounter"}</button></form>}
               {vaccineFor === encounter.id && <form className="vet-clinical-entry-form" onSubmit={addAdministeredVaccine}><div className="panel-heading"><div><p className="eyebrow">Preventive care</p><h4>Record administered vaccine</h4></div><button type="button" onClick={() => setVaccineFor(null)}>×</button></div><div className="vet-form-grid"><label>Configured vaccine<select value={vaccineForm.requirement_id} onChange={(event) => setVaccineForm({ ...vaccineForm, requirement_id: event.target.value, vaccine_name: "" })}><option value="">Other vaccine</option>{vaccineRequirements.filter((item) => item.species.toLowerCase() === "all" || item.species.toLowerCase() === selectedPet.species.toLowerCase()).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{!vaccineForm.requirement_id && <label>Vaccine name<input required value={vaccineForm.vaccine_name} onChange={(event) => setVaccineForm({ ...vaccineForm, vaccine_name: event.target.value })} /></label>}<label>Administered<input required type="date" value={vaccineForm.administered_on} onChange={(event) => setVaccineForm({ ...vaccineForm, administered_on: event.target.value })} /></label><label>Next due / expires<input required type="date" value={vaccineForm.expires_on} onChange={(event) => setVaccineForm({ ...vaccineForm, expires_on: event.target.value })} /></label><label>Manufacturer / provider<input value={vaccineForm.provider} onChange={(event) => setVaccineForm({ ...vaccineForm, provider: event.target.value })} placeholder={businessName} /></label><label>Lot / serial number<input value={vaccineForm.lot_number} onChange={(event) => setVaccineForm({ ...vaccineForm, lot_number: event.target.value })} /></label><label>Administration site<input value={vaccineForm.administration_site} onChange={(event) => setVaccineForm({ ...vaccineForm, administration_site: event.target.value })} placeholder="Right rear limb" /></label></div><button className="primary-button" disabled={saving}>{saving ? "Saving…" : "Record vaccination"}</button></form>}
+              {correctionFor === encounter.id && <form className="vet-correction-form" onSubmit={correctEncounterPatient}><div><p className="eyebrow">Medical record correction</p><h4>Move a mistaken record safely</h4><p>The original will be marked entered in error. A copy will open as a draft under the correct patient for review.</p></div><label>Correct patient<select required value={correctionForm.pet_id} onChange={(event) => setCorrectionForm({ ...correctionForm, pet_id: event.target.value })}><option value="">Select the correct patient</option>{pets.filter((pet) => pet.id !== encounter.pet_id).map((pet) => <option key={pet.id} value={pet.id}>{pet.PetName} · {ownerFor(pet.id) ? `${ownerFor(pet.id)!.FirstName} ${ownerFor(pet.id)!.LastName}` : "No owner"}</option>)}</select></label><label>Reason for correction<textarea required rows={3} value={correctionForm.reason} onChange={(event) => setCorrectionForm({ ...correctionForm, reason: event.target.value })} placeholder="Record was accidentally entered under Oliver instead of Gary." /></label><div><button type="button" className="secondary-button" onClick={() => setCorrectionFor(null)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? "Correcting…" : "Mark error & create corrected draft"}</button></div></form>}
               {encounter.finalized_at && <small>Finalized {new Date(encounter.finalized_at).toLocaleString()} · Original record locked</small>}
               {amendments.filter((item) => item.encounter_id === encounter.id).map((amendment) => <aside className="vet-amendment" key={amendment.id}><strong>Amendment · {new Date(amendment.created_at).toLocaleString()}</strong><span>Reason: {amendment.reason}</span><p>{amendment.amendment_text}</p></aside>)}
               {amendmentFor === encounter.id && <form className="vet-amendment-form" onSubmit={addAmendment}><label>Reason<input required value={amendmentForm.reason} onChange={(event) => setAmendmentForm({ ...amendmentForm, reason: event.target.value })} placeholder="Why is this amendment necessary?" /></label><label>Amendment<textarea required rows={4} value={amendmentForm.text} onChange={(event) => setAmendmentForm({ ...amendmentForm, text: event.target.value })} /></label><div><button type="button" className="secondary-button" onClick={() => setAmendmentFor(null)}>Cancel</button><button className="primary-button" disabled={saving}>Save amendment</button></div></form>}
