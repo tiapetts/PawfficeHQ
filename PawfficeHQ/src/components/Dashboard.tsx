@@ -11,6 +11,7 @@ import Settings from "./Settings";
 import Billing from "./Billing";
 import Vaccinations, { vaccinationState } from "./Vaccinations";
 import VeterinaryWorkspace from "./VeterinaryWorkspace";
+import VeterinaryMedicationWorkspace from "./VeterinaryMedicationWorkspace";
 import RevenueOverview from "./RevenueOverview";
 import ReportCards from "./ReportCards";
 import ModuleWorkspace from "./ModuleWorkspace";
@@ -97,6 +98,7 @@ type ActivePage =
   | "boarding_calendar"
   | "boarding_services"
   | "veterinary_module"
+  | "veterinary_medications"
   | "settings";
 
 function Dashboard({
@@ -409,7 +411,7 @@ function Dashboard({
           {enabledModules.includes("grooming")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.grooming} onClick={()=>setExpandedModules(current=>({...current,grooming:!current.grooming}))}><span>Grooming</span><span>⌄</span></button>{expandedModules.grooming&&<div className="module-nav-items"><button className={`nav-button ${activePage==="history"?"active":""}`} onClick={()=>openPage("history")}>Appointment history</button><button className={`nav-button ${activePage==="services"?"active":""}`} onClick={()=>openPage("services")}>Grooming services</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Grooming report cards</button><button className={`nav-button ${activePage==="staff_earnings"?"active":""}`} onClick={()=>openPage("staff_earnings")}>Staff earnings</button></div>}</div>}
           {enabledModules.includes("pet_sitting")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.pet_sitting} onClick={()=>setExpandedModules(current=>({...current,pet_sitting:!current.pet_sitting}))}><span>Pet sitting</span><span>⌄</span></button>{expandedModules.pet_sitting&&<div className="module-nav-items"><button className={`nav-button ${activePage==="pet_sitting_module"?"active":""}`} onClick={()=>openPage("pet_sitting_module")}>Bookings & care plans</button><button className={`nav-button ${activePage==="pet_sitting_calendar"?"active":""}`} onClick={()=>openPage("pet_sitting_calendar")}>Visit calendar</button><button className={`nav-button ${activePage==="pet_sitting_reports"?"active":""}`} onClick={()=>openPage("pet_sitting_reports")}>Visit reports</button></div>}</div>}
           {enabledModules.includes("boarding_daycare")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.boarding_daycare} onClick={()=>setExpandedModules(current=>({...current,boarding_daycare:!current.boarding_daycare}))}><span>Boarding & daycare</span><span>⌄</span></button>{expandedModules.boarding_daycare&&<div className="module-nav-items"><button className={`nav-button ${activePage==="boarding_daycare_module"?"active":""}`} onClick={()=>openPage("boarding_daycare_module")}>Reservations & occupancy</button><button className={`nav-button ${activePage==="boarding_calendar"?"active":""}`} onClick={()=>openPage("boarding_calendar")}>Stay calendar</button><button className={`nav-button ${activePage==="boarding_services"?"active":""}`} onClick={()=>openPage("boarding_services")}>Boarding services</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Care reports</button></div>}</div>}
-          {enabledModules.includes("veterinary")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.veterinary} onClick={()=>setExpandedModules(current=>({...current,veterinary:!current.veterinary}))}><span>Veterinary</span><span>⌄</span></button>{expandedModules.veterinary&&<div className="module-nav-items"><button className={`nav-button ${activePage==="veterinary_module"?"active":""}`} onClick={()=>openPage("veterinary_module")}>Encounters & records</button><button className={`nav-button ${activePage==="vaccinations"?"active":""}`} onClick={()=>openPage("vaccinations")}>Vaccinations</button></div>}</div>}
+          {enabledModules.includes("veterinary")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.veterinary} onClick={()=>setExpandedModules(current=>({...current,veterinary:!current.veterinary}))}><span>Veterinary</span><span>⌄</span></button>{expandedModules.veterinary&&<div className="module-nav-items"><button className={`nav-button ${activePage==="veterinary_module"?"active":""}`} onClick={()=>openPage("veterinary_module")}>Encounters & records</button><button className={`nav-button ${activePage==="veterinary_medications"?"active":""}`} onClick={()=>openPage("veterinary_medications")}>Medications</button><button className={`nav-button ${activePage==="vaccinations"?"active":""}`} onClick={()=>openPage("vaccinations")}>Vaccinations</button></div>}</div>}
           <div className="core-nav-divider" />
           <button
             className={`nav-button ${activePage === "staff" ? "active" : ""}`}
@@ -477,6 +479,8 @@ function Dashboard({
           <BoardingServices businessId={businessId} readOnly={readOnly} />
         ) : activePage === "veterinary_module" ? (
           <VeterinaryWorkspace businessId={businessId} readOnly={readOnly} />
+        ) : activePage === "veterinary_medications" ? (
+          <VeterinaryMedicationWorkspace businessId={businessId} readOnly={readOnly} />
         ) : activePage.endsWith("_module") ? (
           <ModuleWorkspace moduleKey={activePage.replace("_module","") as "grooming"|"pet_sitting"|"boarding_daycare"|"veterinary"} />
         ) : activePage === "services" ? (
@@ -506,6 +510,7 @@ function Dashboard({
                 if (current === "boarding_calendar" && !modules.includes("boarding_daycare")) return "settings";
                 if (!modules.includes("grooming") && ["history","services"].includes(current)) return "settings";
                 if (!modules.includes("veterinary") && current === "vaccinations") return "settings";
+                if (!modules.includes("veterinary") && current === "veterinary_medications") return "settings";
                 return current;
               });
             }}

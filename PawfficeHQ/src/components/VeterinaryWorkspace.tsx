@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import ProfilePhoto from "./ProfilePhoto";
+import VeterinaryMedications from "./VeterinaryMedications";
 import "./VeterinaryWorkspace.css";
 
 type Props = { businessId: string; readOnly?: boolean };
@@ -380,6 +381,8 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
               <div className="vet-problem-list">{selectedProblems.map((problem) => <article key={problem.id}><div><strong>{problem.name}</strong><span>{problem.status}{problem.onset_on ? ` · since ${new Date(problem.onset_on + "T00:00:00").toLocaleDateString()}` : ""}</span></div>{!readOnly && <select value={problem.status} onChange={(event) => void changeProblem(problem, event.target.value)}><option value="active">Active</option><option value="monitoring">Monitoring</option><option value="resolved">Resolved</option></select>}</article>)}</div>
             </section>
           </div>
+
+          <VeterinaryMedications businessId={businessId} petId={selectedPet.id} petName={selectedPet.PetName} ownerName={ownerFor(selectedPet.id) ? `${ownerFor(selectedPet.id)!.FirstName} ${ownerFor(selectedPet.id)!.LastName}` : "Pet parent"} encounters={selectedEncounters} readOnly={readOnly} />
 
           {showEncounterForm && !readOnly && <section className="dashboard-panel vet-encounter-form">
             <div className="panel-heading"><div><p className="eyebrow">{editingEncounterId ? "Draft medical record" : "New medical record"}</p><h3>{editingEncounterId ? "Continue encounter" : "Clinical encounter"}</h3><p className="vet-encounter-patient">Patient: <strong>{pets.find((pet) => pet.id === encounterPetId)?.PetName ?? "Select a patient"}</strong> · This record will remain attached to this patient.</p></div><button className="secondary-button" type="button" onClick={() => { setShowEncounterForm(false); setEditingEncounterId(null); setEncounterPetId(null); }}>Close</button></div>
