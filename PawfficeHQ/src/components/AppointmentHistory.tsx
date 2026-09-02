@@ -78,6 +78,7 @@ type HistoryFilter =
   | "requested"
   | "completed"
   | "cancelled"
+  | "cancelled_or_no_show"
   | "no_show";
 
 const statusLabels: Record<string, string> = {
@@ -319,7 +320,14 @@ export default function AppointmentHistory({
       }
 
       if (
-        !["all", "upcoming"].includes(activeFilter) &&
+        activeFilter === "cancelled_or_no_show" &&
+        !["cancelled", "no_show"].includes(appointment.status)
+      ) {
+        return false;
+      }
+
+      if (
+        !["all", "upcoming", "cancelled_or_no_show"].includes(activeFilter) &&
         appointment.status !== activeFilter
       ) {
         return false;
@@ -656,22 +664,26 @@ export default function AppointmentHistory({
       )}
 
       <section className="history-summary-grid" aria-label="History summary">
-        <article className="history-summary-card">
+        <button type="button" className="history-summary-card clickable-summary-card" onClick={() => setActiveFilter("all")}>
           <span>All appointments</span>
           <strong>{loading ? "—" : summary.total}</strong>
-        </article>
-        <article className="history-summary-card">
+          <small>Show all →</small>
+        </button>
+        <button type="button" className="history-summary-card clickable-summary-card" onClick={() => setActiveFilter("requested")}>
           <span>Awaiting approval</span>
           <strong>{loading ? "—" : summary.requested}</strong>
-        </article>
-        <article className="history-summary-card">
+          <small>Show requests →</small>
+        </button>
+        <button type="button" className="history-summary-card clickable-summary-card" onClick={() => setActiveFilter("completed")}>
           <span>Completed</span>
           <strong>{loading ? "—" : summary.completed}</strong>
-        </article>
-        <article className="history-summary-card">
+          <small>Show completed →</small>
+        </button>
+        <button type="button" className="history-summary-card clickable-summary-card" onClick={() => setActiveFilter("cancelled_or_no_show")}>
           <span>Cancelled / no-show</span>
           <strong>{loading ? "—" : summary.cancelled}</strong>
-        </article>
+          <small>Show cancelled →</small>
+        </button>
       </section>
 
       <section className="dashboard-panel history-panel">

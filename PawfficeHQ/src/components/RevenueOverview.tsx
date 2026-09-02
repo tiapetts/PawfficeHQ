@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import "./RevenueOverview.css";
 
-type Props = { businessId: string };
+type Props = { businessId: string; onOpenProjected?: () => void; onOpenEarned?: () => void };
 type Appointment = { id: string; start_at: string };
 type AppointmentService = { appointment_id: string; price_at_booking: number | null };
 type Payment = { amount: number; tip_amount: number | null; status: string; paid_at: string | null; created_at: string };
@@ -15,7 +15,7 @@ const dateKey = (value: string | Date) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
 
-export default function RevenueOverview({ businessId }: Props) {
+export default function RevenueOverview({ businessId, onOpenProjected, onOpenEarned }: Props) {
   const [daily, setDaily] = useState<DailyRevenue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -115,10 +115,10 @@ export default function RevenueOverview({ businessId }: Props) {
 
   return <>
     <section className="revenue-summary-grid" aria-label="Revenue summary">
-      <article className="revenue-summary-card projected"><span>Projected today</span><strong>{loading ? "—" : money.format(todayRow?.projected ?? 0)}</strong><small>Booked services</small></article>
-      <article className="revenue-summary-card earned"><span>Earned today</span><strong>{loading ? "—" : money.format(todayRow?.earned ?? 0)}</strong><small>Payments + tips − refunds</small></article>
-      <article className="revenue-summary-card projected"><span>Projected this month</span><strong>{loading ? "—" : money.format(totals.projected)}</strong><small>Non-cancelled appointments</small></article>
-      <article className="revenue-summary-card earned"><span>Earned this month</span><strong>{loading ? "—" : money.format(totals.earned)}</strong><small>Net collected revenue</small></article>
+      <button type="button" className="revenue-summary-card projected clickable-summary-card" onClick={onOpenProjected}><span>Projected today</span><strong>{loading ? "—" : money.format(todayRow?.projected ?? 0)}</strong><small>Open appointments →</small></button>
+      <button type="button" className="revenue-summary-card earned clickable-summary-card" onClick={onOpenEarned}><span>Earned today</span><strong>{loading ? "—" : money.format(todayRow?.earned ?? 0)}</strong><small>Open invoices →</small></button>
+      <button type="button" className="revenue-summary-card projected clickable-summary-card" onClick={onOpenProjected}><span>Projected this month</span><strong>{loading ? "—" : money.format(totals.projected)}</strong><small>Open appointments →</small></button>
+      <button type="button" className="revenue-summary-card earned clickable-summary-card" onClick={onOpenEarned}><span>Earned this month</span><strong>{loading ? "—" : money.format(totals.earned)}</strong><small>Open invoices →</small></button>
     </section>
 
     <section className="dashboard-panel revenue-panel">

@@ -539,22 +539,26 @@ function Dashboard({
             )}
 
             <section className="summary-grid">
-              <article className="summary-card">
+              <button type="button" className="summary-card clickable-summary-card" onClick={() => openPage("calendar")}>
                 <span>Today’s appointments</span>
                 <strong>{loading ? "—" : todayAppointments.length}</strong>
-              </article>
-              <article className="summary-card">
+                <small>Open schedule →</small>
+              </button>
+              <button type="button" className="summary-card clickable-summary-card" onClick={() => openPage("pets")}>
                 <span>Total pets</span>
                 <strong>{loading ? "—" : petCount}</strong>
-              </article>
-              <article className="summary-card">
+                <small>Open pet records →</small>
+              </button>
+              <button type="button" className="summary-card clickable-summary-card" onClick={() => openPage("clients")}>
                 <span>Total clients</span>
                 <strong>{loading ? "—" : clientCount}</strong>
-              </article>
-              <article className="summary-card">
+                <small>Open client records →</small>
+              </button>
+              <button type="button" className="summary-card clickable-summary-card" onClick={() => openPage("vaccinations")} disabled={!enabledModules.includes("veterinary")}>
                 <span>Vaccination alerts</span>
                 <strong>{loading ? "—" : vaccinationAlertCount}</strong>
-              </article>
+                <small>{enabledModules.includes("veterinary") ? "Review alerts →" : "Veterinary module required"}</small>
+              </button>
             </section>
 
             <section className="dashboard-panel">
@@ -613,7 +617,7 @@ function Dashboard({
               )}
             </section>
 
-            <RevenueOverview businessId={businessId} />
+            <RevenueOverview businessId={businessId} onOpenProjected={() => openPage("history")} onOpenEarned={() => openPage("invoices")} />
           </>
         )}
       </main>
