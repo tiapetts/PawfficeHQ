@@ -991,18 +991,21 @@ export default function Invoices({
       )}
 
       <section className="invoice-summary-grid">
-        <article>
+        <button type="button" className="clickable-summary-card" onClick={() => setFilter("unpaid")}>
           <span>Outstanding</span>
           <strong>{loading ? "—" : money.format(totals.outstanding)}</strong>
-        </article>
-        <article>
+          <small>Show unpaid →</small>
+        </button>
+        <button type="button" className="clickable-summary-card" onClick={() => setFilter("paid")}>
           <span>Payments received</span>
           <strong>{loading ? "—" : money.format(totals.paid)}</strong>
-        </article>
-        <article>
+          <small>Show paid →</small>
+        </button>
+        <button type="button" className="clickable-summary-card" onClick={() => setFilter("draft")}>
           <span>Draft invoices</span>
           <strong>{loading ? "—" : totals.drafts}</strong>
-        </article>
+          <small>Show drafts →</small>
+        </button>
       </section>
 
       <section className="dashboard-panel invoice-list-panel">

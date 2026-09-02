@@ -289,3 +289,48 @@ textarea {
     padding: 1.5rem;
   }
 }
+.clickable-summary-card {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+
+.clickable-summary-card:hover:not(:disabled) {
+  border-color: #69b8aa;
+  box-shadow: 0 12px 28px rgb(31 61 53 / 12%);
+  transform: translateY(-2px);
+}
+
+.clickable-summary-card:focus-visible {
+  outline: 3px solid rgb(0 180 216 / 28%);
+  outline-offset: 3px;
+}
+
+.clickable-summary-card:disabled {
+  cursor: not-allowed;
+  opacity: .62;
+}
+
+.clickable-summary-card small {
+  color: #2e6d61;
+  font-weight: 800;
+}
+
+.boarding-summary > button,
+.vet-med-overview > button,
+.earnings-summary > button {
+  display: grid;
+  gap: 5px;
+  padding: 1rem;
+  border: 1px solid #d9e5e2;
+  border-top: 4px solid #00b4d8;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.boarding-summary > button:nth-child(even) {
+  border-top-color: #36a269;
+}
