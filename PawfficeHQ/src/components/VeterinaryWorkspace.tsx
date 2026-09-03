@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import ProfilePhoto from "./ProfilePhoto";
 import VeterinaryMedications from "./VeterinaryMedications";
+import VeterinaryTreatmentPlan from "./VeterinaryTreatmentPlan";
 import "./VeterinaryWorkspace.css";
 
-type Props = { businessId: string; readOnly?: boolean };
+type Props = { businessId: string; readOnly?: boolean; onOpenInvoice?: (invoiceId:string) => void };
 type Pet = { id: number; PetName: string; species: string; PetBreed: string | null; PetDOB: string | null; PetWeight: number | null; profile_photo_path: string | null };
 type Client = { id: number; FirstName: string; LastName: string; PhoneNumber: string | null; EmailAddress: string | null };
 type ClientPet = { client_id: number; pet_id: number; is_primary: boolean };
@@ -37,7 +38,7 @@ const blankTreatment = { treatment_type: "treatment", name: "", dose: "", route:
 const blankVaccine = { requirement_id: "", vaccine_name: "", administered_on: new Date().toISOString().slice(0, 10), expires_on: "", provider: "", lot_number: "", administration_site: "" };
 const encounterColumns = "id, pet_id, appointment_id, visit_type, chief_complaint, status, subjective, objective, assessment, plan, client_instructions, weight_kg, temperature_f, pulse_bpm, respiration_bpm, body_condition_score, pain_score, diagnoses, follow_up_on, created_at, finalized_at, entered_in_error_reason, entered_in_error_at, corrected_encounter_id";
 
-export default function VeterinaryWorkspace({ businessId, readOnly = false }: Props) {
+export default function VeterinaryWorkspace({ businessId, readOnly = false, onOpenInvoice }: Props) {
   const [pets, setPets] = useState<Pet[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [clientPets, setClientPets] = useState<ClientPet[]>([]);
@@ -66,6 +67,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
   const [amendmentForm, setAmendmentForm] = useState({ reason: "", text: "" });
   const [showEncounterForm, setShowEncounterForm] = useState(false);
   const [treatmentFor, setTreatmentFor] = useState<string | null>(null);
+  const [planFor, setPlanFor] = useState<string | null>(null);
   const [treatmentForm, setTreatmentForm] = useState(blankTreatment);
   const [vaccineFor, setVaccineFor] = useState<string | null>(null);
   const [vaccineForm, setVaccineForm] = useState(blankVaccine);
@@ -178,7 +180,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
     return years < 1 ? "Under 1 year" : `${years} year${years === 1 ? "" : "s"}`;
   }
   function choosePet(petId: number) {
-    setSelectedPetId(petId); setShowEncounterForm(false); setEditingEncounterId(null); setAmendmentFor(null); setMessage("");
+    setSelectedPetId(petId); setShowEncounterForm(false); setEditingEncounterId(null); setAmendmentFor(null); setPlanFor(null); setMessage("");
     const profile = profiles.find((item) => item.pet_id === petId);
     setProfileForm(profile ? { sex: profile.sex ?? "unknown", reproductive_status: profile.reproductive_status ?? "unknown", color_markings: profile.color_markings ?? "", microchip_number: profile.microchip_number ?? "" } : blankProfile);
   }
@@ -409,6 +411,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
             {selectedEncounters.length === 0 ? <div className="empty-state"><h3>No encounters yet</h3><p>Start the first clinical record for {selectedPet.PetName}.</p></div> : selectedEncounters.map((encounter) => <article className={`vet-encounter-card ${encounter.status}`} id={`vet-encounter-${encounter.id}`} key={encounter.id}>
               <header><div><span className={`vet-record-status ${encounter.status}`}>{encounter.status}</span><h3>{encounter.visit_type.replaceAll("_", " ")}</h3><p>{new Date(encounter.created_at).toLocaleString()} {encounter.chief_complaint ? `· ${encounter.chief_complaint}` : ""}</p></div><div className="vet-record-actions">
                 {encounter.status !== "entered_in_error" && <button className="secondary-button" onClick={() => printClientInstructions(encounter)}>Take-home instructions</button>}
+                {encounter.status !== "entered_in_error" && ownerFor(encounter.pet_id) && <button className="secondary-button" onClick={() => setPlanFor(planFor === encounter.id ? null : encounter.id)}>{planFor === encounter.id ? "Close treatment plan" : "Estimate & treatment plan"}</button>}
                 {encounter.status === "draft" && !readOnly && <>
                   <button className="secondary-button" onClick={() => { setTreatmentFor(encounter.id); setVaccineFor(null); }}>+ Treatment</button>
                   <button className="secondary-button" onClick={() => { setVaccineFor(encounter.id); setTreatmentFor(null); }}>+ Vaccine</button>
@@ -421,6 +424,7 @@ export default function VeterinaryWorkspace({ businessId, readOnly = false }: Pr
               <div className="vet-vital-readout">{encounter.weight_kg != null && <span>Weight <b>{encounter.weight_kg} kg</b></span>}{encounter.temperature_f != null && <span>Temp <b>{encounter.temperature_f} °F</b></span>}{encounter.pulse_bpm != null && <span>Pulse <b>{encounter.pulse_bpm}</b></span>}{encounter.respiration_bpm != null && <span>Resp <b>{encounter.respiration_bpm}</b></span>}{encounter.body_condition_score != null && <span>BCS <b>{encounter.body_condition_score}/9</b></span>}{encounter.pain_score != null && <span>Pain <b>{encounter.pain_score}/10</b></span>}</div>
               <div className="vet-soap-readout"><section><b>S</b><div>{encounter.subjective || "Not recorded"}</div></section><section><b>O</b><div>{encounter.objective || "Not recorded"}</div></section><section><b>A</b><div>{encounter.assessment || "Not recorded"}</div></section><section><b>P</b><div>{encounter.plan || "Not recorded"}</div></section></div>
               {encounter.diagnoses.length > 0 && <div className="vet-diagnoses">{encounter.diagnoses.map((diagnosis) => <span key={diagnosis}>{diagnosis}</span>)}</div>}
+              {planFor === encounter.id && ownerFor(encounter.pet_id) && <VeterinaryTreatmentPlan businessId={businessId} encounterId={encounter.id} petId={encounter.pet_id} petName={selectedPet.PetName} clientId={ownerFor(encounter.pet_id)!.id} clientName={`${ownerFor(encounter.pet_id)!.FirstName} ${ownerFor(encounter.pet_id)!.LastName}`} readOnly={readOnly} onOpenInvoice={onOpenInvoice} />}
               {treatments.some((item) => item.encounter_id === encounter.id) && <section className="vet-care-delivered"><strong>Treatments provided</strong><div>{treatments.filter((item) => item.encounter_id === encounter.id).map((item) => <article key={item.id}><div><b>{item.name}</b><span>{item.treatment_type.replaceAll("_", " ")}</span></div><p>{[item.dose, item.route, item.administration_site, item.quantity].filter(Boolean).join(" · ")}</p>{item.notes && <small>{item.notes}</small>}</article>)}</div></section>}
               {vaccinations.some((item) => item.encounter_id === encounter.id) && <section className="vet-care-delivered vaccines"><strong>Vaccinations administered</strong><div>{vaccinations.filter((item) => item.encounter_id === encounter.id).map((item) => <article key={item.id}><div><b>{item.vaccine_name}</b><span>Due {new Date(item.expires_on + "T00:00:00").toLocaleDateString()}</span></div><p>{[item.administration_site, item.lot_number ? `Lot ${item.lot_number}` : null, item.provider].filter(Boolean).join(" · ")}</p></article>)}</div></section>}
               {encounter.client_instructions && <div className="vet-instructions"><strong>Client instructions</strong><p>{encounter.client_instructions}</p></div>}
