@@ -478,7 +478,7 @@ function Dashboard({
         ) : activePage === "boarding_services" ? (
           <BoardingServices businessId={businessId} readOnly={readOnly} />
         ) : activePage === "veterinary_module" ? (
-          <VeterinaryWorkspace businessId={businessId} readOnly={readOnly} />
+          <VeterinaryWorkspace businessId={businessId} readOnly={readOnly} onOpenInvoice={(invoiceId) => { setRequestedInvoiceId(invoiceId); setActivePage("invoices"); }} />
         ) : activePage === "veterinary_medications" ? (
           <VeterinaryMedicationWorkspace businessId={businessId} readOnly={readOnly} />
         ) : activePage.endsWith("_module") ? (
