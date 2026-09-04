@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import "./Invoices.css";
+import RebookAppointment from "./RebookAppointment";
 
 type InvoicesProps = {
   businessId: string;
@@ -1271,6 +1272,9 @@ export default function Invoices({
                             >
                               View receipt
                             </button>
+                          )}
+                          {!readOnly && invoice.status === "paid" && invoice.appointment_id && appointments.find(item=>item.id===invoice.appointment_id) && (
+                            <RebookAppointment businessId={businessId} appointmentId={invoice.appointment_id} sourceStartAt={appointments.find(item=>item.id===invoice.appointment_id)!.start_at} />
                           )}
                           {!readOnly && invoice.status === "draft" && (
                             <button
