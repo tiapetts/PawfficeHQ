@@ -22,6 +22,7 @@ import BoardingDaycare from "./BoardingDaycare";
 import BoardingCalendar from "./BoardingCalendar";
 import BoardingServices from "./BoardingServices";
 import StaffEarnings from "./StaffEarnings";
+import MobileGrooming from "./MobileGrooming";
 import type { SubscriptionAccess } from "./SubscriptionGate";
 import { applyBusinessTheme } from "./Settings";
 import "./Responsive.css";
@@ -90,6 +91,7 @@ type ActivePage =
   | "vaccinations"
   | "report_cards"
   | "staff_earnings"
+  | "mobile_grooming"
   | "grooming_module"
   | "pet_sitting_module"
   | "pet_sitting_calendar"
@@ -418,7 +420,7 @@ function Dashboard({
             Pets
           </button>
           <div className="core-nav-divider" />
-          {enabledModules.includes("grooming")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.grooming} onClick={()=>setExpandedModules(current=>({...current,grooming:!current.grooming}))}><span>Grooming</span><span>⌄</span></button>{expandedModules.grooming&&<div className="module-nav-items"><button className={`nav-button ${activePage==="history"?"active":""}`} onClick={()=>openPage("history")}>Appointment history</button><button className={`nav-button ${activePage==="services"?"active":""}`} onClick={()=>openPage("services")}>Grooming services</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Grooming report cards</button><button className={`nav-button ${activePage==="staff_earnings"?"active":""}`} onClick={()=>openPage("staff_earnings")}>Staff earnings</button></div>}</div>}
+          {enabledModules.includes("grooming")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.grooming} onClick={()=>setExpandedModules(current=>({...current,grooming:!current.grooming}))}><span>Grooming</span><span>⌄</span></button>{expandedModules.grooming&&<div className="module-nav-items"><button className={`nav-button ${activePage==="history"?"active":""}`} onClick={()=>openPage("history")}>Appointment history</button><button className={`nav-button ${activePage==="services"?"active":""}`} onClick={()=>openPage("services")}>Grooming services</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Grooming report cards</button><button className={`nav-button ${activePage==="mobile_grooming"?"active":""}`} onClick={()=>openPage("mobile_grooming")}>Mobile grooming</button><button className={`nav-button ${activePage==="staff_earnings"?"active":""}`} onClick={()=>openPage("staff_earnings")}>Staff earnings</button></div>}</div>}
           {enabledModules.includes("pet_sitting")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.pet_sitting} onClick={()=>setExpandedModules(current=>({...current,pet_sitting:!current.pet_sitting}))}><span>Pet sitting</span><span>⌄</span></button>{expandedModules.pet_sitting&&<div className="module-nav-items"><button className={`nav-button ${activePage==="pet_sitting_module"?"active":""}`} onClick={()=>openPage("pet_sitting_module")}>Bookings & care plans</button><button className={`nav-button ${activePage==="pet_sitting_calendar"?"active":""}`} onClick={()=>openPage("pet_sitting_calendar")}>Visit calendar</button><button className={`nav-button ${activePage==="pet_sitting_reports"?"active":""}`} onClick={()=>openPage("pet_sitting_reports")}>Visit reports</button></div>}</div>}
           {enabledModules.includes("boarding_daycare")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.boarding_daycare} onClick={()=>setExpandedModules(current=>({...current,boarding_daycare:!current.boarding_daycare}))}><span>Boarding & daycare</span><span>⌄</span></button>{expandedModules.boarding_daycare&&<div className="module-nav-items"><button className={`nav-button ${activePage==="boarding_daycare_module"?"active":""}`} onClick={()=>openPage("boarding_daycare_module")}>Reservations & occupancy</button><button className={`nav-button ${activePage==="boarding_calendar"?"active":""}`} onClick={()=>openPage("boarding_calendar")}>Stay calendar</button><button className={`nav-button ${activePage==="boarding_services"?"active":""}`} onClick={()=>openPage("boarding_services")}>Boarding services</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Care reports</button></div>}</div>}
           {enabledModules.includes("veterinary")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.veterinary} onClick={()=>setExpandedModules(current=>({...current,veterinary:!current.veterinary}))}><span>Veterinary</span><span>⌄</span></button>{expandedModules.veterinary&&<div className="module-nav-items"><button className={`nav-button ${activePage==="veterinary_module"?"active":""}`} onClick={()=>openPage("veterinary_module")}>Encounters & records</button><button className={`nav-button ${activePage==="veterinary_medications"?"active":""}`} onClick={()=>openPage("veterinary_medications")}>Medications</button><button className={`nav-button ${activePage==="vaccinations"?"active":""}`} onClick={()=>openPage("vaccinations")}>Vaccinations</button></div>}</div>}
@@ -475,6 +477,8 @@ function Dashboard({
           <ReportCards businessId={businessId} readOnly={readOnly} />
         ) : activePage === "staff_earnings" ? (
           <StaffEarnings businessId={businessId} readOnly={readOnly} />
+        ) : activePage === "mobile_grooming" ? (
+          <MobileGrooming businessId={businessId} readOnly={readOnly} />
         ) : activePage === "pet_sitting_module" ? (
           <PetSitting businessId={businessId} readOnly={readOnly} />
         ) : activePage === "pet_sitting_calendar" ? (
