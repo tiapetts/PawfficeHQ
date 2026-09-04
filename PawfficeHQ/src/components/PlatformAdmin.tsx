@@ -33,6 +33,7 @@ type ModuleAccessRequest = {
 type ComplimentaryAccess={business_id:string;access_override_plan:"basic"|"pro"|null;access_override_expires_at:string|null;access_override_reason:string|null};
 type ComplimentaryModule={business_id:string;module_key:"pet_sitting"|"boarding_daycare"|"veterinary"};
 type BusinessAdminState={business_id:string;archived_at:string|null;archive_reason:string|null;access_suspended_at:string|null;suspension_reason:string|null};
+type SupportRequest={id:string;requester_name:string;requester_email:string;business_name:string|null;category:string;subject:string;message:string;status:"new"|"in_progress"|"resolved";created_at:string;updated_at:string};
 
 const emptyOverview: PlatformOverview = {
   total_businesses: 0,
@@ -57,6 +58,8 @@ export default function PlatformAdmin({
   const [complimentaryModules,setComplimentaryModules]=useState<ComplimentaryModule[]>([]);
   const [businessAdminStates,setBusinessAdminStates]=useState<BusinessAdminState[]>([]);
   const [businessFilter,setBusinessFilter]=useState<"active"|"archived">("active");
+  const [supportRequests,setSupportRequests]=useState<SupportRequest[]>([]);
+  const [supportFilter,setSupportFilter]=useState<"open"|"resolved">("open");
   const [archiveCandidate,setArchiveCandidate]=useState<PlatformBusiness|null>(null);
   const [archiveMode,setArchiveMode]=useState<"archive"|"suspend">("archive");
   const [archiveReason,setArchiveReason]=useState("");
@@ -84,16 +87,17 @@ export default function PlatformAdmin({
       setLoading(true);
       setMessage("");
 
-      const [overviewResult, businessesResult, requestsResult, complimentaryResult, complimentaryModulesResult, adminStatesResult] = await Promise.all([
+      const [overviewResult, businessesResult, requestsResult, complimentaryResult, complimentaryModulesResult, adminStatesResult, supportRequestsResult] = await Promise.all([
         supabase.rpc("get_platform_overview").single(),
         supabase.rpc("get_platform_businesses"),
         supabase.from("module_access_request").select("id, business_id, module_key, request_type, message, created_at").eq("status","pending").order("created_at"),
         supabase.from("business_subscription").select("business_id, access_override_plan, access_override_expires_at, access_override_reason"),
         supabase.from("complimentary_module_access").select("business_id, module_key"),
         supabase.from("business_admin_state").select("business_id, archived_at, archive_reason, access_suspended_at, suspension_reason"),
+        supabase.from("support_request").select("id, requester_name, requester_email, business_name, category, subject, message, status, created_at, updated_at").order("created_at",{ascending:false}),
       ]);
 
-      const error = overviewResult.error || businessesResult.error || requestsResult.error || complimentaryResult.error || complimentaryModulesResult.error || adminStatesResult.error;
+      const error = overviewResult.error || businessesResult.error || requestsResult.error || complimentaryResult.error || complimentaryModulesResult.error || adminStatesResult.error || supportRequestsResult.error;
 
       if (error) {
         console.error(error);
@@ -107,6 +111,7 @@ export default function PlatformAdmin({
         setComplimentaryAccess((complimentaryResult.data as ComplimentaryAccess[]|null)??[]);
         setComplimentaryModules((complimentaryModulesResult.data as ComplimentaryModule[]|null)??[]);
         setBusinessAdminStates((adminStatesResult.data as BusinessAdminState[]|null)??[]);
+        setSupportRequests((supportRequestsResult.data as SupportRequest[]|null)??[]);
       }
 
       setLoading(false);
@@ -176,6 +181,12 @@ export default function PlatformAdmin({
       setModuleRequests(current => current.filter(item => item.id !== request.id));
       setMessage(`${moduleName(request.module_key)} request ${approve ? "approved" : "denied"}.`);
     }
+  }
+
+  async function updateSupportRequest(request:SupportRequest,status:SupportRequest["status"]){
+    const now=new Date().toISOString();
+    const {error}=await supabase.from("support_request").update({status,updated_at:now,resolved_at:status==="resolved"?now:null}).eq("id",request.id);
+    if(error)setMessage(error.message);else setSupportRequests(current=>current.map(item=>item.id===request.id?{...item,status,updated_at:now}:item));
   }
 
   const filteredBusinesses = useMemo(() => {
@@ -390,6 +401,12 @@ export default function PlatformAdmin({
             <span>Total pets</span>
             <strong>{loading ? "—" : overview.total_pets}</strong>
           </article>
+        </section>
+
+        <section className="dashboard-panel" style={{ marginBottom: 32 }}>
+          <div className="panel-heading"><div><p className="eyebrow">Customer support</p><h3>Support inbox</h3></div><strong>{supportRequests.filter(item=>item.status!=="resolved").length} open</strong></div>
+          <div style={{display:"flex",gap:8,marginBottom:18}}><button type="button" className={supportFilter==="open"?"primary-button":"secondary-button"} onClick={()=>setSupportFilter("open")}>Open</button><button type="button" className={supportFilter==="resolved"?"primary-button":"secondary-button"} onClick={()=>setSupportFilter("resolved")}>Resolved</button></div>
+          {supportRequests.filter(item=>supportFilter==="open"?item.status!=="resolved":item.status==="resolved").length===0?<div className="empty-state"><p>No {supportFilter} support requests.</p></div>:<div style={{display:"grid",gap:12}}>{supportRequests.filter(item=>supportFilter==="open"?item.status!=="resolved":item.status==="resolved").map(request=><article key={request.id} style={{border:"1px solid #d7e0dd",borderLeft:`5px solid ${request.status==="new"?"#00b4d8":request.status==="in_progress"?"#e7b52e":"#38a169"}`,borderRadius:12,padding:16}}><div style={{display:"flex",justifyContent:"space-between",gap:18,flexWrap:"wrap"}}><div><span style={{fontSize:12,fontWeight:900,textTransform:"uppercase",color:"#0786c1"}}>{request.category.replaceAll("_"," ")} · {request.status.replaceAll("_"," ")}</span><h4 style={{margin:"5px 0"}}>{request.subject}</h4><p style={{margin:"5px 0"}}><strong>{request.requester_name}</strong> · <a href={`mailto:${request.requester_email}`}>{request.requester_email}</a>{request.business_name?` · ${request.business_name}`:""}</p><small>{new Date(request.created_at).toLocaleString()}</small></div><div style={{display:"flex",gap:8,alignItems:"flex-start",flexWrap:"wrap"}}>{request.status!=="in_progress"&&request.status!=="resolved"&&<button className="secondary-button" onClick={()=>void updateSupportRequest(request,"in_progress")}>Start working</button>}{request.status!=="resolved"?<button className="primary-button" onClick={()=>void updateSupportRequest(request,"resolved")}>Mark resolved</button>:<button className="secondary-button" onClick={()=>void updateSupportRequest(request,"in_progress")}>Reopen</button>}</div></div><p style={{margin:"16px 0 0",padding:"14px",borderRadius:9,background:"#f5f9fa",whiteSpace:"pre-wrap"}}>{request.message}</p></article>)}</div>}
         </section>
 
         <section className="dashboard-panel" style={{ marginBottom: 32 }}>

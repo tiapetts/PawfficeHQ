@@ -1,0 +1,28 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+const allowedOrigins = new Set(["https://pawfficehq.com", "https://www.pawfficehq.com", "http://localhost:5173"]);
+const cors = (request: Request) => ({ "Access-Control-Allow-Origin": allowedOrigins.has(request.headers.get("Origin") ?? "") ? request.headers.get("Origin")! : "https://pawfficehq.com", "Access-Control-Allow-Headers": "content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" });
+const json = (request: Request, body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors(request), "Content-Type": "application/json" } });
+const clean = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const categories = new Set(["product", "account", "billing", "technical", "privacy", "legal", "other"]);
+Deno.serve(async (request) => {
+  if (request.method === "OPTIONS") return new Response("ok", { headers: cors(request) });
+  if (request.method !== "POST") return json(request, { error: "Method not allowed." }, 405);
+  const input = await request.json().catch(() => null);
+  if (!input || typeof input !== "object") return json(request, { error: "Invalid request." }, 400);
+  const body = input as Record<string, unknown>;
+  if (clean(body.website, 200)) return json(request, { success: true });
+  const requester_name = clean(body.requester_name, 100), requester_email = clean(body.requester_email, 254).toLowerCase();
+  const business_name = clean(body.business_name, 160) || null, category = clean(body.category, 30), subject = clean(body.subject, 160), message = clean(body.message, 5000);
+  if (requester_name.length < 2 || !emailPattern.test(requester_email) || !categories.has(category) || subject.length < 3 || message.length < 10) return json(request, { error: "Complete all required fields with a valid email address." }, 400);
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const salt = Deno.env.get("SUPPORT_RATE_LIMIT_SALT") ?? Deno.env.get("SUPABASE_URL") ?? "pawfficehq";
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${salt}:${forwarded}`));
+  const ip_hash = Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, "0")).join("");
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+  const { count } = await admin.from("support_request").select("id", { count: "exact", head: true }).eq("ip_hash", ip_hash).gte("created_at", new Date(Date.now() - 3600000).toISOString());
+  if ((count ?? 0) >= 5) return json(request, { error: "Too many requests. Please wait and try again later." }, 429);
+  const { error } = await admin.from("support_request").insert({ requester_name, requester_email, business_name, category, subject, message, ip_hash });
+  if (error) return json(request, { error: "Your request could not be saved. Please try again." }, 500);
+  return json(request, { success: true });
+});
