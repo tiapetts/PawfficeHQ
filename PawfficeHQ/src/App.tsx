@@ -6,9 +6,12 @@ import BusinessSetup from "./components/BusinessSetup";
 import Dashboard from "./components/Dashboard";
 import PlatformAdmin from "./components/PlatformAdmin";
 import SetPassword from "./components/SetPassword";
-import SubscriptionGate, { type SubscriptionAccess } from "./components/SubscriptionGate";
+import SubscriptionGate, {
+  type SubscriptionAccess,
+} from "./components/SubscriptionGate";
 import "./App.css";
 import "./UiPolish.css";
+import { Analytics } from "@vercel/analytics/react";
 
 type StaffProfile = {
   id: string;
@@ -18,10 +21,16 @@ type StaffProfile = {
 };
 
 function App() {
-  const [needsPassword, setNeedsPassword] = useState(
-    () => ["invite","recovery"].includes(new URLSearchParams(window.location.hash.slice(1)).get("type") ?? ""),
+  const [needsPassword, setNeedsPassword] = useState(() =>
+    ["invite", "recovery"].includes(
+      new URLSearchParams(window.location.hash.slice(1)).get("type") ?? "",
+    ),
   );
-  const [isPasswordRecovery,setIsPasswordRecovery]=useState(()=>new URLSearchParams(window.location.hash.slice(1)).get("type")==="recovery");
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(
+    () =>
+      new URLSearchParams(window.location.hash.slice(1)).get("type") ===
+      "recovery",
+  );
   const [session, setSession] = useState<Session | null>(null);
   const [staff, setStaff] = useState<StaffProfile | null>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
@@ -31,7 +40,8 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [profileError, setProfileError] = useState("");
-  const [subscriptionAccess, setSubscriptionAccess] = useState<SubscriptionAccess | null>(null);
+  const [subscriptionAccess, setSubscriptionAccess] =
+    useState<SubscriptionAccess | null>(null);
 
   async function loadStaffProfile(userId: string) {
     const { data, error } = await supabase
@@ -82,16 +92,21 @@ function App() {
   }
 
   async function loadSubscriptionAccess(businessId: string) {
-    const { data, error } = await supabase.rpc("get_subscription_access", { p_business_id: businessId });
+    const { data, error } = await supabase.rpc("get_subscription_access", {
+      p_business_id: businessId,
+    });
     if (error) {
       setProfileError(`Subscription check failed: ${error.message}`);
       return;
     }
-    setSubscriptionAccess((data?.[0] as SubscriptionAccess | undefined) ?? null);
+    setSubscriptionAccess(
+      (data?.[0] as SubscriptionAccess | undefined) ?? null,
+    );
   }
 
   useEffect(() => {
-    if (staff?.business_id && !isPlatformAdmin) void loadSubscriptionAccess(staff.business_id);
+    if (staff?.business_id && !isPlatformAdmin)
+      void loadSubscriptionAccess(staff.business_id);
   }, [staff?.business_id, isPlatformAdmin]);
 
   useEffect(() => {
@@ -134,7 +149,7 @@ function App() {
 
       setSession(newSession);
 
-      if(event==="PASSWORD_RECOVERY"){
+      if (event === "PASSWORD_RECOVERY") {
         setIsPasswordRecovery(true);
         setNeedsPassword(true);
       }
@@ -169,7 +184,15 @@ function App() {
   }
 
   if (needsPassword) {
-    return <SetPassword recovery={isPasswordRecovery} onComplete={() => {setNeedsPassword(false);setIsPasswordRecovery(false)}} />;
+    return (
+      <SetPassword
+        recovery={isPasswordRecovery}
+        onComplete={() => {
+          setNeedsPassword(false);
+          setIsPasswordRecovery(false);
+        }}
+      />
+    );
   }
 
   if (profileError) {
@@ -259,11 +282,23 @@ function App() {
   }
 
   if (!isPlatformAdmin && !subscriptionAccess) {
-    return <p className="loading-message">Checking your Pawffice HQ membership...</p>;
+    return (
+      <p className="loading-message">Checking your Pawffice HQ membership...</p>
+    );
   }
 
-  if (!isPlatformAdmin && subscriptionAccess && !subscriptionAccess.has_access) {
-    return <SubscriptionGate businessId={staff.business_id} access={subscriptionAccess} onRefresh={() => void loadSubscriptionAccess(staff.business_id)} />;
+  if (
+    !isPlatformAdmin &&
+    subscriptionAccess &&
+    !subscriptionAccess.has_access
+  ) {
+    return (
+      <SubscriptionGate
+        businessId={staff.business_id}
+        access={subscriptionAccess}
+        onRefresh={() => void loadSubscriptionAccess(staff.business_id)}
+      />
+    );
   }
 
   return (
@@ -271,7 +306,9 @@ function App() {
       businessId={staff.business_id}
       firstName={staff.first_name}
       subscriptionAccess={subscriptionAccess}
-      onSubscriptionRefresh={() => void loadSubscriptionAccess(staff.business_id)}
+      onSubscriptionRefresh={() =>
+        void loadSubscriptionAccess(staff.business_id)
+      }
     />
   );
 }
