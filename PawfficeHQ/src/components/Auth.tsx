@@ -221,8 +221,10 @@ export default function Auth() {
 
             {isSigningUp && !isResettingPassword && (
               <p className="auth-fine-print">
-                By creating an account, you can set up your business and begin
-                the 14-day trial.
+                By creating an account, you agree to the{" "}
+                <a href="/terms.html">Terms of Service</a> and acknowledge the{" "}
+                <a href="/privacy.html">Privacy Policy</a>. Your 14-day trial
+                begins when your account is created.
               </p>
             )}
             {message && (
@@ -398,7 +400,15 @@ export default function Auth() {
             <img src="/pwa-icon.png" alt="" />
             PawfficeHQ
           </strong>
-          <span>Built for the people behind exceptional pet care.</span>
+          <span className="auth-footer-tagline">
+            Built for the people behind exceptional pet care.
+          </span>
+          <nav aria-label="Legal and support links">
+            <a href="/privacy.html">Privacy</a>
+            <a href="/terms.html">Terms</a>
+            <a href="/contact.html">Contact</a>
+            <a href="/support.html">Support</a>
+          </nav>
         </footer>
       </div>
     </main>
