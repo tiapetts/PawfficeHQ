@@ -131,6 +131,16 @@ function Dashboard({
   const [enabledModules, setEnabledModules] = useState<Array<"grooming"|"pet_sitting"|"boarding_daycare"|"veterinary">>([]);
   const [expandedModules, setExpandedModules] = useState<Record<"grooming"|"pet_sitting"|"boarding_daycare"|"veterinary",boolean>>({grooming:true,pet_sitting:true,boarding_daycare:true,veterinary:true});
   const [boardingDraftDate, setBoardingDraftDate] = useState<string | null>(null);
+  const [dashboardNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (readOnly) return;
+    void supabase.rpc("record_platform_activity", { p_event_type: "page_view", p_page_key: activePage });
+    const heartbeat = window.setInterval(() => {
+      void supabase.rpc("record_platform_activity", { p_event_type: "activity_ping", p_page_key: activePage });
+    }, 300_000);
+    return () => window.clearInterval(heartbeat);
+  }, [activePage, readOnly]);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -331,7 +341,7 @@ function Dashboard({
     if (subscriptionAccess.is_complimentary) return `Complimentary ${subscriptionAccess.plan === "pro" ? "Pro" : "Basic"}`;
     if (subscriptionAccess.status === "trialing") {
       const remaining = subscriptionAccess.trial_end
-        ? Math.max(0, Math.ceil((new Date(subscriptionAccess.trial_end).getTime() - Date.now()) / 86_400_000))
+        ? Math.max(0, Math.ceil((new Date(subscriptionAccess.trial_end).getTime() - dashboardNow) / 86_400_000))
         : 0;
       return `Pro trial · ${remaining} day${remaining === 1 ? "" : "s"} left`;
     }
