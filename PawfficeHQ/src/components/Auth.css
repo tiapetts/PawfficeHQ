@@ -185,6 +185,11 @@
     text-align: center;
 }
 
+.auth-fine-print a {
+    color: #0077b6;
+    font-weight: 800;
+}
+
 .auth-marketing-page .auth-message {
     padding: 10px;
     border-radius: 9px;
@@ -376,6 +381,21 @@
     color: #c9edf7;
 }
 
+.auth-footer-tagline {
+    margin-left: auto;
+}
+
+.auth-footer nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.auth-footer a {
+    color: #fff;
+    font-weight: 800;
+}
+
 .auth-footer strong {
     color: #fff;
 }
@@ -445,5 +465,9 @@
         align-items: flex-start;
         flex-direction: column;
         padding: 25px 20px;
+    }
+
+    .auth-footer-tagline {
+        margin-left: 0;
     }
 }
