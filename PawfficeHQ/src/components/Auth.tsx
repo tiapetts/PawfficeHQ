@@ -33,6 +33,11 @@ export default function Auth() {
       if (error) {
         setMessage(error.message);
       } else {
+        window.dispatchEvent(
+          new CustomEvent("pawffice:analytics", {
+            detail: { name: "signup_completed" },
+          }),
+        );
         setMessage(
           "If an account uses that email address, a secure password-reset link is on its way. Check your spam folder too.",
         );
@@ -71,6 +76,11 @@ export default function Auth() {
   }
 
   function chooseSignUp() {
+    window.dispatchEvent(
+      new CustomEvent("pawffice:analytics", {
+        detail: { name: "signup_started" },
+      }),
+    );
     setIsSigningUp(true);
     setIsResettingPassword(false);
     setShowEmailHelp(false);
