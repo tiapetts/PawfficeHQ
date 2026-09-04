@@ -34,6 +34,7 @@ type ComplimentaryAccess={business_id:string;access_override_plan:"basic"|"pro"|
 type ComplimentaryModule={business_id:string;module_key:"pet_sitting"|"boarding_daycare"|"veterinary"};
 type BusinessAdminState={business_id:string;archived_at:string|null;archive_reason:string|null;access_suspended_at:string|null;suspension_reason:string|null};
 type SupportRequest={id:string;requester_name:string;requester_email:string;business_name:string|null;category:string;subject:string;message:string;status:"new"|"in_progress"|"resolved";created_at:string;updated_at:string};
+type UsageEvent={id:number;business_id:string;business_name:string;staff_id:string;staff_name:string;staff_email:string;event_type:"page_view"|"activity_ping";page_key:string;occurred_at:string};
 
 const emptyOverview: PlatformOverview = {
   total_businesses: 0,
@@ -60,6 +61,9 @@ export default function PlatformAdmin({
   const [businessFilter,setBusinessFilter]=useState<"active"|"archived">("active");
   const [supportRequests,setSupportRequests]=useState<SupportRequest[]>([]);
   const [supportFilter,setSupportFilter]=useState<"open"|"resolved">("open");
+  const [usageEvents,setUsageEvents]=useState<UsageEvent[]>([]);
+  const [usageRange,setUsageRange]=useState<"today"|"7days"|"30days">("7days");
+  const [analyticsNow,setAnalyticsNow]=useState(()=>Date.now());
   const [archiveCandidate,setArchiveCandidate]=useState<PlatformBusiness|null>(null);
   const [archiveMode,setArchiveMode]=useState<"archive"|"suspend">("archive");
   const [archiveReason,setArchiveReason]=useState("");
@@ -87,7 +91,7 @@ export default function PlatformAdmin({
       setLoading(true);
       setMessage("");
 
-      const [overviewResult, businessesResult, requestsResult, complimentaryResult, complimentaryModulesResult, adminStatesResult, supportRequestsResult] = await Promise.all([
+      const [overviewResult, businessesResult, requestsResult, complimentaryResult, complimentaryModulesResult, adminStatesResult, supportRequestsResult, usageResult] = await Promise.all([
         supabase.rpc("get_platform_overview").single(),
         supabase.rpc("get_platform_businesses"),
         supabase.from("module_access_request").select("id, business_id, module_key, request_type, message, created_at").eq("status","pending").order("created_at"),
@@ -95,9 +99,10 @@ export default function PlatformAdmin({
         supabase.from("complimentary_module_access").select("business_id, module_key"),
         supabase.from("business_admin_state").select("business_id, archived_at, archive_reason, access_suspended_at, suspension_reason"),
         supabase.from("support_request").select("id, requester_name, requester_email, business_name, category, subject, message, status, created_at, updated_at").order("created_at",{ascending:false}),
+        supabase.rpc("get_platform_usage_activity",{p_limit:500}),
       ]);
 
-      const error = overviewResult.error || businessesResult.error || requestsResult.error || complimentaryResult.error || complimentaryModulesResult.error || adminStatesResult.error || supportRequestsResult.error;
+      const error = overviewResult.error || businessesResult.error || requestsResult.error || complimentaryResult.error || complimentaryModulesResult.error || adminStatesResult.error || supportRequestsResult.error || usageResult.error;
 
       if (error) {
         console.error(error);
@@ -112,6 +117,7 @@ export default function PlatformAdmin({
         setComplimentaryModules((complimentaryModulesResult.data as ComplimentaryModule[]|null)??[]);
         setBusinessAdminStates((adminStatesResult.data as BusinessAdminState[]|null)??[]);
         setSupportRequests((supportRequestsResult.data as SupportRequest[]|null)??[]);
+        setUsageEvents((usageResult.data as UsageEvent[]|null)??[]);
       }
 
       setLoading(false);
@@ -119,6 +125,8 @@ export default function PlatformAdmin({
 
     void loadPlatformAdmin();
   }, []);
+
+  useEffect(()=>{const timer=window.setInterval(()=>setAnalyticsNow(Date.now()),60000);return()=>window.clearInterval(timer)},[]);
 
   function activeComplimentary(businessId:string){const item=complimentaryAccess.find(row=>row.business_id===businessId);return Boolean(item?.access_override_reason&&(!item.access_override_expires_at||new Date(item.access_override_expires_at)>new Date()))}
   function openComplimentary(business:PlatformBusiness){const existing=complimentaryAccess.find(item=>item.business_id===business.business_id);setComplimentaryCandidate(business);setComplimentaryPlan(existing?.access_override_plan??"pro");setComplimentaryDuration(existing?.access_override_expires_at?"custom":"90");setComplimentaryExpires(existing?.access_override_expires_at?.slice(0,10)??"");setComplimentaryReason(existing?.access_override_reason??"Beta tester");setComplimentarySelectedModules(complimentaryModules.filter(item=>item.business_id===business.business_id).map(item=>item.module_key))}
@@ -193,6 +201,11 @@ export default function PlatformAdmin({
     const query = search.trim().toLowerCase();
     return businesses.filter((business) => Boolean(businessAdminStates.find(item=>item.business_id===business.business_id)?.archived_at)===(businessFilter==="archived")).filter((business) => !query||business.business_name.toLowerCase().includes(query)).sort((a,b)=>{const aTime=a.last_appointment_at?new Date(a.last_appointment_at).getTime():0,bTime=b.last_appointment_at?new Date(b.last_appointment_at).getTime():0;return bTime-aTime||a.business_name.localeCompare(b.business_name)});
   }, [businesses,businessAdminStates,businessFilter,search]);
+
+  const filteredUsage=useMemo(()=>{const start=usageRange==="today"?new Date(new Date(analyticsNow).setHours(0,0,0,0)).getTime():analyticsNow-(usageRange==="7days"?7:30)*86400000;return usageEvents.filter(item=>new Date(item.occurred_at).getTime()>=start)},[usageEvents,usageRange,analyticsNow]);
+  const activeBusinessCount=new Set(usageEvents.filter(item=>analyticsNow-new Date(item.occurred_at).getTime()<=15*60000).map(item=>item.business_id)).size;
+  const activeStaffCount=new Set(usageEvents.filter(item=>analyticsNow-new Date(item.occurred_at).getTime()<=15*60000).map(item=>item.staff_id)).size;
+  const usagePageName=(key:string)=>key.replaceAll("_"," ").replace(/\b\w/g,letter=>letter.toUpperCase());
 
   async function startSupportSession() {
     if (!supportCandidate || supportReason.trim().length < 5) {
@@ -401,6 +414,12 @@ export default function PlatformAdmin({
             <span>Total pets</span>
             <strong>{loading ? "—" : overview.total_pets}</strong>
           </article>
+        </section>
+
+        <section className="dashboard-panel" style={{ marginBottom: 32 }}>
+          <div className="panel-heading"><div><p className="eyebrow">Customer activity</p><h3>Usage analytics</h3></div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{(["today","7days","30days"] as const).map(range=><button type="button" key={range} className={usageRange===range?"primary-button":"secondary-button"} onClick={()=>setUsageRange(range)}>{range==="today"?"Today":range==="7days"?"7 days":"30 days"}</button>)}</div></div>
+          <div className="summary-grid" style={{margin:"20px 0"}}><article className="summary-card"><span>Active businesses · 15 min</span><strong>{activeBusinessCount}</strong></article><article className="summary-card"><span>Active staff · 15 min</span><strong>{activeStaffCount}</strong></article><article className="summary-card"><span>Businesses in range</span><strong>{new Set(filteredUsage.map(item=>item.business_id)).size}</strong></article><article className="summary-card"><span>Module views in range</span><strong>{filteredUsage.filter(item=>item.event_type==="page_view").length}</strong></article></div>
+          {filteredUsage.length===0?<div className="empty-state"><p>No customer activity has been recorded for this range yet.</p></div>:<div style={{display:"grid",gridTemplateColumns:"minmax(0,1.25fr) minmax(280px,.75fr)",gap:20}}><div style={{overflowX:"auto"}}><h4>Recent activity</h4><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr style={{textAlign:"left",color:"#58716b"}}><th style={{padding:"10px"}}>Business</th><th style={{padding:"10px"}}>Staff</th><th style={{padding:"10px"}}>Area</th><th style={{padding:"10px"}}>Last seen</th></tr></thead><tbody>{filteredUsage.filter(item=>item.event_type==="page_view").slice(0,20).map(event=><tr key={event.id} style={{borderTop:"1px solid #d7e0dd"}}><td style={{padding:"12px 10px"}}><strong>{event.business_name}</strong></td><td style={{padding:"12px 10px"}}>{event.staff_name||event.staff_email}</td><td style={{padding:"12px 10px"}}>{usagePageName(event.page_key)}</td><td style={{padding:"12px 10px"}}>{new Date(event.occurred_at).toLocaleString()}</td></tr>)}</tbody></table></div><div><h4>Most-used areas</h4><div style={{display:"grid",gap:9}}>{Array.from(filteredUsage.filter(item=>item.event_type==="page_view").reduce((counts,event)=>counts.set(event.page_key,(counts.get(event.page_key)??0)+1),new Map<string,number>())).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([page,count])=><article key={page} style={{display:"flex",justifyContent:"space-between",gap:12,padding:"11px 13px",border:"1px solid #d7e0dd",borderRadius:9,background:"#f8fbfc"}}><span>{usagePageName(page)}</span><strong>{count}</strong></article>)}</div></div></div>}
         </section>
 
         <section className="dashboard-panel" style={{ marginBottom: 32 }}>
