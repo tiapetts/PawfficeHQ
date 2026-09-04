@@ -11,7 +11,6 @@ import SubscriptionGate, {
 } from "./components/SubscriptionGate";
 import "./App.css";
 import "./UiPolish.css";
-import { Analytics } from "@vercel/analytics/react";
 
 type StaffProfile = {
   id: string;
