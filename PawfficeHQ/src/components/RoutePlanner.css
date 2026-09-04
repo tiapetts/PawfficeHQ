@@ -31,8 +31,13 @@
   padding-bottom: 0.5rem;
 }
 
+.route-day.outside-month {
+  opacity: 0.5;
+  background: #f1f4f5;
+}
+
 .route-day {
-  min-height: 240px;
+  min-height: 150px;
   overflow: hidden;
   border: 1px solid #d8e4e8;
   border-radius: 14px;
