@@ -77,9 +77,46 @@
 .route-appointment small { color: #60717a; }
 .route-appointment.dimmed { opacity: 0.2; }
 .route-drag-help { margin: 0.8rem 0 0; color: #60717a; font-size: 0.9rem; }
+.route-mobile-help { display: none; }
+.mobile-drag-tray { display: none; }
 
 @media (max-width: 720px) {
   .route-week-toolbar { align-items: stretch; flex-direction: column; }
   .route-week-toolbar > div:last-child { display: grid; grid-template-columns: repeat(3, 1fr); }
-  .route-week-grid { grid-template-columns: repeat(7, minmax(155px, 1fr)); }
+  .route-client-search { display: none; }
+  .route-week-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.25rem;
+    overflow: visible;
+  }
+  .route-day {
+    min-width: 0;
+    min-height: 62px;
+    border-radius: 9px;
+  }
+  .route-day > header {
+    display: flex;
+    min-height: 62px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.1rem;
+    padding: 0.25rem 0.1rem;
+    text-align: center;
+    border-bottom: 0;
+  }
+  .route-day > header span { font-size: 0.64rem; text-transform: uppercase; }
+  .route-day > header strong { font-size: 1rem; }
+  .route-day > header small { font-size: 0.58rem; line-height: 1; }
+  .route-day > div { display: none; }
+  .route-day.selected { border-width: 2px; }
+  .route-day.touch-target { border: 2px solid #f4a261; background: #fff3df; transform: scale(1.04); }
+  .route-drag-help { display: none; }
+  .route-mobile-help { display: block; margin: 0.8rem 0 0; color: #60717a; font-size: 0.85rem; }
+  .mobile-drag-tray { display: grid; gap: 0.55rem; margin-top: 1rem; padding: 0.85rem; border-radius: 12px; background: #f3f8fa; }
+  .mobile-drag-tray > span { color: #60717a; font-size: 0.82rem; }
+  .mobile-drag-tray > button { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0.65rem; width: 100%; padding: 0.7rem; border: 1px solid #cbdde3; border-radius: 10px; background: white; color: inherit; text-align: left; touch-action: none; }
+  .mobile-drag-tray > button > b { color: var(--brand-primary); font-size: 1.25rem; }
+  .mobile-drag-tray > button > span { display: grid; gap: 0.15rem; }
+  .mobile-drag-tray > button small { color: #60717a; }
+  .mobile-drag-tray > button.dragging { opacity: 0.7; border-color: #f4a261; box-shadow: 0 8px 24px rgba(20,55,65,.2); }
 }
