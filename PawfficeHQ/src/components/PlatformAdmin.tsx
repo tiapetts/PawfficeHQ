@@ -102,11 +102,11 @@ export default function PlatformAdmin({
         supabase.rpc("get_platform_usage_activity",{p_limit:500}),
       ]);
 
-      const error = overviewResult.error || businessesResult.error || requestsResult.error || complimentaryResult.error || complimentaryModulesResult.error || adminStatesResult.error || supportRequestsResult.error || usageResult.error;
+      const coreError = overviewResult.error || businessesResult.error || requestsResult.error || complimentaryResult.error || complimentaryModulesResult.error || adminStatesResult.error || supportRequestsResult.error;
 
-      if (error) {
-        console.error(error);
-        setMessage(error.message);
+      if (coreError) {
+        console.error(coreError);
+        setMessage(coreError.message);
       } else {
         setOverview(
           (overviewResult.data as PlatformOverview | null) ?? emptyOverview,
@@ -117,6 +117,15 @@ export default function PlatformAdmin({
         setComplimentaryModules((complimentaryModulesResult.data as ComplimentaryModule[]|null)??[]);
         setBusinessAdminStates((adminStatesResult.data as BusinessAdminState[]|null)??[]);
         setSupportRequests((supportRequestsResult.data as SupportRequest[]|null)??[]);
+      }
+
+      if (usageResult.error) {
+        console.error(usageResult.error);
+        setUsageEvents([]);
+        if (!coreError) {
+          setMessage(`Usage analytics are temporarily unavailable: ${usageResult.error.message}`);
+        }
+      } else {
         setUsageEvents((usageResult.data as UsageEvent[]|null)??[]);
       }
 
