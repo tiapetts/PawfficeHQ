@@ -47,7 +47,7 @@ begin
     on client.business_id = b.id
   left join public."PET" pet
     on pet.business_id = b.id
-  left join public."APPOINTMENT" appointment
+  left join public.appointment appointment
     on appointment.business_id = b.id
   group by b.id, b.business_name, owner_user.email, owner_staff.email
   order by b.business_name;
