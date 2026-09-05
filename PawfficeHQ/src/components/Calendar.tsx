@@ -69,6 +69,15 @@ type AppointmentService = {
   staff_id: string | null;
 };
 
+function getMonday(date: Date) {
+  const monday = new Date(date);
+  const day = monday.getDay();
+  const distance = day === 0 ? -6 : 1 - day;
+  monday.setDate(monday.getDate() + distance);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
 function Calendar({
   businessId,
   readOnly = false,
@@ -330,15 +339,6 @@ function Calendar({
       ),
     [appointments],
   );
-
-  function getMonday(date: Date) {
-    const monday = new Date(date);
-    const day = monday.getDay();
-    const distance = day === 0 ? -6 : 1 - day;
-    monday.setDate(monday.getDate() + distance);
-    monday.setHours(0, 0, 0, 0);
-    return monday;
-  }
 
   function formatInputDateTime(date: Date) {
     const year = date.getFullYear();

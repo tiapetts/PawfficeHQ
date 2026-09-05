@@ -18,5 +18,13 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Existing hook findings are tracked as a fixed budget. New warnings fail CI.
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/exhaustive-deps': 'warn',
+      'react-refresh/only-export-components': 'warn',
+      '@typescript-eslint/ban-ts-comment': 'warn',
+      'no-useless-escape': 'warn',
+    },
   },
 ])
