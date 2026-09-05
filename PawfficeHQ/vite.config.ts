@@ -2,6 +2,11 @@ import { defineConfig } from "vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import { VitePWA } from "vite-plugin-pwa";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
+
+const sentryBuildConfigured = Boolean(
+  process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT,
+);
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -61,5 +66,14 @@ export default defineConfig({
         type: "module",
       },
     }),
+    ...(sentryBuildConfigured
+      ? [sentryVitePlugin({
+          authToken: process.env.SENTRY_AUTH_TOKEN,
+          org: process.env.SENTRY_ORG,
+          project: process.env.SENTRY_PROJECT,
+          sourcemaps: { filesToDeleteAfterUpload: ["./dist/**/*.map"] },
+        })]
+      : []),
   ],
+  build: { sourcemap: sentryBuildConfigured ? "hidden" : false },
 });

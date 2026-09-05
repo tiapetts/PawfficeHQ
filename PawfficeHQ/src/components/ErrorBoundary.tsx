@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import "./ErrorBoundary.css";
+import { captureApplicationError } from "../lib/monitoring";
 
 type Props = { children: ReactNode };
 type State = { hasError: boolean };
@@ -11,6 +12,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("PawfficeHQ application error", error, info);
+    captureApplicationError(error, info.componentStack ?? undefined);
   }
 
   render() {
