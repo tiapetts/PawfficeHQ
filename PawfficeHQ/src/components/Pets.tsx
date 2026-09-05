@@ -226,9 +226,8 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
     }
 
     const existingLink = wasEditing ? ownerLink(editingId) : undefined;
-    let relationshipError: { message: string } | null = null;
-    if (existingLink) {
-      const result = await supabase
+    const relationshipResult = existingLink
+      ? await supabase
         .from("client_pet")
         .update({
           client_id: Number(form.ownerId),
@@ -236,17 +235,14 @@ export default function Pets({ businessId, readOnly = false }: PetsProps) {
           is_primary: true,
         })
         .eq("pet_id", editingId)
-        .eq("client_id", existingLink.client_id);
-      relationshipError = result.error;
-    } else {
-      const result = await supabase.from("client_pet").insert({
-        client_id: Number(form.ownerId),
-        pet_id: savedPet.id,
-        relationship: "owner",
-        is_primary: true,
-      });
-      relationshipError = result.error;
-    }
+        .eq("client_id", existingLink.client_id)
+      : await supabase.from("client_pet").insert({
+          client_id: Number(form.ownerId),
+          pet_id: savedPet.id,
+          relationship: "owner",
+          is_primary: true,
+        });
+    const relationshipError = relationshipResult.error;
     if (relationshipError) {
       if (!wasEditing)
         await supabase.from("PET").delete().eq("id", savedPet.id);

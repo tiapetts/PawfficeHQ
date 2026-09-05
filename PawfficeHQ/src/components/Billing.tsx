@@ -46,12 +46,13 @@ async function invokeBillingFunction(name: string, body: Record<string, unknown>
 }
 
 export default function Billing({ businessId, access, onRefresh }: Props) {
+  const [loadedAt] = useState(() => Date.now());
   const [action, setAction] = useState<Action>(null);
   const [message, setMessage] = useState("");
   const isTrial = access.status === "trialing";
   const isComplimentary = access.is_complimentary;
   const daysLeft = access.trial_end
-    ? Math.max(0, Math.ceil((new Date(access.trial_end).getTime() - Date.now()) / 86_400_000))
+    ? Math.max(0, Math.ceil((new Date(access.trial_end).getTime() - loadedAt) / 86_400_000))
     : 0;
 
   async function startCheckout(plan: "basic" | "pro") {
