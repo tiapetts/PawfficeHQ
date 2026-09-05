@@ -10,6 +10,7 @@ import "./Responsive.css";
 import "./Notifications.css";
 import "./CalendarClientSearch.css";
 import "./CalendarOverlap.css";
+import "./CalendarMonthPicker.css";
 
 type CalendarProps = {
   businessId: string;
@@ -304,6 +305,20 @@ function Calendar({
     setMobileDate(today);
     setWeekStart(getMonday(today));
   }
+
+  function jumpToMonth(value: string) {
+    const [year, month] = value.split("-").map(Number);
+    if (!year || !month) return;
+    const firstOfMonth = new Date(year, month - 1, 1);
+    firstOfMonth.setHours(0, 0, 0, 0);
+    setMobileDate(firstOfMonth);
+    setWeekStart(getMonday(firstOfMonth));
+  }
+
+  const displayedMonth = (() => {
+    const displayedDate = isMobile ? mobileDate : weekDays[3];
+    return `${displayedDate.getFullYear()}-${String(displayedDate.getMonth() + 1).padStart(2, "0")}`;
+  })();
 
   const upcomingAppointments = useMemo(
     () =>
@@ -973,7 +988,16 @@ function Calendar({
             </h3>
           </div>
 
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div className="calendar-date-controls">
+            <label className="calendar-month-picker">
+              <span>Jump to month</span>
+              <input
+                type="month"
+                value={displayedMonth}
+                onChange={(event) => jumpToMonth(event.target.value)}
+                aria-label="Jump to month and year"
+              />
+            </label>
             <button
               className="secondary-button"
               type="button"
