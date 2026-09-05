@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import "./AppointmentHistory.css";
+import RebookAppointment from "./RebookAppointment";
 
 type AppointmentHistoryProps = {
   businessId: string;
@@ -785,7 +786,7 @@ export default function AppointmentHistory({
                 : 0;
               const fullyRefunded = Boolean(stripePayment && refundable <= 0);
               const partiallyRefunded = refundedAmount > 0 && !fullyRefunded;
-              const paymentComplete = Boolean(stripePayment);
+              const paymentComplete = appointmentInvoice?.status === "paid";
 
               return (
                 <article
@@ -890,6 +891,8 @@ export default function AppointmentHistory({
                               ? "Partially refunded"
                               : "Paid"}
                         </button>
+
+                        <RebookAppointment businessId={businessId} appointmentId={appointment.id} sourceStartAt={appointment.start_at} />
 
                         {!fullyRefunded && stripePayment && (
                           <button
