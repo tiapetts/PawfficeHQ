@@ -1,0 +1,45 @@
+.calendar-date-controls {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.calendar-month-picker {
+  display: grid;
+  gap: 4px;
+  min-width: 170px;
+  color: #405a54;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.calendar-month-picker input {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid #9fb2ad;
+  border-radius: 9px;
+  background: white;
+  color: #173d36;
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+@media (max-width: 720px) {
+  .calendar-date-controls {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    width: 100%;
+  }
+
+  .calendar-month-picker {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .calendar-date-controls .secondary-button {
+    width: 100%;
+  }
+}
