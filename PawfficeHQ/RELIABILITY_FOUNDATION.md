@@ -8,7 +8,7 @@ The repository inherited 41 React hook, hot-reload, generated-markup, and TypeSc
 
 ## Next milestones
 
-- Add error monitoring and release alerts.
+- Production error monitoring is integrated; finish the Sentry project and alert configuration in Vercel/Sentry.
 - Add browser tests for sign-in, appointment creation, checkout, and rebooking.
 - Exercise database restores and document recovery targets.
 - Add tenant-isolation and role-permission regression tests.
