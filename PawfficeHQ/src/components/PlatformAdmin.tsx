@@ -15,6 +15,7 @@ type PlatformOverview = {
 type PlatformBusiness = {
   business_id: string;
   business_name: string;
+  owner_email: string | null;
   staff_count: number;
   client_count: number;
   pet_count: number;
@@ -208,7 +209,7 @@ export default function PlatformAdmin({
 
   const filteredBusinesses = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return businesses.filter((business) => Boolean(businessAdminStates.find(item=>item.business_id===business.business_id)?.archived_at)===(businessFilter==="archived")).filter((business) => !query||business.business_name.toLowerCase().includes(query)).sort((a,b)=>{const aTime=a.last_appointment_at?new Date(a.last_appointment_at).getTime():0,bTime=b.last_appointment_at?new Date(b.last_appointment_at).getTime():0;return bTime-aTime||a.business_name.localeCompare(b.business_name)});
+    return businesses.filter((business) => Boolean(businessAdminStates.find(item=>item.business_id===business.business_id)?.archived_at)===(businessFilter==="archived")).filter((business) => !query||business.business_name.toLowerCase().includes(query)||business.owner_email?.toLowerCase().includes(query)).sort((a,b)=>{const aTime=a.last_appointment_at?new Date(a.last_appointment_at).getTime():0,bTime=b.last_appointment_at?new Date(b.last_appointment_at).getTime():0;return bTime-aTime||a.business_name.localeCompare(b.business_name)});
   }, [businesses,businessAdminStates,businessFilter,search]);
 
   const filteredUsage=useMemo(()=>{const start=usageRange==="today"?new Date(new Date(analyticsNow).setHours(0,0,0,0)).getTime():analyticsNow-(usageRange==="7days"?7:30)*86400000;return usageEvents.filter(item=>new Date(item.occurred_at).getTime()>=start)},[usageEvents,usageRange,analyticsNow]);
@@ -462,7 +463,7 @@ export default function PlatformAdmin({
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search businesses"
+              placeholder="Search businesses or emails"
               style={{ maxWidth: 320 }}
             />
           </div>
@@ -495,7 +496,7 @@ export default function PlatformAdmin({
                       style={{ borderTop: "1px solid #d7e0dd" }}
                     >
                       <td style={{ padding: "16px 10px" }}>
-                        <strong>{business.business_name}</strong>{activeComplimentary(business.business_id)&&<span style={{display:"block",marginTop:5,color:"#087341",fontWeight:800,fontSize:12}}>Complimentary access</span>}{adminState(business.business_id)?.archived_at&&<span style={{display:"block",marginTop:5,color:"#6d5a16",fontWeight:800,fontSize:12}}>Archived · {new Date(adminState(business.business_id)!.archived_at!).toLocaleDateString()}</span>}{adminState(business.business_id)?.access_suspended_at&&<span style={{display:"block",marginTop:5,color:"#a52a1c",fontWeight:800,fontSize:12}}>Access suspended</span>}
+                        <strong>{business.business_name}</strong>{business.owner_email&&<a href={`mailto:${business.owner_email}`} style={{display:"block",marginTop:5,color:"#087fa1",fontSize:13,overflowWrap:"anywhere"}}>{business.owner_email}</a>}{activeComplimentary(business.business_id)&&<span style={{display:"block",marginTop:5,color:"#087341",fontWeight:800,fontSize:12}}>Complimentary access</span>}{adminState(business.business_id)?.archived_at&&<span style={{display:"block",marginTop:5,color:"#6d5a16",fontWeight:800,fontSize:12}}>Archived · {new Date(adminState(business.business_id)!.archived_at!).toLocaleDateString()}</span>}{adminState(business.business_id)?.access_suspended_at&&<span style={{display:"block",marginTop:5,color:"#a52a1c",fontWeight:800,fontSize:12}}>Access suspended</span>}
                       </td>
                       <td style={{ padding: "16px 10px" }}>
                         {business.staff_count}
