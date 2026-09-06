@@ -136,3 +136,18 @@ select,
 textarea {
   font: inherit;
 }
+
+.staging-banner {
+  position: sticky;
+  top: 0;
+  z-index: 10000;
+  width: 100%;
+  padding: 8px 16px;
+  border-bottom: 2px solid #7a4b00;
+  background: #f4c95d;
+  color: #2f2400;
+  font-size: 0.875rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
