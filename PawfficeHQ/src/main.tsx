@@ -8,9 +8,16 @@ import { initializeMonitoring } from "./lib/monitoring.ts";
 
 initializeMonitoring();
 
+const isStaging = import.meta.env.VITE_APP_ENV === "staging";
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary>
+      {isStaging ? (
+        <div className="staging-banner" role="status">
+          STAGING — TEST DATA ONLY
+        </div>
+      ) : null}
       <App />
       <Analytics />
     </ErrorBoundary>
