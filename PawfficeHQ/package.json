@@ -9,6 +9,7 @@
     "lint": "eslint . --max-warnings 41",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:e2e": "playwright test",
     "smoke": "node scripts/smoke-build.mjs",
     "check": "npm run lint && npm run test:run && npm run build && npm run smoke",
     "preview": "vite preview"
@@ -22,7 +23,9 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
+    "@playwright/test": "^1.55.0",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
     "@rolldown/plugin-babel": "^0.2.3",
     "@sentry/vite-plugin": "^5.4.0",
     "@testing-library/jest-dom": "^7.0.1",
