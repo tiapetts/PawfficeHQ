@@ -13,7 +13,7 @@ export function initializeMonitoring() {
 
   Sentry.init({
     dsn,
-    environment: import.meta.env.MODE,
+    environment: import.meta.env.VITE_APP_ENV ?? import.meta.env.MODE,
     enabled: import.meta.env.PROD,
     sendDefaultPii: false,
     tracesSampleRate: 0.1,

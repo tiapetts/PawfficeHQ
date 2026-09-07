@@ -5,8 +5,10 @@ import App from "./App.tsx";
 import { Analytics } from "@vercel/analytics/react";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import { initializeMonitoring } from "./lib/monitoring.ts";
+import { registerPawfficeServiceWorker } from "./lib/registerServiceWorker.ts";
 
 initializeMonitoring();
+registerPawfficeServiceWorker();
 
 const isStaging = import.meta.env.VITE_APP_ENV === "staging";
 
