@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import Clients from "./Clients";
 import Pets from "./Pets";
@@ -23,6 +23,7 @@ import BoardingCalendar from "./BoardingCalendar";
 import BoardingServices from "./BoardingServices";
 import StaffEarnings from "./StaffEarnings";
 import MobileGrooming from "./MobileGrooming";
+import Messages from "./Messages";
 import type { SubscriptionAccess } from "./SubscriptionGate";
 import { applyBusinessTheme } from "./Settings";
 import "./Responsive.css";
@@ -80,6 +81,7 @@ type AppointmentService = {
 
 type ActivePage =
   | "dashboard"
+  | "messages"
   | "clients"
   | "pets"
   | "services"
@@ -110,6 +112,16 @@ function Dashboard({
   subscriptionAccess = null,
   onSubscriptionRefresh,
 }: DashboardProps) {
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const refreshUnreadMessages = useCallback(async () => {
+    const { data, error } = await supabase.rpc("messaging_unread_count", { p_business_id: businessId });
+    if (!error) setUnreadMessages(Number(data ?? 0));
+  }, [businessId]);
+  useEffect(() => {
+    const initial = window.setTimeout(() => void refreshUnreadMessages(), 0);
+    const timer = window.setInterval(() => { if (!document.hidden) void refreshUnreadMessages(); }, 15_000);
+    return () => { window.clearTimeout(initial); window.clearInterval(timer); };
+  }, [refreshUnreadMessages]);
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
   const [requestedInvoiceId, setRequestedInvoiceId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -402,6 +414,12 @@ function Dashboard({
             Calendar
           </button>
           <button
+            className={`nav-button ${activePage === "messages" ? "active" : ""}`}
+            onClick={() => openPage("messages")}
+          >
+            Messages{unreadMessages > 0 ? ` (${unreadMessages})` : ""}
+          </button>
+          <button
             className={`nav-button ${activePage === "invoices" ? "active" : ""}`}
             onClick={() => openPage("invoices")}
           >
@@ -458,6 +476,8 @@ function Dashboard({
       <main className="dashboard-main">
         {activePage === "calendar" ? (
           <Calendar businessId={businessId} readOnly={readOnly} onOpenInvoice={(invoiceId) => { setRequestedInvoiceId(invoiceId); setActivePage("invoices"); }} />
+        ) : activePage === "messages" ? (
+          <Messages key={businessId} businessId={businessId} readOnly={readOnly} onUnreadChange={refreshUnreadMessages} />
         ) : activePage === "history" ? (
           <AppointmentHistory businessId={businessId} onOpenInvoice={(invoiceId) => { setRequestedInvoiceId(invoiceId); setActivePage("invoices"); }} />
         ) : activePage === "invoices" ? (
