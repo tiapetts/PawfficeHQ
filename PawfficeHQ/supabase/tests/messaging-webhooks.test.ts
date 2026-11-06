@@ -57,7 +57,7 @@ globalThis.fetch = (async (resource: RequestInfo | URL, init?: RequestInit) => {
     inboundWrites.push(JSON.parse(String(init?.body)));
     return json(threadId);
   }
-  let rows: Row[] = [];
+  let rows: Row[];
   if (url.pathname.endsWith("/business_sms_number")) {
     const phone = url.searchParams.get("phone_number")?.replace("eq.", "") ??
       "+19205550001";
@@ -80,7 +80,7 @@ globalThis.fetch = (async (resource: RequestInfo | URL, init?: RequestInit) => {
       sms_consent: consent,
       archived_at: null,
     }];
-  } else if (url.pathname.endsWith("/client_message")) {
+  } else if (url.pathname.endsWith("/client_sms_message")) {
     if (method === "POST") {
       log = {
         ...JSON.parse(String(init?.body)),

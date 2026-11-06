@@ -4,7 +4,7 @@ This change adds Messages beside Calendar in the business sidebar. Staff can sta
 
 ## Deployment order
 
-1. Apply `supabase/migrations/202611060001_client_messaging.sql` to **staging** first.
+1. Apply `supabase/migrations/20261106190022_client_messaging.sql` to **staging** first.
 2. Provision a verified number for **each business**, as below. There is no global-number fallback. Configure every existing reminder-enabled business before deploying the reminder function update, or its reminders will be skipped.
 3. Add the function secrets below, then deploy `send-client-message` with JWT verification **enabled**. Deploy `receive-appointment-confirmation` and `client-message-status` with JWT verification **disabled**; both verify Twilio's signed request against the receiving/sending number's own account token.
 4. Deploy the updated `process-appointment-reminders` with its existing verification/scheduling configuration. It now uses the business's number and an atomic SMS quota reservation shared with custom replies.
@@ -35,7 +35,7 @@ These must be the exact externally configured HTTPS URLs, without query paramete
 
 ## Expected behavior and limits
 
-- Existing `appointment_sms_message` reminder/confirmation logs are backfilled and future writes mirrored. Texts previously discarded by the old webhook cannot be recovered from the app database; examine Twilio logs separately if needed.
+- Existing `appointment_sms_message` reminder/confirmation logs and SMS rows from the deployed pickup `client_message` log are backfilled into `client_sms_message`, and future writes are mirrored. The original pickup/email log is preserved. Texts previously discarded by the old webhook cannot be recovered from the app database; examine Twilio logs separately if needed.
 - Each reply is routed by the business number in `To`, then matched to a unique client number **inside that business**. A new sender is still saved and visible by phone number. To reply, add a unique client with that number and recorded SMS consent, then use New message to link the thread.
 - Sending validates active staff membership, subscription access, current client phone number, archive state, SMS consent, and opt-out state server-side. Unicode and multipart messages consume the appropriate segment allowance. Reserved segments remain consumed after a provider failure or timeout, to avoid undercounting ambiguous sends.
 - Confirmation replies still update one unambiguous upcoming appointment associated with a recent reminder. A service question never triggers the old “Reply C” canned response. If several appointments could match, the text is saved for staff to clarify.
@@ -43,7 +43,7 @@ These must be the exact externally configured HTTPS URLs, without query paramete
 - An interrupted send keeps its request ID. Check send status reuses that request instead of creating another message. A send left `pending` or `unknown` requires checking Twilio logs before manually reconciling its status; the app deliberately does not retry the provider automatically.
 - “Queued” means accepted by Twilio, not delivered. Signed status callbacks advance messages to sent/delivered/failed/undelivered and cannot downgrade a terminal status.
 - SMS text is supported in this first version. MMS attachments are identified by count and must be viewed in Twilio; files are not downloaded into the app. Automatic TwiML confirmation acknowledgments are not part of the conversation log.
-- The existing deployed `send-client-notification` (pickup/email notifications) has no source in this repository. Its history cannot be imported or mirrored without that function and its log schema. It remains separate from this change; do not overwrite or redeploy it with an invented implementation. New custom texts and reminder history are included here.
+- The deployed `send-client-notification` source has been recovered from Supabase into the repository without changing its sending behavior. Keep its existing email/provider configuration. A database trigger brings its SMS log entries into Messages while preserving its original table; email entries remain in the original log. This function still uses its existing global Twilio Messaging Service configuration, so verify that its sender pool matches each business's mapped number before relying on two-way pickup replies. Do not redeploy it merely to enable the new inbox.
 
 ## Validation
 

@@ -24,7 +24,7 @@ Deno.serve(async (request) => {
     const next = params.get("MessageStatus") ?? "";
     if (!messageId || !sid) return twiml(undefined, 400);
     const admin = messagingAdmin();
-    const { data: message, error } = await admin.from("client_message").select(
+    const { data: message, error } = await admin.from("client_sms_message").select(
       "id,status,provider_message_id,conversation_id",
     ).eq("id", messageId).eq("business_id", number.business_id).eq(
       "direction",
@@ -41,7 +41,7 @@ Deno.serve(async (request) => {
     if (threadError) throw threadError;
     if (thread.phone_number !== params.get("To")) return twiml(undefined, 403);
     if (shouldAdvanceStatus(message.status, next)) {
-      const { error: updateError } = await admin.from("client_message").update({
+      const { error: updateError } = await admin.from("client_sms_message").update({
         status: next,
         provider_message_id: sid,
         error_message: ["failed", "undelivered"].includes(next)

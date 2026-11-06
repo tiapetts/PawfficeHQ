@@ -56,7 +56,7 @@ Deno.serve(async (request) => {
   }
   const body = input.message.trim();
   async function existingAttempt() {
-    const { data, error } = await admin.from("client_message").select(
+    const { data, error } = await admin.from("client_sms_message").select(
       "id,conversation_id,message_body,status,error_message",
     ).eq("business_id", input.businessId).eq("request_id", input.requestId)
       .maybeSingle();
@@ -126,7 +126,7 @@ Deno.serve(async (request) => {
           "Your business's Twilio connection needs to be configured before sending.",
       }, 503);
     }
-    const { data: log, error: logError } = await admin.from("client_message")
+    const { data: log, error: logError } = await admin.from("client_sms_message")
       .insert({
         business_id: input.businessId,
         conversation_id: thread.id,
@@ -151,7 +151,7 @@ Deno.serve(async (request) => {
       const error = quotaError
         ? "Unable to check SMS allowance. Try again later."
         : "Monthly SMS allowance reached. Check Billing.";
-      await admin.from("client_message").update({
+      await admin.from("client_sms_message").update({
         status: "failed",
         error_message: error,
       }).eq("id", log.id);
@@ -184,7 +184,7 @@ Deno.serve(async (request) => {
       );
       payload = await response.json();
     } catch {
-      await admin.from("client_message").update({
+      await admin.from("client_sms_message").update({
         status: "unknown",
         error_message:
           "Twilio has not confirmed the send. Check its message log before sending again.",
@@ -195,7 +195,7 @@ Deno.serve(async (request) => {
       const reason = payload.code === 21610
         ? "This number has opted out of texts."
         : "Twilio rejected the message. Check the Twilio message log.";
-      await admin.from("client_message").update({
+      await admin.from("client_sms_message").update({
         status: "failed",
         error_message: reason,
       }).eq("id", log.id).eq("status", "pending");
@@ -209,13 +209,13 @@ Deno.serve(async (request) => {
       });
     }
     if (!payload.sid) {
-      await admin.from("client_message").update({ status: "unknown" }).eq(
+      await admin.from("client_sms_message").update({ status: "unknown" }).eq(
         "id",
         log.id,
       ).eq("status", "pending");
       return messagingJson({ message: { id: log.id, status: "unknown" } });
     }
-    const { error: saveError } = await admin.from("client_message").update({
+    const { error: saveError } = await admin.from("client_sms_message").update({
       status: "queued",
       provider_message_id: payload.sid,
     }).eq("id", log.id).eq("status", "pending");

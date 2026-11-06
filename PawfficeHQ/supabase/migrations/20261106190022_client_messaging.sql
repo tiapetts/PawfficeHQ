@@ -28,7 +28,7 @@ returns boolean language sql stable security definer set search_path = public as
     and auth_user_id = auth.uid() and is_active = true
   );
 $$;
-revoke all on function public.can_use_client_messages(uuid) from public;
+revoke all on function public.can_use_client_messages(uuid) from public, anon, authenticated;
 grant execute on function public.can_use_client_messages(uuid) to authenticated, service_role;
 
 create table public.client_conversation (
@@ -41,7 +41,7 @@ create table public.client_conversation (
   unique (business_id, phone_number),
   unique (business_id, id)
 );
-create table public.client_message (
+create table public.client_sms_message (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null,
   conversation_id uuid not null,
@@ -54,11 +54,15 @@ create table public.client_message (
   sender_user_id uuid references auth.users(id) on delete set null,
   error_message text,
   legacy_message_id uuid unique,
+  legacy_pickup_id uuid unique,
   created_at timestamptz not null default now(),
   foreign key (business_id, conversation_id) references public.client_conversation(business_id,id) on delete cascade,
   unique (business_id, request_id)
 );
-create index client_message_thread on public.client_message(conversation_id, created_at desc, id);
+create index client_conversation_client on public.client_conversation(client_id);
+create index client_sms_message_sender on public.client_sms_message(sender_user_id);
+create index client_sms_message_tenant_thread on public.client_sms_message(business_id,conversation_id);
+create index client_sms_message_thread on public.client_sms_message(conversation_id, created_at desc, id);
 create index client_conversation_inbox on public.client_conversation(business_id, last_message_at desc);
 create table public.client_conversation_read (
   conversation_id uuid not null references public.client_conversation(id) on delete cascade,
@@ -67,15 +71,17 @@ create table public.client_conversation_read (
   primary key (conversation_id, user_id)
 );
 
+create index client_conversation_read_user on public.client_conversation_read(user_id);
+
 alter table public.client_conversation enable row level security;
-alter table public.client_message enable row level security;
+alter table public.client_sms_message enable row level security;
 alter table public.client_conversation_read enable row level security;
-revoke all on public.client_conversation, public.client_message, public.client_conversation_read from anon, authenticated;
-grant select on public.client_conversation, public.client_message to authenticated;
-grant all on public.client_conversation, public.client_message, public.client_conversation_read to service_role;
+revoke all on public.client_conversation, public.client_sms_message, public.client_conversation_read from anon, authenticated;
+grant select on public.client_conversation, public.client_sms_message to authenticated;
+grant all on public.client_conversation, public.client_sms_message, public.client_conversation_read to service_role;
 create policy "Staff can read business conversations" on public.client_conversation for select to authenticated
 using (public.can_use_client_messages(business_id));
-create policy "Staff can read business messages" on public.client_message for select to authenticated
+create policy "Staff can read business messages" on public.client_sms_message for select to authenticated
 using (public.can_use_client_messages(business_id));
 
 -- A service-role write must not accidentally attach another tenant's client.
@@ -95,7 +101,7 @@ begin
   return new;
 end;
 $$;
-create trigger touch_client_conversation after insert on public.client_message
+create trigger touch_client_conversation after insert on public.client_sms_message
 for each row execute function public.touch_client_conversation();
 
 create function public.get_messaging_connection(p_business_id uuid)
@@ -132,8 +138,8 @@ returns table (id uuid, client_id bigint, phone_number text, client_name text, s
   last_message_at timestamptz, preview text, unread_count bigint)
 language sql stable security definer set search_path = public as $$
   select c.id,c.client_id,c.phone_number,concat_ws(' ',cl."FirstName",cl."LastName"),c.sms_opted_out,c.last_message_at,
-    (select left(m.message_body,140) from public.client_message m where m.conversation_id=c.id order by m.created_at desc,m.id desc limit 1),
-    (select count(*) from public.client_message m where m.conversation_id=c.id and m.direction='inbound' and m.created_at > coalesce(r.read_at,'-infinity'::timestamptz))
+    (select left(m.message_body,140) from public.client_sms_message m where m.conversation_id=c.id order by m.created_at desc,m.id desc limit 1),
+    (select count(*) from public.client_sms_message m where m.conversation_id=c.id and m.direction='inbound' and m.created_at > coalesce(r.read_at,'-infinity'::timestamptz))
   from public.client_conversation c left join public."CLIENT" cl on cl.id=c.client_id and cl.business_id=c.business_id
   left join public.client_conversation_read r on r.conversation_id=c.id and r.user_id=auth.uid()
   where c.business_id=p_business_id and public.can_use_client_messages(p_business_id)
@@ -145,7 +151,7 @@ create function public.record_client_inbound(p_business_id uuid, p_phone text, p
 returns uuid language plpgsql security definer set search_path = public as $$
 declare target_client bigint; thread_id uuid; existing_thread uuid;
 begin
-  select conversation_id into existing_thread from public.client_message where provider_message_id=p_sid;
+  select conversation_id into existing_thread from public.client_sms_message where provider_message_id=p_sid;
   if existing_thread is not null then return existing_thread; end if;
   select case when count(*)=1 then min(id) else null end into target_client from public."CLIENT"
     where business_id=p_business_id and public.messaging_phone("PhoneNumber")=p_phone;
@@ -154,7 +160,7 @@ begin
   on conflict (business_id,phone_number) do update set
     client_id=excluded.client_id, sms_opted_out=client_conversation.sms_opted_out or excluded.sms_opted_out
   returning id into thread_id;
-  insert into public.client_message (business_id,conversation_id,direction,message_body,media_count,status,provider_message_id)
+  insert into public.client_sms_message (business_id,conversation_id,direction,message_body,media_count,status,provider_message_id)
   values (p_business_id,thread_id,'inbound',p_body,p_media_count,'received',p_sid)
   on conflict (provider_message_id) do nothing;
   if p_opt_out then
@@ -174,7 +180,7 @@ begin
   values (new.business_id,new.client_id,phone,new.created_at)
   on conflict (business_id,phone_number) do update set last_message_at=greatest(client_conversation.last_message_at,excluded.last_message_at)
   returning id into thread_id;
-  insert into public.client_message (business_id,conversation_id,direction,message_body,status,provider_message_id,legacy_message_id,created_at,error_message)
+  insert into public.client_sms_message (business_id,conversation_id,direction,message_body,status,provider_message_id,legacy_message_id,created_at,error_message)
   values (new.business_id,thread_id,new.direction,new.message_body,
     case when new.status='skipped' then 'failed' else new.status end,new.provider_message_id,new.id,new.created_at,new.error_message)
   on conflict (legacy_message_id) do update set status=excluded.status,provider_message_id=excluded.provider_message_id,error_message=excluded.error_message;
@@ -186,22 +192,22 @@ for each row execute function public.mirror_appointment_sms();
 update public.appointment_sms_message set status=status;
 
 revoke all on function public.get_messaging_connection(uuid), public.start_client_conversation(uuid,bigint),
-  public.mark_client_conversation_read(uuid,timestamptz), public.messaging_inbox(uuid) from public;
+  public.mark_client_conversation_read(uuid,timestamptz), public.messaging_inbox(uuid) from public, anon, authenticated;
 grant execute on function public.get_messaging_connection(uuid), public.start_client_conversation(uuid,bigint),
   public.mark_client_conversation_read(uuid,timestamptz), public.messaging_inbox(uuid) to authenticated;
 revoke all on function public.record_client_inbound(uuid,text,text,text,integer,boolean) from public,anon,authenticated;
 grant execute on function public.record_client_inbound(uuid,text,text,text,integer,boolean) to service_role;
-revoke all on function public.check_conversation_client(), public.touch_client_conversation(), public.mirror_appointment_sms() from public;
+revoke all on function public.check_conversation_client(), public.touch_client_conversation(), public.mirror_appointment_sms() from public, anon, authenticated;
 
 create function public.messaging_unread_count(p_business_id uuid)
 returns bigint language sql stable security definer set search_path = public as $$
-  select count(*) from public.client_message m
+  select count(*) from public.client_sms_message m
   left join public.client_conversation_read r on r.conversation_id=m.conversation_id and r.user_id=auth.uid()
   where m.business_id=p_business_id and m.direction='inbound'
   and m.created_at > coalesce(r.read_at,'-infinity'::timestamptz)
   and public.can_use_client_messages(p_business_id);
 $$;
-revoke all on function public.messaging_unread_count(uuid) from public;
+revoke all on function public.messaging_unread_count(uuid) from public, anon, authenticated;
 grant execute on function public.messaging_unread_count(uuid) to authenticated;
 
 -- Reminder jobs and staff replies share the same locked SMS allowance row.
@@ -224,3 +230,40 @@ end;
 $$;
 revoke all on function public.reserve_reminder_sms_segments(uuid,integer) from public,anon,authenticated;
 grant execute on function public.reserve_reminder_sms_segments(uuid,integer) to service_role;
+
+-- The deployed pickup function uses an older public.client_message email/SMS log.
+-- Leave that table and function intact. Mirror only SMS into the new inbox ledger.
+create function public.mirror_pickup_sms() returns trigger language plpgsql security definer set search_path = public as $$
+declare thread_id uuid; phone text;
+begin
+  if new.channel <> 'sms' then return new; end if;
+  phone := public.messaging_phone(new.recipient);
+  if phone is null then return new; end if;
+  insert into public.client_conversation (business_id,client_id,phone_number,last_message_at)
+  values (new.business_id,new.client_id,phone,new.created_at)
+  on conflict (business_id,phone_number) do update set last_message_at=greatest(client_conversation.last_message_at,excluded.last_message_at)
+  returning id into thread_id;
+  insert into public.client_sms_message (business_id,conversation_id,direction,message_body,status,provider_message_id,legacy_pickup_id,sender_user_id,created_at,error_message)
+  values (new.business_id,thread_id,'outbound',new.message_body,new.status,new.provider_message_id,new.id,new.sent_by,new.created_at,new.error_message)
+  on conflict (legacy_pickup_id) do update set status=excluded.status,provider_message_id=excluded.provider_message_id,error_message=excluded.error_message;
+  return new;
+end;
+$$;
+revoke all on function public.mirror_pickup_sms() from public, anon, authenticated;
+do $$
+begin
+  if to_regclass('public.client_message') is not null then
+    execute 'create trigger mirror_pickup_sms after insert or update on public.client_message for each row execute function public.mirror_pickup_sms()';
+    insert into public.client_conversation (business_id,client_id,phone_number,last_message_at)
+    select distinct on (business_id,public.messaging_phone(recipient)) business_id,client_id,public.messaging_phone(recipient),created_at
+    from public.client_message where channel='sms' and public.messaging_phone(recipient) is not null
+    order by business_id,public.messaging_phone(recipient),created_at desc
+    on conflict (business_id,phone_number) do update set last_message_at=greatest(client_conversation.last_message_at,excluded.last_message_at);
+    insert into public.client_sms_message (business_id,conversation_id,direction,message_body,status,provider_message_id,legacy_pickup_id,sender_user_id,created_at,error_message)
+    select m.business_id,c.id,'outbound',m.message_body,m.status,m.provider_message_id,m.id,m.sent_by,m.created_at,m.error_message
+    from public.client_message m join public.client_conversation c on c.business_id=m.business_id and c.phone_number=public.messaging_phone(m.recipient)
+    where m.channel='sms'
+    on conflict do nothing;
+  end if;
+end;
+$$;

@@ -14,27 +14,35 @@ create table "STAFF"(id uuid primary key default gen_random_uuid(),business_id u
 create table "CLIENT"(id bigint primary key,business_id uuid,"PhoneNumber" text,"FirstName" text,"LastName" text,archived_at timestamptz,sms_consent boolean);
 create function has_subscription_access(uuid) returns boolean language sql as $$ select true $$;
 create table business_subscription(business_id uuid primary key,plan text,sms_used integer,sms_period_start date);
+create table client_message(id uuid primary key default gen_random_uuid(),business_id uuid,client_id bigint,channel text,recipient text,message_body text,status text,provider_message_id text,sent_by uuid,created_at timestamptz default now(),error_message text);
 create table appointment_sms_message(id uuid primary key default gen_random_uuid(),business_id uuid,appointment_id uuid,client_id bigint,direction text,phone_number text,message_body text,status text,provider_message_id text,error_message text,created_at timestamptz default now());
 insert into auth.users values ('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002'),('00000000-0000-0000-0000-000000000003');
 insert into business values ('10000000-0000-0000-0000-000000000001'),('10000000-0000-0000-0000-000000000002');
 insert into "STAFF"(business_id,auth_user_id,is_active) values ('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001',true),('10000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000002',true),('10000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000003',true);
 insert into "CLIENT" values (1,'10000000-0000-0000-0000-000000000001','(920) 555-0123','Client','One',null,true),(2,'10000000-0000-0000-0000-000000000002','(920) 555-0123','Client','Two',null,true);
 `);
+await db.exec("alter default privileges in schema public grant execute on functions to anon,authenticated");
 await db.exec(
   await readFile(
     new URL(
-      "../supabase/migrations/202611060001_client_messaging.sql",
+      "../supabase/migrations/20261106190022_client_messaging.sql",
       import.meta.url,
     ),
     "utf8",
   ),
 );
+assert.equal((await db.query("select has_function_privilege('anon','public.get_messaging_connection(uuid)','EXECUTE') as allowed")).rows[0].allowed,false);
 const a = "10000000-0000-0000-0000-000000000001",
   b = "10000000-0000-0000-0000-000000000002";
 async function scalar(sql, params = []) {
   const r = await db.query(sql, params);
   return Object.values(r.rows[0])[0];
 }
+await db.query("insert into client_message(business_id,client_id,channel,recipient,message_body,status) values ($1,1,'sms','+19205550150','Ready for pickup','sent')", [a]);
+assert.equal(await scalar("select count(*) from client_sms_message where legacy_pickup_id is not null"), 1);
+assert.equal(await scalar("select count(*) from client_message"), 1);
+await db.query("insert into client_message(business_id,client_id,channel,recipient,message_body,status) values ($1,1,'email','client@example.invalid','Email receipt','sent')", [a]);
+assert.equal(await scalar("select count(*) from client_sms_message where legacy_pickup_id is not null"), 1);
 const ca = await scalar(
   `select record_client_inbound($1,'+19205550123','Do you offer trims?','SM1')`,
   [a],
@@ -52,7 +60,7 @@ await scalar(
   `select record_client_inbound($1,'+19205550123','Do you offer trims?','SM1')`,
   [a],
 );
-assert.equal(await scalar("select count(*) from client_message"), 2);
+assert.equal(await scalar("select count(*) from client_sms_message where legacy_pickup_id is null"), 2);
 await assert.rejects(
   db.query(
     "insert into client_conversation(business_id,client_id,phone_number) values ($1,2,$2)",
@@ -62,7 +70,7 @@ await assert.rejects(
 );
 await assert.rejects(
   db.query(
-    `insert into client_message(business_id,conversation_id,direction,message_body,status) values ($1,$2,'outbound','wrong tenant','pending')`,
+    `insert into client_sms_message(business_id,conversation_id,direction,message_body,status) values ($1,$2,'outbound','wrong tenant','pending')`,
     [a, cb],
   ),
   /foreign key/,
@@ -100,7 +108,7 @@ await db.exec(
 await db.exec(
   `set role authenticated; set request.jwt.claim.sub='00000000-0000-0000-0000-000000000001'`,
 );
-assert.equal(await scalar("select count(*) from client_message"), 3);
+assert.equal(await scalar("select count(*) from client_sms_message where legacy_pickup_id is null"), 3);
 assert.equal(await scalar("select count(*) from messaging_inbox($1)", [b]), 0);
 assert.equal(await scalar("select messaging_unread_count($1)", [a]), 3);
 await scalar("select mark_client_conversation_read($1,now())", [ca]);
@@ -125,7 +133,7 @@ await assert.rejects(
 );
 await assert.rejects(
   db.query(
-    `insert into client_message(business_id,conversation_id,direction,message_body,status) values ($1,$2,'outbound','bypass send','pending')`,
+    `insert into client_sms_message(business_id,conversation_id,direction,message_body,status) values ($1,$2,'outbound','bypass send','pending')`,
     [a, ca],
   ),
   /permission denied/,
@@ -148,13 +156,13 @@ await db.exec(
 );
 assert.equal(
   await scalar(
-    `select count(*) from client_message where provider_message_id='SM6'`,
+    `select count(*) from client_sms_message where provider_message_id='SM6'`,
   ),
   1,
 );
 assert.equal(
   await scalar(
-    `select status from client_message where provider_message_id='SM6'`,
+    `select status from client_sms_message where provider_message_id='SM6'`,
   ),
   "sent",
 );

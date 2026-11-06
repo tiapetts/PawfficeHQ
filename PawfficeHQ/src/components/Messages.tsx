@@ -130,7 +130,7 @@ export default function Messages(
     let active = true;
     if (!threadId) return;
     async function refresh() {
-      const { data, error: loadError } = await supabase.from("client_message")
+      const { data, error: loadError } = await supabase.from("client_sms_message")
         .select(messageFields)
         .eq("business_id", businessId).eq("conversation_id", threadId)
         .order("created_at", { ascending: false }).order("id", {
@@ -250,7 +250,7 @@ export default function Messages(
     if (!oldest || !threadId) return;
     const requestedThread = threadId;
     setLoadingOlder(true);
-    const { data, error: olderError } = await supabase.from("client_message")
+    const { data, error: olderError } = await supabase.from("client_sms_message")
       .select(messageFields)
       .eq("business_id", businessId).eq("conversation_id", requestedThread)
       .or(
@@ -333,7 +333,7 @@ export default function Messages(
             : "Accepted by Twilio. Delivery status will update in the conversation.",
         );
       } else throw new Error("No message status returned");
-      const { data: latest } = await supabase.from("client_message").select(
+      const { data: latest } = await supabase.from("client_sms_message").select(
         messageFields,
       ).eq("business_id", businessId).eq("conversation_id", target).order(
         "created_at",
