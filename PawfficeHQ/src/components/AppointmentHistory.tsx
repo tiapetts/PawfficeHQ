@@ -1,3 +1,5 @@
+import { invoiceAppointmentIds } from "../lib/invoiceAppointments";
+import HouseholdCheckout from "./HouseholdCheckout";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import "./AppointmentHistory.css";
@@ -53,6 +55,7 @@ type AppointmentService = {
 };
 
 type AppointmentInvoice = {
+  invoice_appointment?: { appointment_id: string }[];
   id: string;
   appointment_id: string | null;
   status: string;
@@ -176,7 +179,7 @@ export default function AppointmentHistory({
           .eq("business_id", businessId),
         supabase
           .from("invoice")
-          .select("id, appointment_id, status")
+          .select("id, appointment_id, status, invoice_appointment(appointment_id)")
           .eq("business_id", businessId)
           .neq("status", "void"),
         supabase
@@ -487,63 +490,8 @@ export default function AppointmentHistory({
     setUpdatingId(null);
   }
 
-  async function openAppointmentCheckout(appointmentId: string) {
+  function openAppointmentCheckout(appointmentId: string) {
     setPayingAppointmentId(appointmentId);
-    setMessage("");
-
-    try {
-      const { data: invoiceIdData, error: invoiceError } = await supabase.rpc(
-        "create_invoice_from_appointment",
-        { p_appointment_id: appointmentId },
-      );
-
-      if (invoiceError || !invoiceIdData) {
-        throw (
-          invoiceError ??
-          new Error("The appointment invoice could not be created.")
-        );
-      }
-
-      const invoiceId = String(invoiceIdData);
-      const { data: invoice, error: invoiceStatusError } = await supabase
-        .from("invoice")
-        .select("id, status")
-        .eq("id", invoiceId)
-        .single();
-
-      if (invoiceStatusError || !invoice) {
-        throw (
-          invoiceStatusError ??
-          new Error("The appointment invoice could not be loaded.")
-        );
-      }
-
-      if (invoice.status === "draft") {
-        const { error: issueError } = await supabase.rpc("issue_invoice", {
-          p_invoice_id: invoiceId,
-        });
-
-        if (issueError) throw issueError;
-      } else if (
-        !["open", "partially_paid", "overdue"].includes(invoice.status)
-      ) {
-        throw new Error(
-          invoice.status === "paid"
-            ? "This appointment is already paid."
-            : "This appointment is not currently available for payment.",
-        );
-      }
-
-      onOpenInvoice?.(invoiceId);
-    } catch (error) {
-      console.error("Appointment checkout error:", error);
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "The invoice could not be opened.",
-      );
-      setPayingAppointmentId(null);
-    }
   }
 
   function openRefundForm(payment: AppointmentPayment, refundable: number) {
@@ -616,7 +564,7 @@ export default function AppointmentHistory({
     const [invoicesResult, paymentsResult, refundsResult] = await Promise.all([
       supabase
         .from("invoice")
-        .select("id, appointment_id, status")
+        .select("id, appointment_id, status, invoice_appointment(appointment_id)")
         .eq("business_id", businessId)
         .neq("status", "void"),
       supabase
@@ -648,6 +596,12 @@ export default function AppointmentHistory({
 
   return (
     <>
+      {payingAppointmentId && appointments.find(a => a.id === payingAppointmentId) &&
+        <HouseholdCheckout key={payingAppointmentId} appointmentId={payingAppointmentId}
+          startAt={appointments.find(a => a.id === payingAppointmentId)!.start_at}
+          onClose={() => setPayingAppointmentId(null)}
+          onComplete={invoiceId => { setPayingAppointmentId(null); onOpenInvoice?.(invoiceId); }} />}
+
       <header className="dashboard-header history-page-header">
         <div>
           <p className="eyebrow">Records</p>
@@ -769,7 +723,7 @@ export default function AppointmentHistory({
               const start = new Date(appointment.start_at);
               const end = new Date(appointment.end_at);
               const appointmentInvoice = invoices.find(
-                (invoice) => invoice.appointment_id === appointment.id,
+                (invoice) => invoiceAppointmentIds(invoice).includes(appointment.id),
               );
               const stripePayment = payments.find(
                 (payment) =>
@@ -786,7 +740,8 @@ export default function AppointmentHistory({
                 : 0;
               const fullyRefunded = Boolean(stripePayment && refundable <= 0);
               const partiallyRefunded = refundedAmount > 0 && !fullyRefunded;
-              const paymentComplete = appointmentInvoice?.status === "paid";
+              const paymentComplete = ["paid", "partially_refunded", "refunded"].includes(appointmentInvoice?.status ?? "");
+              const sharedInvoice = appointmentInvoice && invoiceAppointmentIds(appointmentInvoice).length > 1;
 
               return (
                 <article
@@ -894,7 +849,11 @@ export default function AppointmentHistory({
 
                         <RebookAppointment businessId={businessId} appointmentId={appointment.id} sourceStartAt={appointment.start_at} />
 
-                        {!fullyRefunded && stripePayment && (
+                        {sharedInvoice && <button type="button" className="secondary-button"
+                          onClick={() => onOpenInvoice?.(appointmentInvoice.id)}>
+                          View household invoice / refunds
+                        </button>}
+                        {!sharedInvoice && !fullyRefunded && stripePayment && (
                           <button
                             type="button"
                             className="history-danger-button"
@@ -907,7 +866,7 @@ export default function AppointmentHistory({
                           </button>
                         )}
 
-                        {refundPaymentId === stripePayment?.id && (
+                        {!sharedInvoice && refundPaymentId === stripePayment?.id && (
                           <form
                             onSubmit={(event) =>
                               void issueRefund(event, refundable)

@@ -3,11 +3,12 @@ import { supabase } from "../lib/supabase";
 import ClientImportExport from "./ClientImportExport";
 import PetImportExport from "./PetImportExport";
 import ProfilePhoto from "./ProfilePhoto";
+import ClientProfile from "./ClientProfile";
 import "./ClientEditing.css";
 import "./RecordSearch.css";
 
 type ClientsProps = { businessId: string; readOnly?: boolean };
-type Client = {
+export type Client = {
   id: number;
   FirstName: string;
   LastName: string;
@@ -55,6 +56,7 @@ export default function Clients({
   readOnly = false,
 }: ClientsProps) {
   const [clients, setClients] = useState<Client[]>([]);
+  const [profileId, setProfileId] = useState<number | null>(null);
   const [form, setForm] = useState<ClientForm>(emptyForm);
   const [householdPets, setHouseholdPets] = useState<HouseholdPetForm[]>([{ ...emptyPetForm }]);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -273,6 +275,13 @@ export default function Clients({
     return [client.FirstName, client.LastName, client.EmailAddress, client.PhoneNumber, client.StreetAddress, client.ClientCity, client.ClientState, client.ClientZip]
       .filter(Boolean).join(" ").toLowerCase().includes(searchQuery);
   });
+
+  const profileClient = clients.find(client => client.id === profileId);
+  if (profileClient) return <ClientProfile key={businessId + ":" + profileClient.id}
+    businessId={businessId} client={profileClient} onBack={() => setProfileId(null)}
+    onEdit={!readOnly && !profileClient.archived_at ? () => {
+      setProfileId(null); openEdit(profileClient);
+    } : undefined} />;
 
   return (
     <>
@@ -582,9 +591,9 @@ export default function Clients({
                   compact
                 />
                 <div className="client-name">
-                  <strong>
+                  <button type="button" className="client-profile-link" onClick={() => setProfileId(client.id)}>
                     {client.FirstName} {client.LastName}
-                  </strong>
+                  </button>
                   <span>{client.EmailAddress || "No email listed"}</span>
                   {client.booking_deposit_required && (
                     <span className="client-deposit-badge">

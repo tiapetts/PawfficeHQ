@@ -1,3 +1,5 @@
+import HouseholdCheckout from "./HouseholdCheckout";
+import { invoiceAppointmentIds } from "../lib/invoiceAppointments";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 import "./Invoices.css";
@@ -11,6 +13,7 @@ type InvoicesProps = {
 };
 
 type Invoice = {
+  invoice_appointment?: { appointment_id: string }[];
   id: string;
   appointment_id: string | null;
   client_id: number | null;
@@ -147,6 +150,7 @@ export default function Invoices({
   initialInvoiceId = null,
   onInitialInvoiceUsed,
 }: InvoicesProps) {
+  const [householdCheckoutId, setHouseholdCheckoutId] = useState<string | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -271,7 +275,7 @@ export default function Invoices({
       supabase
         .from("invoice")
         .select(
-          "id, appointment_id, client_id, pet_id, walk_in_name, walk_in_email, walk_in_phone, invoice_number, status, currency, subtotal, discount_total, tax_total, total, notes, issued_at, due_at, paid_at, created_at",
+          "invoice_appointment(appointment_id), id, appointment_id, client_id, pet_id, walk_in_name, walk_in_email, walk_in_phone, invoice_number, status, currency, subtotal, discount_total, tax_total, total, notes, issued_at, due_at, paid_at, created_at",
         )
         .eq("business_id", businessId)
         .order("created_at", { ascending: false }),
@@ -397,7 +401,11 @@ export default function Invoices({
   }
 
   function getInvoicePetName(invoice: Invoice) {
-    if (invoice.appointment_id) return getAppointmentPetName(invoice.appointment_id);
+    const ids = invoiceAppointmentIds(invoice);
+    if (ids.length) {
+      const petIds = new Set(appointmentPets.filter(link => ids.includes(link.appointment_id)).map(link => link.pet_id));
+      return pets.filter(pet => petIds.has(pet.id)).map(pet => pet.PetName).join(", ") || "Unknown pet";
+    }
     if (!invoice.pet_id) return "No pet selected";
     return pets.find((pet) => pet.id === invoice.pet_id)?.PetName ?? "Unknown pet";
   }
@@ -472,7 +480,7 @@ export default function Invoices({
     const invoicedAppointmentIds = new Set(
       invoices
         .filter((invoice) => invoice.status !== "void")
-        .map((invoice) => invoice.appointment_id)
+        .flatMap(invoiceAppointmentIds)
         .filter(Boolean),
     );
 
@@ -536,32 +544,9 @@ export default function Invoices({
     [invoices, payments, refunds],
   );
 
-  async function createInvoice(event: FormEvent<HTMLFormElement>) {
+  function createInvoice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedAppointmentId) return;
-
-    setSaving(true);
-    setMessage("");
-    setSuccessMessage("");
-
-    const { data, error } = await supabase.rpc(
-      "create_invoice_from_appointment",
-      { p_appointment_id: selectedAppointmentId },
-    );
-
-    if (error) {
-      console.error(error);
-      setMessage(error.message);
-      setSaving(false);
-      return;
-    }
-
-    setSelectedAppointmentId("");
-    setShowCreateForm(false);
-    setExpandedInvoiceId(String(data));
-    setSuccessMessage("Draft invoice created.");
-    await loadInvoices();
-    setSaving(false);
+    if (selectedAppointmentId) setHouseholdCheckoutId(selectedAppointmentId);
   }
 
   function updateStandaloneLine(index: number, changes: Partial<StandaloneLine>) {
@@ -876,6 +861,15 @@ export default function Invoices({
 
   return (
     <>
+      {!readOnly && householdCheckoutId && appointments.find(a => a.id === householdCheckoutId) &&
+        <HouseholdCheckout key={householdCheckoutId} appointmentId={householdCheckoutId}
+          startAt={appointments.find(a => a.id === householdCheckoutId)!.start_at} issueNow={false}
+          onClose={() => setHouseholdCheckoutId(null)}
+          onComplete={invoiceId => {
+            setHouseholdCheckoutId(null); setSelectedAppointmentId(""); setShowCreateForm(false);
+            setExpandedInvoiceId(invoiceId); setSuccessMessage("Invoice ready for review."); void loadInvoices();
+          }} />}
+
       <header className="dashboard-header invoice-page-header">
         <div>
           <p className="eyebrow">Payments</p>
@@ -1273,9 +1267,10 @@ export default function Invoices({
                               View receipt
                             </button>
                           )}
-                          {!readOnly && invoice.status === "paid" && invoice.appointment_id && appointments.find(item=>item.id===invoice.appointment_id) && (
-                            <RebookAppointment businessId={businessId} appointmentId={invoice.appointment_id} sourceStartAt={appointments.find(item=>item.id===invoice.appointment_id)!.start_at} />
-                          )}
+                          {!readOnly && invoice.status === "paid" && invoiceAppointmentIds(invoice).map(id => {
+                            const appointment = appointments.find(item => item.id === id);
+                            return appointment ? <div key={id}><p>Rebook {getAppointmentPetName(id)}</p><RebookAppointment businessId={businessId} appointmentId={id} sourceStartAt={appointment.start_at} /></div> : null;
+                          })}
                           {!readOnly && invoice.status === "draft" && (
                             <button
                               type="button"
