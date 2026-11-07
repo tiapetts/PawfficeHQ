@@ -1,0 +1,12 @@
+.household-checkout { width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow: auto; box-sizing: border-box; border: 1px solid #c9dce5; border-radius: 18px; padding: 24px; color: #163d50; }
+.household-checkout::backdrop { background: #102d43a6; }
+.household-checkout header { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
+.household-checkout h2 { margin-top: 0; }
+.household-checkout-list { display: grid; gap: 12px; }
+.household-checkout-list label { display: flex; align-items: start; gap: 12px; padding: 16px; border: 1px solid #c9dce5; border-radius: 10px; }
+.household-checkout-list label > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.household-checkout-list input { margin-top: 4px; width: 20px; height: 20px; }
+.household-checkout-list small, .checkout-service { display: block; margin-top: 6px; }
+.household-checkout-list .unavailable { background: #f1f4f6; color: #566873; }
+.checkout-total { padding: 16px 0; border-top: 1px solid #c9dce5; }
+.household-checkout [role="alert"] { color: #a21e2d; }

@@ -1,0 +1,12 @@
+.client-profile { display: grid; gap: 20px; }
+.client-profile > button { justify-self: start; }
+.client-profile-details { display: flex; gap: 24px; align-items: flex-start; }
+.client-profile dl { display: grid; gap: 16px; margin: 0; overflow-wrap: anywhere; }
+.client-profile dt { color: #526b79; font-size: .9rem; }
+.client-profile dd { margin: 4px 0 0; }
+.client-profile-pets { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 16px; }
+.client-profile-pets article { border: 1px solid #d6e0dd; border-radius: 12px; padding: 20px; }
+.client-profile-pets h4 { margin: 0 0 16px; }
+.client-profile-link { border: 0; background: none; color: inherit; font: inherit; font-weight: 700; padding: 0; text-align: left; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.client-profile-link:focus-visible { outline: 2px solid var(--brand-accent, #0077b6); outline-offset: 4px; }
+@media (max-width: 600px) { .client-profile-details { flex-direction: column; } }

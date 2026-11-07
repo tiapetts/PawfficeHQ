@@ -1,3 +1,4 @@
+import { invoiceAppointmentIds } from "../lib/invoiceAppointments";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import "./StaffEarnings.css";
@@ -6,7 +7,7 @@ type Props = { businessId: string; readOnly?: boolean };
 type Staff = { id: string; first_name: string; last_name: string; job_title: string | null; is_active: boolean };
 type Appointment = { id: string; start_at: string; status: string };
 type AppointmentService = { appointment_id: string; staff_id: string | null; price_at_booking: number };
-type Invoice = { id: string; appointment_id: string | null; invoice_number: string };
+type Invoice = { invoice_appointment?: { appointment_id: string }[]; id: string; appointment_id: string | null; invoice_number: string };
 type Payment = { id: string; invoice_id: string; amount: number; tip_amount: number; method: string; status: string; paid_at: string | null; created_at: string };
 type Refund = { payment_id: string; amount: number; status: string };
 type Allocation = { id: string; payment_id: string; staff_id: string; amount: number };
@@ -45,7 +46,7 @@ export default function StaffEarnings({ businessId, readOnly = false }: Props) {
       supabase.from("STAFF").select("id, first_name, last_name, job_title, is_active").eq("business_id", businessId).order("last_name"),
       supabase.from("appointment").select("id, start_at, status").eq("business_id", businessId),
       supabase.from("appointment_service").select("appointment_id, staff_id, price_at_booking"),
-      supabase.from("invoice").select("id, appointment_id, invoice_number").eq("business_id", businessId),
+      supabase.from("invoice").select("id, appointment_id, invoice_number, invoice_appointment(appointment_id)").eq("business_id", businessId),
       supabase.from("payment").select("id, invoice_id, amount, tip_amount, method, status, paid_at, created_at").eq("business_id", businessId),
       supabase.from("refund").select("payment_id, amount, status").eq("business_id", businessId),
       supabase.from("staff_tip_allocation").select("id, payment_id, staff_id, amount").eq("business_id", businessId),
@@ -93,10 +94,11 @@ export default function StaffEarnings({ businessId, readOnly = false }: Props) {
       const paidDate = new Date(payment.paid_at ?? payment.created_at);
       if (paidDate < bounds.start || paidDate > bounds.end) return;
       const invoice = invoices.find(item => item.id === payment.invoice_id);
-      if (!invoice?.appointment_id) return;
-      const appointment = appointments.find(item => item.id === invoice.appointment_id);
+      if (!invoice) return;
+      const appointmentIds = invoiceAppointmentIds(invoice);
+      const appointment = appointments.find(item => appointmentIds.includes(item.id));
       if (!appointment) return;
-      const assigned = services.filter(item => item.appointment_id === appointment.id && item.staff_id);
+      const assigned = services.filter(item => appointmentIds.includes(item.appointment_id) && item.staff_id);
       const staffIds = [...new Set(assigned.map(item => item.staff_id as string))];
       if (!staffIds.length) return;
       const totalBooked = assigned.reduce((sum, item) => sum + Number(item.price_at_booking || 0), 0);
@@ -130,7 +132,7 @@ export default function StaffEarnings({ businessId, readOnly = false }: Props) {
 
   function staffForPayment(payment: Payment) {
     const invoice = invoices.find(item => item.id === payment.invoice_id);
-    return [...new Set(services.filter(item => item.appointment_id === invoice?.appointment_id && item.staff_id).map(item => item.staff_id as string))];
+    return [...new Set(services.filter(item => invoice && invoiceAppointmentIds(invoice).includes(item.appointment_id) && item.staff_id).map(item => item.staff_id as string))];
   }
 
   function draftValue(payment: Payment, staffId: string) {

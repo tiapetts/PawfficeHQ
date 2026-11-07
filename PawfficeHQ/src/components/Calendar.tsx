@@ -1,3 +1,4 @@
+import HouseholdCheckout from "./HouseholdCheckout";
 import {
   useEffect,
   useMemo,
@@ -733,67 +734,18 @@ function Calendar({
       : "Unassigned";
   }
 
-  async function openAppointmentCheckout(appointmentId: string) {
+  function openAppointmentCheckout(appointmentId: string) {
     setPayingAppointmentId(appointmentId);
-    setMessage("");
-
-    try {
-      const { data: invoiceIdData, error: invoiceError } = await supabase.rpc(
-        "create_invoice_from_appointment",
-        { p_appointment_id: appointmentId },
-      );
-
-      if (invoiceError || !invoiceIdData) {
-        throw (
-          invoiceError ??
-          new Error("The appointment invoice could not be created.")
-        );
-      }
-
-      const invoiceId = String(invoiceIdData);
-      const { data: invoice, error: invoiceStatusError } = await supabase
-        .from("invoice")
-        .select("id, status")
-        .eq("id", invoiceId)
-        .single();
-
-      if (invoiceStatusError || !invoice) {
-        throw (
-          invoiceStatusError ??
-          new Error("The appointment invoice could not be loaded.")
-        );
-      }
-
-      if (invoice.status === "draft") {
-        const { error: issueError } = await supabase.rpc("issue_invoice", {
-          p_invoice_id: invoiceId,
-        });
-
-        if (issueError) throw issueError;
-      } else if (
-        !["open", "partially_paid", "overdue"].includes(invoice.status)
-      ) {
-        throw new Error(
-          invoice.status === "paid"
-            ? "This appointment is already paid."
-            : "This appointment is not currently available for payment.",
-        );
-      }
-
-      onOpenInvoice?.(invoiceId);
-    } catch (error) {
-      console.error("Appointment checkout error:", error);
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "The invoice could not be opened.",
-      );
-      setPayingAppointmentId(null);
-    }
   }
 
   return (
     <div>
+      {!readOnly && payingAppointmentId && appointments.find(a => a.id === payingAppointmentId) &&
+        <HouseholdCheckout key={payingAppointmentId} appointmentId={payingAppointmentId}
+          startAt={appointments.find(a => a.id === payingAppointmentId)!.start_at}
+          onClose={() => setPayingAppointmentId(null)}
+          onComplete={invoiceId => { setPayingAppointmentId(null); onOpenInvoice?.(invoiceId); }} />}
+
       <header className="dashboard-header">
         <div>
           <p className="eyebrow">Schedule</p>
