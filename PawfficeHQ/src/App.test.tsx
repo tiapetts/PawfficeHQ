@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Session } from "@supabase/supabase-js";
 import { useState } from "react";
 import App from "./App";
@@ -46,6 +46,7 @@ async function openClientDraft() {
   fireEvent.click(screen.getByText("Go to Clients"));
   fireEvent.change(screen.getByLabelText("Phone draft"), { target: { value: "6085550100" } });
 }
+afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.listener = null;
