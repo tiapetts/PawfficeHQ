@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import Auth from "./components/Auth";
@@ -20,6 +20,7 @@ type StaffProfile = {
 };
 
 function App() {
+  const activeUserId = useRef<string | null>(null);
   const [needsPassword, setNeedsPassword] = useState(() =>
     ["invite", "recovery"].includes(
       new URLSearchParams(window.location.hash.slice(1)).get("type") ?? "",
@@ -49,6 +50,8 @@ function App() {
       .eq("auth_user_id", userId)
       .maybeSingle();
 
+    if (activeUserId.current !== userId) return;
+
     if (error) {
       console.error("Staff profile error:", error);
       setStaff(null);
@@ -63,12 +66,14 @@ function App() {
     setLoading(false);
   }
 
-  async function loadUserAccess(userId: string) {
-    setLoading(true);
+  async function loadUserAccess(userId: string, background = false) {
+    if (!background) setLoading(true);
     setProfileError("");
 
     const { data: platformAdmin, error } =
       await supabase.rpc("is_platform_admin");
+
+    if (activeUserId.current !== userId) return;
 
     if (error) {
       console.error("Platform access error:", error);
@@ -126,6 +131,7 @@ function App() {
 
         await supabase.auth.signOut({ scope: "local" });
 
+        activeUserId.current = null;
         setSession(null);
         setStaff(null);
         setIsPlatformAdmin(false);
@@ -136,7 +142,10 @@ function App() {
       }
 
       setSession(refreshedSession);
-      await loadUserAccess(refreshedSession.user.id);
+      if (activeUserId.current !== refreshedSession.user.id) {
+        activeUserId.current = refreshedSession.user.id;
+        await loadUserAccess(refreshedSession.user.id);
+      }
     }
 
     void initializeApp();
@@ -154,6 +163,8 @@ function App() {
       }
 
       if (!newSession) {
+        activeUserId.current = null;
+        setSubscriptionAccess(null);
         setStaff(null);
         setIsPlatformAdmin(false);
         setAdminView("platform");
@@ -163,8 +174,25 @@ function App() {
         return;
       }
 
-      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
-        void loadUserAccess(newSession.user.id);
+      // SIGNED_IN also fires when an existing session is confirmed on tab focus.
+      // Do not unmount the workspace (and discard its page/form state) for that.
+      if (activeUserId.current !== newSession.user.id) {
+        activeUserId.current = newSession.user.id;
+        setStaff(null);
+        setSubscriptionAccess(null);
+        setIsPlatformAdmin(false);
+        setAdminView("platform");
+        setProfileLoaded(false);
+        setLoading(true);
+        window.setTimeout(() => {
+          if (mounted && activeUserId.current === newSession.user.id)
+            void loadUserAccess(newSession.user.id);
+        }, 0);
+      } else if (event === "USER_UPDATED") {
+        window.setTimeout(() => {
+          if (mounted && activeUserId.current === newSession.user.id)
+            void loadUserAccess(newSession.user.id, true);
+        }, 0);
       }
     });
 
