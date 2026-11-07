@@ -1,9 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { normalizeSmsPhone, smsSegments } from "../_shared/sms.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
-const normalizePhone = (value: string) => { const digits = value.replace(/\D/g, ""); return digits.length === 10 ? `+1${digits}` : digits.length === 11 && digits.startsWith("1") ? `+${digits}` : value; };
-const smsSegments = (value: string) => Math.max(1, Math.ceil(value.length / 160));
 
 type Settings = {
   business_id: string; client_sms_reminders_enabled: boolean; initial_reminder_hours: 24 | 48;
@@ -18,9 +17,6 @@ Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const cronSecret = Deno.env.get("REMINDER_CRON_SECRET") ?? "";
-  const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
-  const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN")!;
-  const twilioFrom = Deno.env.get("TWILIO_PHONE_NUMBER")!;
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
   const input = await request.json().catch(() => ({}));
   const appointmentId = typeof input.appointmentId === "string" ? input.appointmentId : null;
@@ -52,6 +48,15 @@ Deno.serve(async (request) => {
   const results: Array<Record<string, unknown>> = [];
 
   for (const appointment of (appointments as Appointment[] ?? [])) {
+    const { data: smsNumber, error: smsNumberError } = await admin.from("business_sms_number")
+      .select("phone_number,account_sid,auth_token_secret").eq("business_id", appointment.business_id).maybeSingle();
+    const twilioToken = smsNumber ? Deno.env.get(smsNumber.auth_token_secret) : null;
+    if (smsNumberError || !smsNumber || !twilioToken) {
+      results.push({ appointmentId: appointment.id, status: "skipped", reason: "Business Twilio connection is not configured." });
+      continue;
+    }
+    const twilioSid = smsNumber.account_sid;
+    const twilioFrom = smsNumber.phone_number;
     const settings = settingsByBusiness.get(appointment.business_id);
     if (!manual && !settings?.client_sms_reminders_enabled) continue;
     const hoursAway = (new Date(appointment.start_at).getTime() - now.getTime()) / 3600000;
@@ -79,23 +84,20 @@ Deno.serve(async (request) => {
         ? `Reminder from {business_name}: {pet_names}'s appointment is in one hour at {appointment_time}. Reply C to confirm.`
         : settings?.reminder_message_template ?? `Hi {client_first_name}, {pet_names} has an appointment with {business_name} on {appointment_date} at {appointment_time}. Reply C to confirm.`;
       const body = Object.entries(tokens).reduce((message, [key, value]) => message.replaceAll(key, value), base);
-      const phone = normalizePhone(client.PhoneNumber);
+      const phone = normalizeSmsPhone(client.PhoneNumber);
+      if (!phone) { results.push({ appointmentId: appointment.id, kind, status: "skipped", reason: "Invalid client phone number." }); continue; }
+      const { data: conversation, error: optOutError } = await admin.from("client_conversation").select("sms_opted_out").eq("business_id", appointment.business_id).eq("phone_number", phone).maybeSingle();
+      if (optOutError || conversation?.sms_opted_out) { results.push({ appointmentId: appointment.id, kind, status: "skipped", reason: "Client SMS is unavailable or opted out." }); continue; }
       const { data: log, error: logError } = await admin.from("appointment_sms_message").insert({ business_id: appointment.business_id, appointment_id: appointment.id, client_id: client.id, direction: "outbound", message_kind: kind, phone_number: phone, message_body: body }).select("id").maybeSingle();
       if (logError) { if (logError.code !== "23505") results.push({ appointmentId: appointment.id, kind, status: "failed", reason: logError.message }); continue; }
       const segments = smsSegments(body);
-      const { data: subscription } = await admin.from("business_subscription").select("plan, sms_used, sms_period_start").eq("business_id", appointment.business_id).maybeSingle();
-      const limit = subscription?.plan === "pro" ? 1000 : 250;
-      const periodExpired = subscription?.sms_period_start && new Date(subscription.sms_period_start) < new Date(now.getFullYear(), now.getMonth(), 1);
-      const used = periodExpired ? 0 : Number(subscription?.sms_used ?? 0);
-      if (!subscription || used + segments > limit) { await admin.from("appointment_sms_message").update({ status: "failed", error_message: "Monthly SMS limit reached." }).eq("id", log!.id); continue; }
+      const { data: quota, error: quotaError } = await admin.rpc("reserve_reminder_sms_segments", { p_business_id: appointment.business_id, p_segments: segments });
+      if (quotaError || !quota?.[0]?.allowed) { await admin.from("appointment_sms_message").update({ status: "failed", error_message: "Monthly SMS allowance unavailable or reached." }).eq("id", log!.id); continue; }
       const form = new URLSearchParams({ To: phone, From: twilioFrom, Body: body });
       const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, { method: "POST", headers: { Authorization: `Basic ${btoa(`${twilioSid}:${twilioToken}`)}`, "Content-Type": "application/x-www-form-urlencoded" }, body: form });
       const payload = await response.json();
       if (!response.ok) { await admin.from("appointment_sms_message").update({ status: "failed", error_message: payload.message ?? "Twilio rejected the message." }).eq("id", log!.id); results.push({ appointmentId: appointment.id, kind, status: "failed" }); continue; }
-      await Promise.all([
-        admin.from("appointment_sms_message").update({ status: "sent", provider_message_id: payload.sid, sent_at: new Date().toISOString() }).eq("id", log!.id),
-        admin.from("business_subscription").update({ sms_used: used + segments, ...(periodExpired ? { sms_period_start: now.toISOString().slice(0, 10) } : {}) }).eq("business_id", appointment.business_id),
-      ]);
+      await admin.from("appointment_sms_message").update({ status: "sent", provider_message_id: payload.sid, sent_at: new Date().toISOString() }).eq("id", log!.id);
       results.push({ appointmentId: appointment.id, kind, status: "sent" });
     }
   }

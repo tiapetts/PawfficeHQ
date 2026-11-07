@@ -11,8 +11,9 @@
     "test:run": "vitest run",
     "test:e2e": "playwright test",
     "smoke": "node scripts/smoke-build.mjs",
-    "check": "npm run lint && npm run test:run && npm run build && npm run smoke",
-    "preview": "vite preview"
+    "check": "npm run lint && npm run test:run && npm run test:messaging-db && npm run build && npm run smoke",
+    "preview": "vite preview",
+    "test:messaging-db": "node scripts/test-messaging-db.mjs"
   },
   "dependencies": {
     "@sentry/react": "^10.73.0",
@@ -23,7 +24,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
-    "@playwright/test": "^1.55.0",
+    "@electric-sql/pglite": "^0.5.15",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
     "@rolldown/plugin-babel": "^0.2.3",
