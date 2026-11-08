@@ -142,6 +142,7 @@ const emptyPaymentForm = {
 const emptyRefundForm = {
   amount: "",
   reason: "",
+  externalReference: "",
 };
 
 export default function Invoices({
@@ -704,6 +705,7 @@ export default function Invoices({
     setRefundForm({
       amount: getRefundableAmount(payment).toFixed(2),
       reason: "",
+      externalReference: "",
     });
     setPaymentInvoiceId(null);
     setMessage("");
@@ -717,6 +719,51 @@ export default function Invoices({
     const amount = Number(refundForm.amount);
     const payment = payments.find((item) => item.id === refundPaymentId);
     if (!payment || !Number.isFinite(amount) || amount <= 0) return;
+
+    if (!payment.provider && !payment.provider_payment_id) {
+      const reference = refundForm.externalReference.trim();
+
+      if (!reference) {
+        setMessage("Enter the external refund transaction reference.");
+        return;
+      }
+
+      if (amount > getRefundableAmount(payment)) {
+        setMessage("Refund amount exceeds the remaining refundable amount.");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Have you ALREADY refunded ${money.format(amount)} outside PawfficeHQ?\n\nReference: ${reference}\n\nThis will only record the refund. It will NOT send money.`,
+      );
+
+      if (!confirmed) return;
+
+      setSaving(true);
+      setMessage("");
+      setSuccessMessage("");
+
+      const { error } = await supabase.rpc("record_manual_refund", {
+        p_payment_id: payment.id,
+        p_amount: amount,
+        p_reason: refundForm.reason.trim(),
+        p_external_reference: reference,
+      });
+
+      if (error) {
+        console.error("External refund recording error:", error);
+        setMessage(error.message);
+        setSaving(false);
+        return;
+      }
+
+      setRefundPaymentId(null);
+      setRefundForm(emptyRefundForm);
+      setSuccessMessage("External refund recorded successfully.");
+      await loadInvoices();
+      setSaving(false);
+      return;
+    }
 
     const confirmed = window.confirm(
       `Refund ${money.format(amount)} to the client's original card? This cannot be undone from Pawffice HQ.`,
@@ -1221,6 +1268,22 @@ export default function Invoices({
                                     Refund
                                   </button>
                                 )}
+                              {!readOnly &&
+                                !payment.provider_payment_id &&
+                                !payment.provider &&
+                                ["succeeded", "partially_refunded"].includes(
+                                  payment.status,
+                                ) &&
+                                getRefundableAmount(payment) > 0 && (
+                                  <button
+                                    type="button"
+                                    className="invoice-refund-button"
+                                    onClick={() => void openRefundForm(payment)}
+                                    disabled={saving}
+                                  >
+                                    Record Refund
+                                  </button>
+                                )}
                             </div>
                           ))}
                         </div>
@@ -1428,11 +1491,20 @@ export default function Invoices({
                             onSubmit={issueRefund}
                           >
                             <div>
-                              <h4>Refund card payment</h4>
-                              <p>
-                                The money will be returned through {invoicePayments.find(
+                              <h4>
+                                {invoicePayments.find(
                                   (payment) => payment.id === refundPaymentId,
-                                )?.provider === "square" ? "Square" : "Stripe"} to the client’s original payment method.
+                                )?.provider_payment_id
+                                  ? "Refund card payment"
+                                  : "Record external refund"}
+                              </h4>
+
+                              <p>
+                                {invoicePayments.find(
+                                  (payment) => payment.id === refundPaymentId,
+                                )?.provider_payment_id
+                                  ? "The money will be returned through the payment provider to the client's original payment method."
+                                  : "Only use this form after refunding the customer through your external payment terminal. PawfficeHQ will record the refund but will NOT send money to the customer."}
                               </p>
                             </div>
 
@@ -1475,6 +1547,27 @@ export default function Invoices({
                               />
                             </label>
 
+                            {!invoicePayments.find(
+                              (payment) => payment.id === refundPaymentId,
+                            )?.provider_payment_id && (
+                              <label className="invoice-refund-note">
+                                External refund reference
+                                <input
+                                  type="text"
+                                  maxLength={200}
+                                  value={refundForm.externalReference}
+                                  onChange={(event) =>
+                                    setRefundForm((current) => ({
+                                      ...current,
+                                      externalReference: event.target.value,
+                                    }))
+                                  }
+                                  placeholder="Square refund transaction ID"
+                                  required
+                                />
+                              </label>
+                            )}
+
                             <div className="invoice-refund-actions">
                               <button
                                 type="button"
@@ -1492,7 +1585,16 @@ export default function Invoices({
                                 className="invoice-danger-button"
                                 disabled={saving}
                               >
-                                {saving ? "Refunding..." : "Issue refund"}
+                                {!invoicePayments.find(
+                                  (payment) => payment.id === refundPaymentId,
+                                )?.provider_payment_id
+                                  ? saving
+                                    ? "Recording refund..."
+                                    : "Record Refund"
+                                  : saving
+                                    ? "Refunding..."
+                                    : "Issue Refund"}
+
                               </button>
                             </div>
                           </form>
