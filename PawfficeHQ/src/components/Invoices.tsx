@@ -1585,7 +1585,7 @@ export default function Invoices({
                                 className="invoice-danger-button"
                                 disabled={saving}
                               >
-                                                                {!invoicePayments.find(
+                                {!invoicePayments.find(
                                   (payment) => payment.id === refundPaymentId,
                                 )?.provider_payment_id
                                   ? saving
