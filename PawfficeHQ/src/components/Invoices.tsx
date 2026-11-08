@@ -108,8 +108,18 @@ type AppointmentPet = {
 };
 type ClientPet = { client_id: number; pet_id: number };
 type Service = { id: string; name: string; base_price: number };
-type StandaloneLine = { description: string; quantity: string; unitPrice: string; serviceId: string };
-const emptyStandaloneLine: StandaloneLine = { description: "", quantity: "1", unitPrice: "", serviceId: "" };
+type StandaloneLine = {
+  description: string;
+  quantity: string;
+  unitPrice: string;
+  serviceId: string;
+};
+const emptyStandaloneLine: StandaloneLine = {
+  description: "",
+  quantity: "1",
+  unitPrice: "",
+  serviceId: "",
+};
 
 type InvoiceFilter = "all" | "unpaid" | "draft" | "paid" | "void";
 
@@ -139,6 +149,7 @@ const emptyPaymentForm = {
 const emptyRefundForm = {
   amount: "",
   reason: "",
+  externalReference: "",
 };
 
 export default function Invoices({
@@ -160,13 +171,19 @@ export default function Invoices({
   const [businessSettings, setBusinessSettings] =
     useState<BusinessSettings | null>(null);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState("");
-  const [createMode, setCreateMode] = useState<"standalone" | "appointment">("standalone");
-  const [customerMode, setCustomerMode] = useState<"client" | "walkin">("client");
+  const [createMode, setCreateMode] = useState<"standalone" | "appointment">(
+    "standalone",
+  );
+  const [customerMode, setCustomerMode] = useState<"client" | "walkin">(
+    "client",
+  );
   const [standaloneClientId, setStandaloneClientId] = useState("");
   const [standalonePetId, setStandalonePetId] = useState("");
   const [clientSearch, setClientSearch] = useState("");
   const [walkIn, setWalkIn] = useState({ name: "", email: "", phone: "" });
-  const [standaloneLines, setStandaloneLines] = useState<StandaloneLine[]>([{ ...emptyStandaloneLine }]);
+  const [standaloneLines, setStandaloneLines] = useState<StandaloneLine[]>([
+    { ...emptyStandaloneLine },
+  ]);
   const [standaloneDiscount, setStandaloneDiscount] = useState("");
   const [standaloneTax, setStandaloneTax] = useState("");
   const [standaloneNotes, setStandaloneNotes] = useState("");
@@ -197,7 +214,9 @@ export default function Invoices({
       const { data } = await supabase
         .rpc("get_square_connection_status", { p_business_id: businessId })
         .maybeSingle();
-      setSquareConnected(Boolean((data as { is_connected?: boolean } | null)?.is_connected));
+      setSquareConnected(
+        Boolean((data as { is_connected?: boolean } | null)?.is_connected),
+      );
     }
     void loadSquareStatus();
   }, [businessId]);
@@ -219,15 +238,25 @@ export default function Invoices({
         "verify-square-checkout",
         { body: { checkoutId } },
       );
-      const result = data as { completed?: boolean; pending?: boolean; error?: string } | null;
+      const result = data as {
+        completed?: boolean;
+        pending?: boolean;
+        error?: string;
+      } | null;
       if (error || result?.error) {
         setSuccessMessage("");
-        setMessage(result?.error ?? error?.message ?? "Square payment could not be verified.");
+        setMessage(
+          result?.error ??
+            error?.message ??
+            "Square payment could not be verified.",
+        );
         return;
       }
       if (!result?.completed) {
         setSuccessMessage("");
-        setMessage("Square has not completed this payment. No payment was recorded.");
+        setMessage(
+          "Square has not completed this payment. No payment was recorded.",
+        );
         return;
       }
       setSuccessMessage("Square payment recorded successfully.");
@@ -290,7 +319,12 @@ export default function Invoices({
       supabase.from("appointment_pet").select("appointment_id, pet_id"),
       supabase.rpc("get_business_settings", { p_business_id: businessId }),
       supabase.from("client_pet").select("client_id, pet_id"),
-      supabase.from("service").select("id, name, base_price").eq("business_id", businessId).eq("is_active", true).order("name"),
+      supabase
+        .from("service")
+        .select("id, name, base_price")
+        .eq("business_id", businessId)
+        .eq("is_active", true)
+        .order("name"),
     ]);
 
     const firstError = [
@@ -393,13 +427,18 @@ export default function Invoices({
   }
 
   function getInvoiceClientName(invoice: Invoice) {
-    return invoice.client_id ? getClientName(invoice.client_id) : invoice.walk_in_name || "Walk-in customer";
+    return invoice.client_id
+      ? getClientName(invoice.client_id)
+      : invoice.walk_in_name || "Walk-in customer";
   }
 
   function getInvoicePetName(invoice: Invoice) {
-    if (invoice.appointment_id) return getAppointmentPetName(invoice.appointment_id);
+    if (invoice.appointment_id)
+      return getAppointmentPetName(invoice.appointment_id);
     if (!invoice.pet_id) return "No pet selected";
-    return pets.find((pet) => pet.id === invoice.pet_id)?.PetName ?? "Unknown pet";
+    return (
+      pets.find((pet) => pet.id === invoice.pet_id)?.PetName ?? "Unknown pet"
+    );
   }
 
   function getAppointmentPetName(appointmentId: string) {
@@ -564,45 +603,103 @@ export default function Invoices({
     setSaving(false);
   }
 
-  function updateStandaloneLine(index: number, changes: Partial<StandaloneLine>) {
-    setStandaloneLines((current) => current.map((line, lineIndex) => lineIndex === index ? { ...line, ...changes } : line));
+  function updateStandaloneLine(
+    index: number,
+    changes: Partial<StandaloneLine>,
+  ) {
+    setStandaloneLines((current) =>
+      current.map((line, lineIndex) =>
+        lineIndex === index ? { ...line, ...changes } : line,
+      ),
+    );
   }
 
   function resetStandaloneForm() {
-    setStandaloneClientId(""); setStandalonePetId(""); setClientSearch("");
+    setStandaloneClientId("");
+    setStandalonePetId("");
+    setClientSearch("");
     setWalkIn({ name: "", email: "", phone: "" });
     setStandaloneLines([{ ...emptyStandaloneLine }]);
-    setStandaloneDiscount(""); setStandaloneTax(""); setStandaloneNotes("");
+    setStandaloneDiscount("");
+    setStandaloneTax("");
+    setStandaloneNotes("");
   }
 
   async function createStandaloneInvoice(issueNow: boolean) {
-    const validLines = standaloneLines.filter((line) => line.description.trim() && Number(line.quantity) > 0 && Number(line.unitPrice) >= 0);
-    const newInvoiceTotal = Math.max(validLines.reduce((sum, line) => sum + Number(line.quantity) * Number(line.unitPrice), 0) - Number(standaloneDiscount || 0) + Number(standaloneTax || 0), 0);
-    if (validLines.length === 0) { setMessage("Add at least one complete invoice item."); return; }
-    if (customerMode === "client" && !standaloneClientId) { setMessage("Choose a client or switch to Walk-in customer."); return; }
-    if (customerMode === "walkin" && !walkIn.name.trim()) { setMessage("Enter the walk-in customer’s name."); return; }
-    setSaving(true); setMessage(""); setSuccessMessage("");
+    const validLines = standaloneLines.filter(
+      (line) =>
+        line.description.trim() &&
+        Number(line.quantity) > 0 &&
+        Number(line.unitPrice) >= 0,
+    );
+    const newInvoiceTotal = Math.max(
+      validLines.reduce(
+        (sum, line) => sum + Number(line.quantity) * Number(line.unitPrice),
+        0,
+      ) -
+        Number(standaloneDiscount || 0) +
+        Number(standaloneTax || 0),
+      0,
+    );
+    if (validLines.length === 0) {
+      setMessage("Add at least one complete invoice item.");
+      return;
+    }
+    if (customerMode === "client" && !standaloneClientId) {
+      setMessage("Choose a client or switch to Walk-in customer.");
+      return;
+    }
+    if (customerMode === "walkin" && !walkIn.name.trim()) {
+      setMessage("Enter the walk-in customer’s name.");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    setSuccessMessage("");
     const { data, error } = await supabase.rpc("create_standalone_invoice", {
       p_business_id: businessId,
-      p_client_id: customerMode === "client" ? Number(standaloneClientId) : null,
-      p_pet_id: customerMode === "client" && standalonePetId ? Number(standalonePetId) : null,
+      p_client_id:
+        customerMode === "client" ? Number(standaloneClientId) : null,
+      p_pet_id:
+        customerMode === "client" && standalonePetId
+          ? Number(standalonePetId)
+          : null,
       p_walk_in_name: customerMode === "walkin" ? walkIn.name.trim() : null,
-      p_walk_in_email: customerMode === "walkin" ? walkIn.email.trim() || null : null,
-      p_walk_in_phone: customerMode === "walkin" ? walkIn.phone.trim() || null : null,
-      p_items: validLines.map((line) => ({ service_id: line.serviceId || null, description: line.description.trim(), quantity: Number(line.quantity), unit_price: Number(line.unitPrice) })),
+      p_walk_in_email:
+        customerMode === "walkin" ? walkIn.email.trim() || null : null,
+      p_walk_in_phone:
+        customerMode === "walkin" ? walkIn.phone.trim() || null : null,
+      p_items: validLines.map((line) => ({
+        service_id: line.serviceId || null,
+        description: line.description.trim(),
+        quantity: Number(line.quantity),
+        unit_price: Number(line.unitPrice),
+      })),
       p_discount_total: Number(standaloneDiscount || 0),
       p_tax_total: Number(standaloneTax || 0),
       p_notes: standaloneNotes.trim() || null,
       p_issue_now: issueNow,
     });
     setSaving(false);
-    if (error) { setMessage(error.message); return; }
-    resetStandaloneForm(); setShowCreateForm(false); setExpandedInvoiceId(String(data));
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    resetStandaloneForm();
+    setShowCreateForm(false);
+    setExpandedInvoiceId(String(data));
     if (issueNow) {
       setPaymentInvoiceId(String(data));
-      setPaymentForm({ ...emptyPaymentForm, amount: newInvoiceTotal.toFixed(2) });
+      setPaymentForm({
+        ...emptyPaymentForm,
+        amount: newInvoiceTotal.toFixed(2),
+      });
     }
-    setSuccessMessage(issueNow ? "Invoice created and ready for payment." : "Draft invoice created.");
+    setSuccessMessage(
+      issueNow
+        ? "Invoice created and ready for payment."
+        : "Draft invoice created.",
+    );
     await loadInvoices();
   }
 
@@ -667,7 +764,11 @@ export default function Invoices({
     );
     const checkoutData = data as { url?: string; error?: string } | null;
     if (error || !checkoutData?.url) {
-      setMessage(checkoutData?.error ?? error?.message ?? "Square Checkout could not be opened.");
+      setMessage(
+        checkoutData?.error ??
+          error?.message ??
+          "Square Checkout could not be opened.",
+      );
       setCheckoutInvoiceId(null);
       return;
     }
@@ -719,6 +820,7 @@ export default function Invoices({
     setRefundForm({
       amount: getRefundableAmount(payment).toFixed(2),
       reason: "",
+      externalReference: "",
     });
     setPaymentInvoiceId(null);
     setMessage("");
@@ -733,6 +835,51 @@ export default function Invoices({
     const payment = payments.find((item) => item.id === refundPaymentId);
     if (!payment || !Number.isFinite(amount) || amount <= 0) return;
 
+    if (!payment.provider && !payment.provider_payment_id) {
+      const reference = refundForm.externalReference.trim();
+
+      if (!reference) {
+        setMessage("Enter the external refund transaction reference.");
+        return;
+      }
+
+      if (amount > getRefundableAmount(payment)) {
+        setMessage("Refund amount exceeds the remaining refundable amount.");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Have you ALREADY refunded ${money.format(amount)} outside PawfficeHQ?\n\nReference: ${reference}\n\nThis will only record the refund. It will NOT send money.`,
+      );
+
+      if (!confirmed) return;
+
+      setSaving(true);
+      setMessage("");
+      setSuccessMessage("");
+
+      const { error } = await supabase.rpc("record_manual_refund", {
+        p_payment_id: payment.id,
+        p_amount: amount,
+        p_reason: refundForm.reason.trim(),
+        p_external_reference: reference,
+      });
+
+      if (error) {
+        console.error("External refund recording error:", error);
+        setMessage(error.message);
+        setSaving(false);
+        return;
+      }
+
+      setRefundPaymentId(null);
+      setRefundForm(emptyRefundForm);
+      setSuccessMessage("External refund recorded successfully.");
+      await loadInvoices();
+      setSaving(false);
+      return;
+    }
+
     const confirmed = window.confirm(
       `Refund ${money.format(amount)} to the client's original card? This cannot be undone from Pawffice HQ.`,
     );
@@ -744,7 +891,9 @@ export default function Invoices({
 
     const refundProvider = payment.provider === "square" ? "Square" : "Stripe";
     const { data, error } = await supabase.functions.invoke(
-      payment.provider === "square" ? "create-square-refund" : "create-stripe-refund",
+      payment.provider === "square"
+        ? "create-square-refund"
+        : "create-stripe-refund",
       {
         body: {
           paymentId: refundPaymentId,
@@ -790,10 +939,18 @@ export default function Invoices({
       "sync-square-refunds",
       { body: { paymentId } },
     );
-    const result = data as { success?: boolean; synced?: number; error?: string } | null;
+    const result = data as {
+      success?: boolean;
+      synced?: number;
+      error?: string;
+    } | null;
     if (error || !result?.success) {
       console.error("Square refund sync error:", error, result);
-      setMessage(result?.error ?? error?.message ?? "Square refunds could not be synchronized.");
+      setMessage(
+        result?.error ??
+          error?.message ??
+          "Square refunds could not be synchronized.",
+      );
       setSaving(false);
       return;
     }
@@ -914,46 +1071,340 @@ export default function Invoices({
       {showCreateForm && !readOnly && (
         <section className="dashboard-panel invoice-create-panel">
           <div className="invoice-create-heading">
-            <div><p className="eyebrow">New invoice</p><h3>{createMode === "standalone" ? "Standalone or walk-in invoice" : "Create from appointment"}</h3></div>
+            <div>
+              <p className="eyebrow">New invoice</p>
+              <h3>
+                {createMode === "standalone"
+                  ? "Standalone or walk-in invoice"
+                  : "Create from appointment"}
+              </h3>
+            </div>
             <div className="invoice-create-tabs">
-              <button type="button" className={createMode === "standalone" ? "active" : ""} onClick={() => setCreateMode("standalone")}>Standalone / walk-in</button>
-              <button type="button" className={createMode === "appointment" ? "active" : ""} onClick={() => setCreateMode("appointment")}>From appointment</button>
+              <button
+                type="button"
+                className={createMode === "standalone" ? "active" : ""}
+                onClick={() => setCreateMode("standalone")}
+              >
+                Standalone / walk-in
+              </button>
+              <button
+                type="button"
+                className={createMode === "appointment" ? "active" : ""}
+                onClick={() => setCreateMode("appointment")}
+              >
+                From appointment
+              </button>
             </div>
           </div>
 
           {createMode === "standalone" ? (
-            <form className="standalone-invoice-form" onSubmit={(event) => { event.preventDefault(); void createStandaloneInvoice(false); }}>
+            <form
+              className="standalone-invoice-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void createStandaloneInvoice(false);
+              }}
+            >
               <div className="standalone-customer-mode">
-                <button type="button" className={customerMode === "client" ? "active" : ""} onClick={() => setCustomerMode("client")}>Saved client</button>
-                <button type="button" className={customerMode === "walkin" ? "active" : ""} onClick={() => { setCustomerMode("walkin"); setStandaloneClientId(""); setStandalonePetId(""); }}>Walk-in customer</button>
+                <button
+                  type="button"
+                  className={customerMode === "client" ? "active" : ""}
+                  onClick={() => setCustomerMode("client")}
+                >
+                  Saved client
+                </button>
+                <button
+                  type="button"
+                  className={customerMode === "walkin" ? "active" : ""}
+                  onClick={() => {
+                    setCustomerMode("walkin");
+                    setStandaloneClientId("");
+                    setStandalonePetId("");
+                  }}
+                >
+                  Walk-in customer
+                </button>
               </div>
               {customerMode === "client" ? (
                 <div className="standalone-customer-fields">
-                  <label>Find client<input type="search" value={clientSearch} onChange={(event) => setClientSearch(event.target.value)} placeholder="Type a client name, email, or phone" /></label>
-                  <label>Client<select required value={standaloneClientId} onChange={(event) => { setStandaloneClientId(event.target.value); setStandalonePetId(""); }}><option value="">Choose client</option>{clients.filter((client) => [client.FirstName, client.LastName, client.EmailAddress, client.PhoneNumber].filter(Boolean).join(" ").toLowerCase().includes(clientSearch.trim().toLowerCase())).map((client) => <option value={client.id} key={client.id}>{client.FirstName} {client.LastName}</option>)}</select></label>
-                  <label>Pet (optional)<select value={standalonePetId} disabled={!standaloneClientId} onChange={(event) => setStandalonePetId(event.target.value)}><option value="">No pet selected</option>{clientPets.filter((link) => String(link.client_id) === standaloneClientId).map((link) => pets.find((pet) => pet.id === link.pet_id)).filter((pet): pet is Pet => Boolean(pet)).map((pet) => <option key={pet.id} value={pet.id}>{pet.PetName}</option>)}</select></label>
+                  <label>
+                    Find client
+                    <input
+                      type="search"
+                      value={clientSearch}
+                      onChange={(event) => setClientSearch(event.target.value)}
+                      placeholder="Type a client name, email, or phone"
+                    />
+                  </label>
+                  <label>
+                    Client
+                    <select
+                      required
+                      value={standaloneClientId}
+                      onChange={(event) => {
+                        setStandaloneClientId(event.target.value);
+                        setStandalonePetId("");
+                      }}
+                    >
+                      <option value="">Choose client</option>
+                      {clients
+                        .filter((client) =>
+                          [
+                            client.FirstName,
+                            client.LastName,
+                            client.EmailAddress,
+                            client.PhoneNumber,
+                          ]
+                            .filter(Boolean)
+                            .join(" ")
+                            .toLowerCase()
+                            .includes(clientSearch.trim().toLowerCase()),
+                        )
+                        .map((client) => (
+                          <option value={client.id} key={client.id}>
+                            {client.FirstName} {client.LastName}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label>
+                    Pet (optional)
+                    <select
+                      value={standalonePetId}
+                      disabled={!standaloneClientId}
+                      onChange={(event) =>
+                        setStandalonePetId(event.target.value)
+                      }
+                    >
+                      <option value="">No pet selected</option>
+                      {clientPets
+                        .filter(
+                          (link) =>
+                            String(link.client_id) === standaloneClientId,
+                        )
+                        .map((link) =>
+                          pets.find((pet) => pet.id === link.pet_id),
+                        )
+                        .filter((pet): pet is Pet => Boolean(pet))
+                        .map((pet) => (
+                          <option key={pet.id} value={pet.id}>
+                            {pet.PetName}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
                 </div>
               ) : (
                 <div className="standalone-customer-fields">
-                  <label>Customer name<input required value={walkIn.name} onChange={(event) => setWalkIn({ ...walkIn, name: event.target.value })} placeholder="Walk-in customer" /></label>
-                  <label>Email (optional)<input type="email" value={walkIn.email} onChange={(event) => setWalkIn({ ...walkIn, email: event.target.value })} /></label>
-                  <label>Phone (optional)<input type="tel" value={walkIn.phone} onChange={(event) => setWalkIn({ ...walkIn, phone: event.target.value })} /></label>
+                  <label>
+                    Customer name
+                    <input
+                      required
+                      value={walkIn.name}
+                      onChange={(event) =>
+                        setWalkIn({ ...walkIn, name: event.target.value })
+                      }
+                      placeholder="Walk-in customer"
+                    />
+                  </label>
+                  <label>
+                    Email (optional)
+                    <input
+                      type="email"
+                      value={walkIn.email}
+                      onChange={(event) =>
+                        setWalkIn({ ...walkIn, email: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Phone (optional)
+                    <input
+                      type="tel"
+                      value={walkIn.phone}
+                      onChange={(event) =>
+                        setWalkIn({ ...walkIn, phone: event.target.value })
+                      }
+                    />
+                  </label>
                 </div>
               )}
               <div className="standalone-lines">
-                <div className="standalone-section-heading"><h4>Invoice items</h4><button className="secondary-button" type="button" onClick={() => setStandaloneLines((current) => [...current, { ...emptyStandaloneLine }])}>+ Add line</button></div>
-                {standaloneLines.map((line, index) => <div className="standalone-line" key={index}>
-                  <label>Service (optional)<select value={line.serviceId} onChange={(event) => { const service = services.find((item) => item.id === event.target.value); updateStandaloneLine(index, { serviceId: event.target.value, description: service?.name ?? line.description, unitPrice: service ? String(service.base_price) : line.unitPrice }); }}><option value="">Custom item</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select></label>
-                  <label>Description<input required value={line.description} onChange={(event) => updateStandaloneLine(index, { description: event.target.value })} /></label>
-                  <label>Quantity<input required type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateStandaloneLine(index, { quantity: event.target.value })} /></label>
-                  <label>Unit price<input required type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateStandaloneLine(index, { unitPrice: event.target.value })} /></label>
-                  <strong>{money.format(Number(line.quantity || 0) * Number(line.unitPrice || 0))}</strong>
-                  <button type="button" onClick={() => setStandaloneLines((current) => current.length === 1 ? [{ ...emptyStandaloneLine }] : current.filter((_, lineIndex) => lineIndex !== index))}>Remove</button>
-                </div>)}
+                <div className="standalone-section-heading">
+                  <h4>Invoice items</h4>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    onClick={() =>
+                      setStandaloneLines((current) => [
+                        ...current,
+                        { ...emptyStandaloneLine },
+                      ])
+                    }
+                  >
+                    + Add line
+                  </button>
+                </div>
+                {standaloneLines.map((line, index) => (
+                  <div className="standalone-line" key={index}>
+                    <label>
+                      Service (optional)
+                      <select
+                        value={line.serviceId}
+                        onChange={(event) => {
+                          const service = services.find(
+                            (item) => item.id === event.target.value,
+                          );
+                          updateStandaloneLine(index, {
+                            serviceId: event.target.value,
+                            description: service?.name ?? line.description,
+                            unitPrice: service
+                              ? String(service.base_price)
+                              : line.unitPrice,
+                          });
+                        }}
+                      >
+                        <option value="">Custom item</option>
+                        {services.map((service) => (
+                          <option key={service.id} value={service.id}>
+                            {service.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Description
+                      <input
+                        required
+                        value={line.description}
+                        onChange={(event) =>
+                          updateStandaloneLine(index, {
+                            description: event.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Quantity
+                      <input
+                        required
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={line.quantity}
+                        onChange={(event) =>
+                          updateStandaloneLine(index, {
+                            quantity: event.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Unit price
+                      <input
+                        required
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.unitPrice}
+                        onChange={(event) =>
+                          updateStandaloneLine(index, {
+                            unitPrice: event.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <strong>
+                      {money.format(
+                        Number(line.quantity || 0) *
+                          Number(line.unitPrice || 0),
+                      )}
+                    </strong>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setStandaloneLines((current) =>
+                          current.length === 1
+                            ? [{ ...emptyStandaloneLine }]
+                            : current.filter(
+                                (_, lineIndex) => lineIndex !== index,
+                              ),
+                        )
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
               </div>
-              <div className="standalone-adjustments"><label>Discount<input type="number" min="0" step="0.01" value={standaloneDiscount} onChange={(event) => setStandaloneDiscount(event.target.value)} /></label><label>Tax<input type="number" min="0" step="0.01" value={standaloneTax} onChange={(event) => setStandaloneTax(event.target.value)} /></label><label className="standalone-notes">Notes<textarea rows={3} value={standaloneNotes} onChange={(event) => setStandaloneNotes(event.target.value)} /></label></div>
-              <div className="standalone-total"><span>Invoice total</span><strong>{money.format(Math.max(standaloneLines.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0) - Number(standaloneDiscount || 0) + Number(standaloneTax || 0), 0))}</strong></div>
-              <div className="standalone-actions"><button type="submit" className="secondary-button" disabled={saving}>{saving ? "Saving…" : "Save draft"}</button><button type="button" className="primary-button" disabled={saving} onClick={() => void createStandaloneInvoice(true)}>Create & take payment</button></div>
+              <div className="standalone-adjustments">
+                <label>
+                  Discount
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={standaloneDiscount}
+                    onChange={(event) =>
+                      setStandaloneDiscount(event.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  Tax
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={standaloneTax}
+                    onChange={(event) => setStandaloneTax(event.target.value)}
+                  />
+                </label>
+                <label className="standalone-notes">
+                  Notes
+                  <textarea
+                    rows={3}
+                    value={standaloneNotes}
+                    onChange={(event) => setStandaloneNotes(event.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="standalone-total">
+                <span>Invoice total</span>
+                <strong>
+                  {money.format(
+                    Math.max(
+                      standaloneLines.reduce(
+                        (sum, line) =>
+                          sum +
+                          Number(line.quantity || 0) *
+                            Number(line.unitPrice || 0),
+                        0,
+                      ) -
+                        Number(standaloneDiscount || 0) +
+                        Number(standaloneTax || 0),
+                      0,
+                    ),
+                  )}
+                </strong>
+              </div>
+              <div className="standalone-actions">
+                <button
+                  type="submit"
+                  className="secondary-button"
+                  disabled={saving}
+                >
+                  {saving ? "Saving…" : "Save draft"}
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={saving}
+                  onClick={() => void createStandaloneInvoice(true)}
+                >
+                  Create & take payment
+                </button>
+              </div>
             </form>
           ) : availableAppointments.length === 0 ? (
             <p>Every eligible appointment already has an invoice.</p>
@@ -992,17 +1443,29 @@ export default function Invoices({
       )}
 
       <section className="invoice-summary-grid">
-        <button type="button" className="clickable-summary-card" onClick={() => setFilter("unpaid")}>
+        <button
+          type="button"
+          className="clickable-summary-card"
+          onClick={() => setFilter("unpaid")}
+        >
           <span>Outstanding</span>
           <strong>{loading ? "—" : money.format(totals.outstanding)}</strong>
           <small>Show unpaid →</small>
         </button>
-        <button type="button" className="clickable-summary-card" onClick={() => setFilter("paid")}>
+        <button
+          type="button"
+          className="clickable-summary-card"
+          onClick={() => setFilter("paid")}
+        >
           <span>Payments received</span>
           <strong>{loading ? "—" : money.format(totals.paid)}</strong>
           <small>Show paid →</small>
         </button>
-        <button type="button" className="clickable-summary-card" onClick={() => setFilter("draft")}>
+        <button
+          type="button"
+          className="clickable-summary-card"
+          onClick={() => setFilter("draft")}
+        >
           <span>Draft invoices</span>
           <strong>{loading ? "—" : totals.drafts}</strong>
           <small>Show drafts →</small>
@@ -1206,7 +1669,9 @@ export default function Invoices({
                                 <button
                                   type="button"
                                   className="invoice-refund-button"
-                                  onClick={() => void syncSquareRefunds(payment.id)}
+                                  onClick={() =>
+                                    void syncSquareRefunds(payment.id)
+                                  }
                                   disabled={saving}
                                 >
                                   Sync Square
@@ -1225,6 +1690,23 @@ export default function Invoices({
                                     disabled={saving}
                                   >
                                     Refund
+                                  </button>
+                                )}
+
+                              {!readOnly &&
+                                !payment.provider_payment_id &&
+                                !payment.provider &&
+                                ["succeeded", "partially_refunded"].includes(
+                                  payment.status,
+                                ) &&
+                                getRefundableAmount(payment) > 0 && (
+                                  <button
+                                    type="button"
+                                    className="invoice-refund-button"
+                                    onClick={() => void openRefundForm(payment)}
+                                    disabled={saving}
+                                  >
+                                    Record Refund
                                   </button>
                                 )}
                             </div>
@@ -1273,9 +1755,23 @@ export default function Invoices({
                               View receipt
                             </button>
                           )}
-                          {!readOnly && invoice.status === "paid" && invoice.appointment_id && appointments.find(item=>item.id===invoice.appointment_id) && (
-                            <RebookAppointment businessId={businessId} appointmentId={invoice.appointment_id} sourceStartAt={appointments.find(item=>item.id===invoice.appointment_id)!.start_at} />
-                          )}
+                          {!readOnly &&
+                            invoice.status === "paid" &&
+                            invoice.appointment_id &&
+                            appointments.find(
+                              (item) => item.id === invoice.appointment_id,
+                            ) && (
+                              <RebookAppointment
+                                businessId={businessId}
+                                appointmentId={invoice.appointment_id}
+                                sourceStartAt={
+                                  appointments.find(
+                                    (item) =>
+                                      item.id === invoice.appointment_id,
+                                  )!.start_at
+                                }
+                              />
+                            )}
                           {!readOnly && invoice.status === "draft" && (
                             <button
                               type="button"
@@ -1309,7 +1805,9 @@ export default function Invoices({
                                   <button
                                     type="button"
                                     className="primary-button"
-                                    onClick={() => void openSquareCheckout(invoice.id)}
+                                    onClick={() =>
+                                      void openSquareCheckout(invoice.id)
+                                    }
                                     disabled={checkoutInvoiceId !== null}
                                   >
                                     {checkoutInvoiceId === invoice.id
@@ -1433,11 +1931,20 @@ export default function Invoices({
                             onSubmit={issueRefund}
                           >
                             <div>
-                              <h4>Refund card payment</h4>
-                              <p>
-                                The money will be returned through {invoicePayments.find(
+                              <h4>
+                                {invoicePayments.find(
                                   (payment) => payment.id === refundPaymentId,
-                                )?.provider === "square" ? "Square" : "Stripe"} to the client’s original payment method.
+                                )?.provider_payment_id
+                                  ? "Refund card payment"
+                                  : "Record external refund"}
+                              </h4>
+
+                              <p>
+                                {invoicePayments.find(
+                                  (payment) => payment.id === refundPaymentId,
+                                )?.provider_payment_id
+                                  ? "The money will be returned through the payment provider to the client's original payment method."
+                                  : "Only use this form after refunding the customer through your external payment terminal. PawfficeHQ will record the refund but will NOT send money to the customer."}
                               </p>
                             </div>
 
@@ -1480,6 +1987,27 @@ export default function Invoices({
                               />
                             </label>
 
+                            {!invoicePayments.find(
+                              (payment) => payment.id === refundPaymentId,
+                            )?.provider_payment_id && (
+                              <label className="invoice-refund-note">
+                                External refund reference
+                                <input
+                                  type="text"
+                                  maxLength={200}
+                                  value={refundForm.externalReference}
+                                  onChange={(event) =>
+                                    setRefundForm((current) => ({
+                                      ...current,
+                                      externalReference: event.target.value,
+                                    }))
+                                  }
+                                  placeholder="Square refund transaction ID"
+                                  required
+                                />
+                              </label>
+                            )}
+
                             <div className="invoice-refund-actions">
                               <button
                                 type="button"
@@ -1497,7 +2025,15 @@ export default function Invoices({
                                 className="invoice-danger-button"
                                 disabled={saving}
                               >
-                                {saving ? "Refunding..." : "Issue refund"}
+                                {!invoicePayments.find(
+                                  (payment) => payment.id === refundPaymentId,
+                                )?.provider_payment_id
+                                  ? saving
+                                    ? "Recording refund..."
+                                    : "Record Refund"
+                                  : saving
+                                    ? "Refunding..."
+                                    : "Issue Refund"}
                               </button>
                             </div>
                           </form>
@@ -1615,14 +2151,16 @@ export default function Invoices({
                 {receiptClient?.PhoneNumber && (
                   <p>{receiptClient.PhoneNumber}</p>
                 )}
-                {!receiptClient && receiptInvoice.walk_in_email && <p>{receiptInvoice.walk_in_email}</p>}
-                {!receiptClient && receiptInvoice.walk_in_phone && <p>{receiptInvoice.walk_in_phone}</p>}
+                {!receiptClient && receiptInvoice.walk_in_email && (
+                  <p>{receiptInvoice.walk_in_email}</p>
+                )}
+                {!receiptClient && receiptInvoice.walk_in_phone && (
+                  <p>{receiptInvoice.walk_in_phone}</p>
+                )}
               </div>
               <div>
                 <span>Pet</span>
-                <strong>
-                  {getInvoicePetName(receiptInvoice)}
-                </strong>
+                <strong>{getInvoicePetName(receiptInvoice)}</strong>
               </div>
             </section>
 
