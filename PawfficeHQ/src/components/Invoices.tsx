@@ -275,7 +275,7 @@ export default function Invoices({
       supabase
         .from("invoice")
         .select(
-          "invoice_appointment(appointment_id), id, appointment_id, client_id, pet_id, walk_in_name, walk_in_email, walk_in_phone, invoice_number, status, currency, subtotal, discount_total, tax_total, total, notes, issued_at, due_at, paid_at, created_at",
+          "id, appointment_id, client_id, pet_id, walk_in_name, walk_in_email, walk_in_phone, invoice_number, status, currency, subtotal, discount_total, tax_total, total, notes, issued_at, due_at, paid_at, created_at",
         )
         .eq("business_id", businessId)
         .order("created_at", { ascending: false }),
