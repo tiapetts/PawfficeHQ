@@ -536,7 +536,16 @@ function Calendar({
     setShowBlockForm(false);
     setShowForm(false);
     setMessage("");
+    const scrollPosition = window.scrollY;
+
     setActionSlot(selected);
+
+    requestAnimationFrame(() => {
+      window.scrollTo({
+        top: scrollPosition,
+        behavior: "instant",
+      });
+    });
   }
 
   function appointmentsInSlot(day: Date, minutesAfterMidnight: number) {
