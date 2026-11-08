@@ -105,6 +105,7 @@ function Calendar({
   const [allowDoubleBooking, setAllowDoubleBooking] = useState(false);
   const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
   const [showBlockForm, setShowBlockForm] = useState(false);
+  const [actionSlot, setActionSlot] = useState<Date | null>(null);
   const [blockStaffId, setBlockStaffId] = useState("");
   const [blockTitle, setBlockTitle] = useState("Unavailable");
   const [blockNotes, setBlockNotes] = useState("");
@@ -377,6 +378,7 @@ function Calendar({
   function openBlockForm(start?: Date, block?: TimeBlock) {
     if (readOnly) return;
     setShowForm(false);
+    setActionSlot(null);
     setEditingBlockId(block?.id ?? null);
     setBlockStaffId(block?.staff_id ?? "");
     setBlockTitle("Unavailable");
@@ -532,10 +534,9 @@ function Calendar({
       0,
     );
     setShowBlockForm(false);
-    setStartTime(formatInputDateTime(selected));
+    setShowForm(false);
     setMessage("");
-    setShowForm(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setActionSlot(selected);
   }
 
   function appointmentsInSlot(day: Date, minutesAfterMidnight: number) {
@@ -982,26 +983,93 @@ function Calendar({
           <p className="eyebrow">Schedule</p>
           <h2>Calendar</h2>
         </div>
-
-        {!readOnly && (
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => openBlockForm()}
-          >
-            + Block personal time
-          </button>
-        )}
-        {!readOnly && (
-          <button
-            className="primary-button"
-            type="button"
-            onClick={() => setShowForm((current) => !current)}
-          >
-            {showForm ? "Cancel" : "+ New appointment"}
-          </button>
-        )}
       </header>
+
+      {actionSlot && !readOnly && (
+        <div
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setActionSlot(null);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 350,
+            display: "grid",
+            placeItems: "center",
+            padding: 20,
+            background: "rgba(18, 44, 38, 0.48)",
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose calendar action"
+            className="dashboard-panel"
+            style={{ width: "min(390px, 100%)", margin: 0, padding: 24 }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "start",
+              }}
+            >
+              <div>
+                <p className="eyebrow">Calendar</p>
+                <h3 style={{ margin: "4px 0 8px" }}>
+                  What would you like to add?
+                </h3>
+                <p style={{ color: "#58716b", margin: "0 0 18px" }}>
+                  {actionSlot.toLocaleDateString(undefined, {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                  {" at "}
+                  {actionSlot.toLocaleTimeString([], {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setActionSlot(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ display: "grid", gap: 12 }}>
+              <button
+                type="button"
+                className="primary-button"
+                style={{ padding: "15px 18px", textAlign: "left" }}
+                onClick={() => {
+                  setStartTime(formatInputDateTime(actionSlot));
+                  setShowBlockForm(false);
+                  setShowForm(true);
+                  setActionSlot(null);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              >
+                + New appointment
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                style={{ padding: "15px 18px", textAlign: "left" }}
+                onClick={() => openBlockForm(actionSlot)}
+              >
+                🔒 Block personal time
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {message && (
         <p className="error-message" role="alert">
@@ -1308,7 +1376,7 @@ function Calendar({
         <p style={{ marginTop: 0, color: "#58716b" }}>
           {readOnly
             ? "Click an appointment to view its details."
-            : "Click an open time to create an appointment, or drag an appointment to reschedule it."}
+            : "Click an open time to add an appointment or block personal time, or drag an appointment to reschedule it."}
         </p>
 
         <div className="calendar-scroll">
@@ -1408,7 +1476,7 @@ function Calendar({
                     title={
                       occupiedSlots.length
                         ? `${occupiedSlots.length} appointment${occupiedSlots.length === 1 ? "" : "s"} in this time slot`
-                        : "Create an appointment at this time"
+                        : "Add an appointment or block personal time"
                     }
                   >
                     {blockedSlots.map((block) => {
