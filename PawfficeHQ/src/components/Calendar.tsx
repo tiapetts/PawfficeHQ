@@ -1229,8 +1229,9 @@ function Calendar({
                       />
                     </label>
                     <div
-                      className="form-actions full-width"
+                      className="full-width"
                       style={{
+                        gridColumn: "1 / -1",
                         display: "grid",
                         gridTemplateColumns: "minmax(0, 1fr)",
                         gap: 10,
@@ -1239,7 +1240,11 @@ function Calendar({
                     >
                       <button
                         className="primary-button"
-                        style={{ width: "100%" }}
+                        style={{
+                          width: "100%",
+                          display: "block",
+                          justifySelf: "stretch",
+                        }}
                         type="submit"
                         disabled={savingBlock}
                       >
@@ -1247,7 +1252,11 @@ function Calendar({
                       </button>
                       <button
                         className="secondary-button"
-                        style={{ width: "100%" }}
+                        style={{
+                          width: "100%",
+                          display: "block",
+                          justifySelf: "stretch",
+                        }}
                         type="button"
                         onClick={() => setShowBlockForm(false)}
                       >
@@ -1258,6 +1267,8 @@ function Calendar({
                           className="secondary-button"
                           style={{
                             width: "100%",
+                            display: "block",
+                            justifySelf: "stretch",
                             background: "#b42318",
                             color: "#fff",
                             border: "1px solid #b42318",
@@ -1426,17 +1437,31 @@ function Calendar({
                       />
                     </label>
 
-                    <div className="form-actions full-width">
+                    <div
+                      className="full-width"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1fr)",
+                        gap: 10,
+                        width: "100%",
+                        gridColumn: "1 / -1",
+                      }}
+                    >
                       <button
                         type="button"
                         className="secondary-button"
+                        style={{ width: "100%", display: "block" }}
                         onClick={() => setShowForm(false)}
                       >
                         Cancel
                       </button>
                       <button
                         className="primary-button"
-                        style={{ width: "100%" }}
+                        style={{
+                          width: "100%",
+                          display: "block",
+                          justifySelf: "stretch",
+                        }}
                         type="submit"
                         disabled={saving}
                       >
