@@ -1042,7 +1042,15 @@ function Calendar({
                   className="secondary-button"
                   onClick={() => setActionSlot(null)}
                   aria-label="Close"
-                  style={{ width: 38, height: 38, padding: 0, flexShrink: 0 }}
+                  style={{
+                    width: 38,
+                    height: 38,
+                    padding: 0,
+                    flexShrink: 0,
+                    background: "#b42318",
+                    color: "#fff",
+                    border: "1px solid #b42318",
+                  }}
                 >
                   ×
                 </button>
@@ -1051,7 +1059,11 @@ function Calendar({
                 <button
                   type="button"
                   className="primary-button"
-                  style={{ padding: "15px 18px", textAlign: "left" }}
+                  style={{
+                    padding: "15px 18px",
+                    textAlign: "left",
+                    width: "100%",
+                  }}
                   onClick={() => {
                     setStartTime(formatInputDateTime(actionSlot));
                     setShowBlockForm(false);
@@ -1064,7 +1076,11 @@ function Calendar({
                 <button
                   type="button"
                   className="secondary-button"
-                  style={{ padding: "15px 18px", textAlign: "left" }}
+                  style={{
+                    padding: "15px 18px",
+                    textAlign: "left",
+                    width: "100%",
+                  }}
                   onClick={() => openBlockForm(actionSlot)}
                 >
                   🔒 Block personal time
@@ -1141,6 +1157,9 @@ function Calendar({
                         height: 38,
                         padding: 0,
                         flexShrink: 0,
+                        background: "#b42318",
+                        color: "#fff",
+                        border: "1px solid #b42318",
                       }}
                     >
                       ×
@@ -1209,9 +1228,18 @@ function Calendar({
                         rows={3}
                       />
                     </label>
-                    <div className="form-actions full-width">
+                    <div
+                      className="form-actions full-width"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1fr)",
+                        gap: 10,
+                        width: "100%",
+                      }}
+                    >
                       <button
                         className="primary-button"
+                        style={{ width: "100%" }}
                         type="submit"
                         disabled={savingBlock}
                       >
@@ -1219,6 +1247,7 @@ function Calendar({
                       </button>
                       <button
                         className="secondary-button"
+                        style={{ width: "100%" }}
                         type="button"
                         onClick={() => setShowBlockForm(false)}
                       >
@@ -1227,6 +1256,12 @@ function Calendar({
                       {editingBlockId && (
                         <button
                           className="secondary-button"
+                          style={{
+                            width: "100%",
+                            background: "#b42318",
+                            color: "#fff",
+                            border: "1px solid #b42318",
+                          }}
                           type="button"
                           onClick={() => void deleteTimeBlock()}
                           disabled={savingBlock}
@@ -1247,6 +1282,15 @@ function Calendar({
                       className="secondary-button"
                       onClick={() => setShowForm(false)}
                       aria-label="Close appointment form"
+                      style={{
+                        width: 38,
+                        height: 38,
+                        padding: 0,
+                        flexShrink: 0,
+                        background: "#b42318",
+                        color: "#fff",
+                        border: "1px solid #b42318",
+                      }}
                     >
                       ×
                     </button>
@@ -1392,6 +1436,7 @@ function Calendar({
                       </button>
                       <button
                         className="primary-button"
+                        style={{ width: "100%" }}
                         type="submit"
                         disabled={saving}
                       >
