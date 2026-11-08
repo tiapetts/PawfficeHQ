@@ -1,4 +1,5 @@
 import HouseholdCheckout from "./HouseholdCheckout";
+import { createPortal } from "react-dom";
 import {
   useEffect,
   useMemo,
@@ -72,6 +73,7 @@ type AppointmentService = {
 
 type TimeBlock = {
   id: string;
+  title: string;
   business_id: string;
   staff_id: string;
   start_at: string;
@@ -201,7 +203,7 @@ function Calendar({
       }),
       supabase
         .from("staff_time_block")
-        .select("id, business_id, staff_id, start_at, end_at")
+        .select("id, business_id, staff_id, title, start_at, end_at")
         .eq("business_id", businessId),
     ]);
 
@@ -381,7 +383,7 @@ function Calendar({
     setActionSlot(null);
     setEditingBlockId(block?.id ?? null);
     setBlockStaffId(block?.staff_id ?? "");
-    setBlockTitle("Unavailable");
+    setBlockTitle(block?.title ?? "Unavailable");
     setBlockNotes("");
     const initial = start ?? (block ? new Date(block.start_at) : new Date());
     setBlockStart(formatInputDateTime(initial));
@@ -984,90 +986,94 @@ function Calendar({
         </div>
       </header>
 
-      {actionSlot && !readOnly && (
-        <div
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setActionSlot(null);
-          }}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 350,
-            display: "grid",
-            placeItems: "center",
-            padding: 20,
-            background: "rgba(18, 44, 38, 0.48)",
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label="Choose calendar action"
-            className="dashboard-panel"
-            style={{ width: "min(390px, 100%)", margin: 0, padding: 24 }}
+      {actionSlot &&
+        !readOnly &&
+        createPortal(
+          <div
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setActionSlot(null);
+            }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 350,
+              display: "grid",
+              placeItems: "center",
+              padding: 20,
+              background: "rgba(18, 44, 38, 0.48)",
+            }}
           >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-                alignItems: "start",
-              }}
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label="Choose calendar action"
+              className="dashboard-panel"
+              style={{ width: "min(390px, 100%)", margin: 0, padding: 24 }}
             >
-              <div>
-                <p className="eyebrow">Calendar</p>
-                <h3 style={{ margin: "4px 0 8px" }}>
-                  What would you like to add?
-                </h3>
-                <p style={{ color: "#58716b", margin: "0 0 18px" }}>
-                  {actionSlot.toLocaleDateString(undefined, {
-                    weekday: "long",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                  {" at "}
-                  {actionSlot.toLocaleTimeString([], {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => setActionSlot(null)}
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-            <div style={{ display: "grid", gap: 12 }}>
-              <button
-                type="button"
-                className="primary-button"
-                style={{ padding: "15px 18px", textAlign: "left" }}
-                onClick={() => {
-                  setStartTime(formatInputDateTime(actionSlot));
-                  setShowBlockForm(false);
-                  setShowForm(true);
-                  setActionSlot(null);
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  alignItems: "start",
                 }}
               >
-                + New appointment
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                style={{ padding: "15px 18px", textAlign: "left" }}
-                onClick={() => openBlockForm(actionSlot)}
-              >
-                🔒 Block personal time
-              </button>
-            </div>
-          </section>
-        </div>
-      )}
+                <div>
+                  <p className="eyebrow">Calendar</p>
+                  <h3 style={{ margin: "4px 0 8px" }}>
+                    What would you like to add?
+                  </h3>
+                  <p style={{ color: "#58716b", margin: "0 0 18px" }}>
+                    {actionSlot.toLocaleDateString(undefined, {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                    {" at "}
+                    {actionSlot.toLocaleTimeString([], {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setActionSlot(null)}
+                  aria-label="Close"
+                  style={{ width: 38, height: 38, padding: 0, flexShrink: 0 }}
+                >
+                  ×
+                </button>
+              </div>
+              <div style={{ display: "grid", gap: 12 }}>
+                <button
+                  type="button"
+                  className="primary-button"
+                  style={{ padding: "15px 18px", textAlign: "left" }}
+                  onClick={() => {
+                    setStartTime(formatInputDateTime(actionSlot));
+                    setShowBlockForm(false);
+                    setShowForm(true);
+                    setActionSlot(null);
+                  }}
+                >
+                  + New appointment
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{ padding: "15px 18px", textAlign: "left" }}
+                  onClick={() => openBlockForm(actionSlot)}
+                >
+                  🔒 Block personal time
+                </button>
+              </div>
+            </section>
+          </div>,
+          document.body,
+        )}
 
       {message && !showBlockForm && !showForm && (
         <p className="error-message" role="alert">
@@ -1075,316 +1081,330 @@ function Calendar({
         </p>
       )}
 
-      {(showBlockForm || showForm) && !readOnly && (
-        <div
-          role="presentation"
-          onMouseDown={(event) => {
-            if (
-              event.target === event.currentTarget &&
-              !saving &&
-              !savingBlock
-            ) {
-              setShowBlockForm(false);
-              setShowForm(false);
-            }
-          }}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 350,
-            display: "grid",
-            placeItems: "center",
-            padding: 16,
-            background: "rgba(18, 44, 38, 0.56)",
-          }}
-        >
+      {(showBlockForm || showForm) &&
+        !readOnly &&
+        createPortal(
           <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={
-              showBlockForm ? "Time block details" : "Appointment details"
-            }
+            role="presentation"
+            onMouseDown={(event) => {
+              if (
+                event.target === event.currentTarget &&
+                !saving &&
+                !savingBlock
+              ) {
+                setShowBlockForm(false);
+                setShowForm(false);
+              }
+            }}
             style={{
-              width: "min(760px, 100%)",
-              maxHeight: "min(90vh, 900px)",
-              overflowY: "auto",
-              borderRadius: 14,
+              position: "fixed",
+              inset: 0,
+              zIndex: 350,
+              display: "grid",
+              placeItems: "center",
+              padding: 16,
+              background: "rgba(18, 44, 38, 0.56)",
             }}
           >
-            {message && (
-              <p
-                className="error-message"
-                role="alert"
-                style={{ margin: "0 0 8px" }}
-              >
-                {message}
-              </p>
-            )}
-            {showBlockForm && (
-              <section className="dashboard-panel" style={{ margin: 0 }}>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setShowBlockForm(false)}
-                    aria-label="Close time block form"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="panel-heading">
-                  <div>
-                    <p className="eyebrow">Availability</p>
-                    <h3>
-                      {editingBlockId
-                        ? "Edit time block"
-                        : "Block personal time"}
-                    </h3>
-                  </div>
-                </div>
-                <form className="appointment-form" onSubmit={saveTimeBlock}>
-                  <label>
-                    Employee
-                    <select
-                      value={blockStaffId}
-                      onChange={(event) => setBlockStaffId(event.target.value)}
-                      required
-                      disabled={Boolean(editingBlockId)}
-                    >
-                      <option value="">Choose an employee</option>
-                      {staff.map((employee) => (
-                        <option key={employee.id} value={employee.id}>
-                          {employee.first_name} {employee.last_name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Title
-                    <input
-                      value={blockTitle}
-                      onChange={(event) => setBlockTitle(event.target.value)}
-                      required
-                    />
-                  </label>
-                  <label>
-                    Start
-                    <input
-                      type="datetime-local"
-                      value={blockStart}
-                      onChange={(event) => setBlockStart(event.target.value)}
-                      required
-                    />
-                  </label>
-                  <label>
-                    End
-                    <input
-                      type="datetime-local"
-                      value={blockEnd}
-                      onChange={(event) => setBlockEnd(event.target.value)}
-                      required
-                    />
-                  </label>
-                  <label className="full-width">
-                    Private notes
-                    <textarea
-                      value={blockNotes}
-                      onChange={(event) => setBlockNotes(event.target.value)}
-                      rows={3}
-                    />
-                  </label>
-                  <div className="form-actions full-width">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={
+                showBlockForm ? "Time block details" : "Appointment details"
+              }
+              style={{
+                width: "min(680px, 100%)",
+                maxHeight: "min(90vh, 900px)",
+                overflowY: "auto",
+                borderRadius: 14,
+              }}
+            >
+              {message && (
+                <p
+                  className="error-message"
+                  role="alert"
+                  style={{ margin: "0 0 8px" }}
+                >
+                  {message}
+                </p>
+              )}
+              {showBlockForm && (
+                <section className="dashboard-panel" style={{ margin: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
                     <button
-                      className="primary-button"
-                      type="submit"
-                      disabled={savingBlock}
-                    >
-                      {savingBlock ? "Saving..." : "Save time block"}
-                    </button>
-                    <button
-                      className="secondary-button"
                       type="button"
+                      className="secondary-button"
                       onClick={() => setShowBlockForm(false)}
+                      aria-label="Close time block form"
+                      style={{
+                        width: 38,
+                        height: 38,
+                        padding: 0,
+                        flexShrink: 0,
+                      }}
                     >
-                      Cancel
+                      ×
                     </button>
-                    {editingBlockId && (
+                  </div>
+                  <div className="panel-heading">
+                    <div>
+                      <p className="eyebrow">Availability</p>
+                      <h3>
+                        {editingBlockId
+                          ? "Edit time block"
+                          : "Block personal time"}
+                      </h3>
+                    </div>
+                  </div>
+                  <form className="appointment-form" onSubmit={saveTimeBlock}>
+                    <label>
+                      Employee
+                      <select
+                        value={blockStaffId}
+                        onChange={(event) =>
+                          setBlockStaffId(event.target.value)
+                        }
+                        required
+                        disabled={Boolean(editingBlockId)}
+                      >
+                        <option value="">Choose an employee</option>
+                        {staff.map((employee) => (
+                          <option key={employee.id} value={employee.id}>
+                            {employee.first_name} {employee.last_name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Title
+                      <input
+                        value={blockTitle}
+                        onChange={(event) => setBlockTitle(event.target.value)}
+                        required
+                      />
+                    </label>
+                    <label>
+                      Start
+                      <input
+                        type="datetime-local"
+                        value={blockStart}
+                        onChange={(event) => setBlockStart(event.target.value)}
+                        required
+                      />
+                    </label>
+                    <label>
+                      End
+                      <input
+                        type="datetime-local"
+                        value={blockEnd}
+                        onChange={(event) => setBlockEnd(event.target.value)}
+                        required
+                      />
+                    </label>
+                    <label className="full-width">
+                      Private notes
+                      <textarea
+                        value={blockNotes}
+                        onChange={(event) => setBlockNotes(event.target.value)}
+                        rows={3}
+                      />
+                    </label>
+                    <div className="form-actions full-width">
+                      <button
+                        className="primary-button"
+                        type="submit"
+                        disabled={savingBlock}
+                      >
+                        {savingBlock ? "Saving..." : "Save time block"}
+                      </button>
                       <button
                         className="secondary-button"
                         type="button"
-                        onClick={() => void deleteTimeBlock()}
-                        disabled={savingBlock}
+                        onClick={() => setShowBlockForm(false)}
                       >
-                        Delete block
+                        Cancel
                       </button>
-                    )}
-                  </div>
-                </form>
-              </section>
-            )}
+                      {editingBlockId && (
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => void deleteTimeBlock()}
+                          disabled={savingBlock}
+                        >
+                          Delete block
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                </section>
+              )}
 
-            {showForm && (
-              <section className="dashboard-panel" style={{ margin: 0 }}>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => setShowForm(false)}
-                    aria-label="Close appointment form"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="panel-heading">
-                  <div>
-                    <p className="eyebrow">Booking</p>
-                    <h3>New appointment</h3>
-                  </div>
-                </div>
-
-                <form className="appointment-form" onSubmit={handleSubmit}>
-                  <label className="calendar-client-search">
-                    Client
-                    <input
-                      type="search"
-                      value={clientSearch}
-                      autoComplete="off"
-                      placeholder="Start typing a client name"
-                      onFocus={() => setClientPickerOpen(true)}
-                      onBlur={() =>
-                        window.setTimeout(() => setClientPickerOpen(false), 120)
-                      }
-                      onChange={(event) => {
-                        setClientSearch(event.target.value);
-                        setClientId("");
-                        setPetId("");
-                        setClientPickerOpen(true);
-                      }}
-                      required
-                    />
-                    {clientPickerOpen && (
-                      <div className="calendar-client-results">
-                        {matchingClients.length ? (
-                          matchingClients.map((client) => (
-                            <button
-                              type="button"
-                              key={client.id}
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={() => {
-                                setClientId(String(client.id));
-                                setClientSearch(
-                                  `${client.FirstName} ${client.LastName}`,
-                                );
-                                setPetId("");
-                                setClientPickerOpen(false);
-                              }}
-                            >
-                              <strong>
-                                {client.FirstName} {client.LastName}
-                              </strong>
-                            </button>
-                          ))
-                        ) : (
-                          <p>No clients match “{clientSearch}”</p>
-                        )}
-                      </div>
-                    )}
-                    {clientSearch && !clientId && (
-                      <small className="calendar-client-hint">
-                        Select a client from the results.
-                      </small>
-                    )}
-                  </label>
-
-                  <label>
-                    Pet
-                    <select
-                      value={petId}
-                      onChange={(event) => setPetId(event.target.value)}
-                      disabled={!clientId}
-                      required
-                    >
-                      <option value="">Choose a pet</option>
-                      {availablePets.map((pet) => (
-                        <option key={pet.id} value={pet.id}>
-                          {pet.PetName}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label>
-                    Service
-                    <select
-                      value={serviceId}
-                      onChange={(event) => setServiceId(event.target.value)}
-                      required
-                    >
-                      <option value="">Choose a service</option>
-                      {services.map((service) => (
-                        <option key={service.id} value={service.id}>
-                          {service.name} — {service.duration_minutes} minutes
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label>
-                    Staff member
-                    <select
-                      value={staffId}
-                      onChange={(event) => setStaffId(event.target.value)}
-                    >
-                      <option value="">Unassigned</option>
-                      {staff.map((employee) => (
-                        <option key={employee.id} value={employee.id}>
-                          {employee.first_name} {employee.last_name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label>
-                    Start time
-                    <input
-                      type="datetime-local"
-                      value={startTime}
-                      onChange={(event) => setStartTime(event.target.value)}
-                      required
-                    />
-                  </label>
-
-                  <label className="full-width">
-                    Notes
-                    <textarea
-                      value={notes}
-                      onChange={(event) => setNotes(event.target.value)}
-                      rows={4}
-                    />
-                  </label>
-
-                  <div className="form-actions full-width">
+              {showForm && (
+                <section className="dashboard-panel" style={{ margin: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
                     <button
                       type="button"
                       className="secondary-button"
                       onClick={() => setShowForm(false)}
+                      aria-label="Close appointment form"
                     >
-                      Cancel
-                    </button>
-                    <button
-                      className="primary-button"
-                      type="submit"
-                      disabled={saving}
-                    >
-                      {saving ? "Saving..." : "Save appointment"}
+                      ×
                     </button>
                   </div>
-                </form>
-              </section>
-            )}
-          </div>
-        </div>
-      )}
+                  <div className="panel-heading">
+                    <div>
+                      <p className="eyebrow">Booking</p>
+                      <h3>New appointment</h3>
+                    </div>
+                  </div>
+
+                  <form className="appointment-form" onSubmit={handleSubmit}>
+                    <label className="calendar-client-search">
+                      Client
+                      <input
+                        type="search"
+                        value={clientSearch}
+                        autoComplete="off"
+                        placeholder="Start typing a client name"
+                        onFocus={() => setClientPickerOpen(true)}
+                        onBlur={() =>
+                          window.setTimeout(
+                            () => setClientPickerOpen(false),
+                            120,
+                          )
+                        }
+                        onChange={(event) => {
+                          setClientSearch(event.target.value);
+                          setClientId("");
+                          setPetId("");
+                          setClientPickerOpen(true);
+                        }}
+                        required
+                      />
+                      {clientPickerOpen && (
+                        <div className="calendar-client-results">
+                          {matchingClients.length ? (
+                            matchingClients.map((client) => (
+                              <button
+                                type="button"
+                                key={client.id}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => {
+                                  setClientId(String(client.id));
+                                  setClientSearch(
+                                    `${client.FirstName} ${client.LastName}`,
+                                  );
+                                  setPetId("");
+                                  setClientPickerOpen(false);
+                                }}
+                              >
+                                <strong>
+                                  {client.FirstName} {client.LastName}
+                                </strong>
+                              </button>
+                            ))
+                          ) : (
+                            <p>No clients match “{clientSearch}”</p>
+                          )}
+                        </div>
+                      )}
+                      {clientSearch && !clientId && (
+                        <small className="calendar-client-hint">
+                          Select a client from the results.
+                        </small>
+                      )}
+                    </label>
+
+                    <label>
+                      Pet
+                      <select
+                        value={petId}
+                        onChange={(event) => setPetId(event.target.value)}
+                        disabled={!clientId}
+                        required
+                      >
+                        <option value="">Choose a pet</option>
+                        {availablePets.map((pet) => (
+                          <option key={pet.id} value={pet.id}>
+                            {pet.PetName}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      Service
+                      <select
+                        value={serviceId}
+                        onChange={(event) => setServiceId(event.target.value)}
+                        required
+                      >
+                        <option value="">Choose a service</option>
+                        {services.map((service) => (
+                          <option key={service.id} value={service.id}>
+                            {service.name} — {service.duration_minutes} minutes
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      Staff member
+                      <select
+                        value={staffId}
+                        onChange={(event) => setStaffId(event.target.value)}
+                      >
+                        <option value="">Unassigned</option>
+                        {staff.map((employee) => (
+                          <option key={employee.id} value={employee.id}>
+                            {employee.first_name} {employee.last_name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      Start time
+                      <input
+                        type="datetime-local"
+                        value={startTime}
+                        onChange={(event) => setStartTime(event.target.value)}
+                        required
+                      />
+                    </label>
+
+                    <label className="full-width">
+                      Notes
+                      <textarea
+                        value={notes}
+                        onChange={(event) => setNotes(event.target.value)}
+                        rows={4}
+                      />
+                    </label>
+
+                    <div className="form-actions full-width">
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => setShowForm(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="primary-button"
+                        type="submit"
+                        disabled={saving}
+                      >
+                        {saving ? "Saving..." : "Save appointment"}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
 
       <section className="dashboard-panel" style={{ overflow: "hidden" }}>
         <div
@@ -1587,7 +1607,7 @@ function Calendar({
                           {employee
                             ? `${employee.first_name} ${employee.last_name}`
                             : "Staff"}{" "}
-                          unavailable
+                          — {block.title || "Unavailable"}
                         </span>
                       );
                     })}
