@@ -70,6 +70,14 @@ type AppointmentService = {
   staff_id: string | null;
 };
 
+type TimeBlock = {
+  id: string;
+  business_id: string;
+  staff_id: string;
+  start_at: string;
+  end_at: string;
+};
+
 function getMonday(date: Date) {
   const monday = new Date(date);
   const day = monday.getDay();
@@ -95,6 +103,15 @@ function Calendar({
     AppointmentService[]
   >([]);
   const [allowDoubleBooking, setAllowDoubleBooking] = useState(false);
+  const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
+  const [showBlockForm, setShowBlockForm] = useState(false);
+  const [blockStaffId, setBlockStaffId] = useState("");
+  const [blockTitle, setBlockTitle] = useState("Unavailable");
+  const [blockNotes, setBlockNotes] = useState("");
+  const [blockStart, setBlockStart] = useState("");
+  const [blockEnd, setBlockEnd] = useState("");
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [savingBlock, setSavingBlock] = useState(false);
 
   const [showForm, setShowForm] = useState(false);
   const [clientId, setClientId] = useState("");
@@ -145,6 +162,7 @@ function Calendar({
       staffResult,
       appointmentsResult,
       settingsResult,
+      blocksResult,
     ] = await Promise.all([
       supabase
         .from("CLIENT")
@@ -180,6 +198,10 @@ function Calendar({
       supabase.rpc("get_business_settings", {
         p_business_id: businessId,
       }),
+      supabase
+        .from("staff_time_block")
+        .select("id, business_id, staff_id, start_at, end_at")
+        .eq("business_id", businessId),
     ]);
 
     const firstError = [
@@ -190,6 +212,7 @@ function Calendar({
       staffResult.error,
       appointmentsResult.error,
       settingsResult.error,
+      blocksResult.error,
     ].find(Boolean);
 
     if (firstError) {
@@ -239,6 +262,7 @@ function Calendar({
     setAppointmentPets(loadedAppointmentPets);
     setAppointmentServices(loadedAppointmentServices);
     setAllowDoubleBooking(Boolean(settingsResult.data?.allow_double_booking));
+    setTimeBlocks(blocksResult.data ?? []);
     setLoading(false);
   }
 
@@ -350,6 +374,154 @@ function Calendar({
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   }
 
+  function openBlockForm(start?: Date, block?: TimeBlock) {
+    if (readOnly) return;
+    setShowForm(false);
+    setEditingBlockId(block?.id ?? null);
+    setBlockStaffId(block?.staff_id ?? "");
+    setBlockTitle("Unavailable");
+    setBlockNotes("");
+    const initial = start ?? (block ? new Date(block.start_at) : new Date());
+    setBlockStart(formatInputDateTime(initial));
+    setBlockEnd(
+      formatInputDateTime(
+        block
+          ? new Date(block.end_at)
+          : new Date(initial.getTime() + 30 * 60_000),
+      ),
+    );
+    setShowBlockForm(true);
+    setMessage("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function blocksInSlot(day: Date, minutesAfterMidnight: number) {
+    const slotStart = new Date(day);
+    slotStart.setHours(
+      Math.floor(minutesAfterMidnight / 60),
+      minutesAfterMidnight % 60,
+      0,
+      0,
+    );
+    const slotEnd = new Date(slotStart.getTime() + 30 * 60_000);
+    return timeBlocks.filter(
+      (block) =>
+        new Date(block.start_at) < slotEnd &&
+        new Date(block.end_at) > slotStart,
+    );
+  }
+
+  async function hasBlockedTime(staffIds: string[], start: Date, end: Date) {
+    if (!staffIds.length) return false;
+    const { data, error } = await supabase
+      .from("staff_time_block")
+      .select("id")
+      .eq("business_id", businessId)
+      .in("staff_id", staffIds)
+      .lt("start_at", end.toISOString())
+      .gt("end_at", start.toISOString())
+      .limit(1);
+    if (error) throw error;
+    return Boolean(data?.length);
+  }
+
+  async function saveTimeBlock(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (readOnly) return;
+    const start = new Date(blockStart);
+    const end = new Date(blockEnd);
+    if (
+      !blockStaffId ||
+      !blockTitle.trim() ||
+      !Number.isFinite(start.getTime()) ||
+      !Number.isFinite(end.getTime()) ||
+      end <= start
+    ) {
+      setMessage("Choose an employee, title, and a valid start and end time.");
+      return;
+    }
+    setSavingBlock(true);
+    setMessage("");
+    try {
+      const overlapping = appointments.some(
+        (a) =>
+          a.status !== "cancelled" &&
+          a.status !== "void" &&
+          new Date(a.start_at) < end &&
+          new Date(a.end_at) > start &&
+          appointmentServices.some(
+            (link) =>
+              link.appointment_id === a.id && link.staff_id === blockStaffId,
+          ),
+      );
+      if (overlapping) {
+        setMessage(
+          "This employee already has an appointment during that time. Move the appointment first.",
+        );
+        return;
+      }
+      const payload = {
+        business_id: businessId,
+        staff_id: blockStaffId,
+        title: blockTitle.trim(),
+        notes: blockNotes.trim() || null,
+        start_at: start.toISOString(),
+        end_at: end.toISOString(),
+      };
+      const result = editingBlockId
+        ? await supabase
+            .from("staff_time_block")
+            .update({
+              title: payload.title,
+              notes: payload.notes,
+              start_at: payload.start_at,
+              end_at: payload.end_at,
+            })
+            .eq("id", editingBlockId)
+            .eq("business_id", businessId)
+            .select("id")
+            .single()
+        : await supabase
+            .from("staff_time_block")
+            .insert(payload)
+            .select("id")
+            .single();
+      if (result.error) throw result.error;
+      setShowBlockForm(false);
+      setEditingBlockId(null);
+      await loadCalendar();
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Could not save time block.",
+      );
+    } finally {
+      setSavingBlock(false);
+    }
+  }
+
+  async function deleteTimeBlock() {
+    if (
+      !editingBlockId ||
+      readOnly ||
+      !window.confirm("Delete this time block?")
+    )
+      return;
+    setSavingBlock(true);
+    const { error } = await supabase
+      .from("staff_time_block")
+      .delete()
+      .eq("id", editingBlockId)
+      .eq("business_id", businessId);
+    setSavingBlock(false);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setShowBlockForm(false);
+    setEditingBlockId(null);
+    await loadCalendar();
+  }
+
   function selectTimeSlot(day: Date, minutesAfterMidnight: number) {
     if (readOnly) return;
     const selected = new Date(day);
@@ -359,6 +531,7 @@ function Calendar({
       0,
       0,
     );
+    setShowBlockForm(false);
     setStartTime(formatInputDateTime(selected));
     setMessage("");
     setShowForm(true);
@@ -435,6 +608,30 @@ function Calendar({
     const newEnd = new Date(newStart.getTime() + duration);
 
     setMessage("");
+
+    const movingStaffIds = [
+      ...new Set(
+        appointmentServices
+          .filter((link) => link.appointment_id === appointment.id)
+          .map((link) => link.staff_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    try {
+      if (await hasBlockedTime(movingStaffIds, newStart, newEnd)) {
+        setMessage("That employee is unavailable at the requested time.");
+        setDraggingAppointmentId(null);
+        return;
+      }
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not check employee availability.",
+      );
+      setDraggingAppointmentId(null);
+      return;
+    }
 
     const { data: conflicts, error: conflictError } = await supabase
       .from("appointment")
@@ -584,9 +781,16 @@ function Calendar({
       { body: { appointmentId: selectedAppointment.id } },
     );
     setSendingReminder(false);
-    const sent = data?.results?.some((result: { status: string }) => result.status === "sent");
+    const sent = data?.results?.some(
+      (result: { status: string }) => result.status === "sent",
+    );
     if (error || data?.error || !sent) {
-      setMessage(data?.error ?? data?.results?.[0]?.reason ?? error?.message ?? "The reminder could not be sent. Check the client phone number and SMS consent.");
+      setMessage(
+        data?.error ??
+          data?.results?.[0]?.reason ??
+          error?.message ??
+          "The reminder could not be sent. Check the client phone number and SMS consent.",
+      );
       return;
     }
     setMessage("Appointment reminder sent by text.");
@@ -640,6 +844,22 @@ function Calendar({
     const end = new Date(
       start.getTime() + selectedService.duration_minutes * 60_000,
     );
+
+    try {
+      if (staffId && (await hasBlockedTime([staffId], start, end))) {
+        setMessage("That employee is unavailable at the requested time.");
+        setSaving(false);
+        return;
+      }
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not check employee availability.",
+      );
+      setSaving(false);
+      return;
+    }
 
     const { data: conflicts, error: conflictError } = await supabase
       .from("appointment")
@@ -740,11 +960,22 @@ function Calendar({
 
   return (
     <div>
-      {!readOnly && payingAppointmentId && appointments.find(a => a.id === payingAppointmentId) &&
-        <HouseholdCheckout key={payingAppointmentId} appointmentId={payingAppointmentId}
-          startAt={appointments.find(a => a.id === payingAppointmentId)!.start_at}
-          onClose={() => setPayingAppointmentId(null)}
-          onComplete={invoiceId => { setPayingAppointmentId(null); onOpenInvoice?.(invoiceId); }} />}
+      {!readOnly &&
+        payingAppointmentId &&
+        appointments.find((a) => a.id === payingAppointmentId) && (
+          <HouseholdCheckout
+            key={payingAppointmentId}
+            appointmentId={payingAppointmentId}
+            startAt={
+              appointments.find((a) => a.id === payingAppointmentId)!.start_at
+            }
+            onClose={() => setPayingAppointmentId(null)}
+            onComplete={(invoiceId) => {
+              setPayingAppointmentId(null);
+              onOpenInvoice?.(invoiceId);
+            }}
+          />
+        )}
 
       <header className="dashboard-header">
         <div>
@@ -752,6 +983,15 @@ function Calendar({
           <h2>Calendar</h2>
         </div>
 
+        {!readOnly && (
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => openBlockForm()}
+          >
+            + Block personal time
+          </button>
+        )}
         {!readOnly && (
           <button
             className="primary-button"
@@ -767,6 +1007,97 @@ function Calendar({
         <p className="error-message" role="alert">
           {message}
         </p>
+      )}
+
+      {showBlockForm && !readOnly && (
+        <section className="dashboard-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Availability</p>
+              <h3>
+                {editingBlockId ? "Edit time block" : "Block personal time"}
+              </h3>
+            </div>
+          </div>
+          <form className="appointment-form" onSubmit={saveTimeBlock}>
+            <label>
+              Employee
+              <select
+                value={blockStaffId}
+                onChange={(event) => setBlockStaffId(event.target.value)}
+                required
+                disabled={Boolean(editingBlockId)}
+              >
+                <option value="">Choose an employee</option>
+                {staff.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.first_name} {employee.last_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Title
+              <input
+                value={blockTitle}
+                onChange={(event) => setBlockTitle(event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Start
+              <input
+                type="datetime-local"
+                value={blockStart}
+                onChange={(event) => setBlockStart(event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              End
+              <input
+                type="datetime-local"
+                value={blockEnd}
+                onChange={(event) => setBlockEnd(event.target.value)}
+                required
+              />
+            </label>
+            <label className="full-width">
+              Private notes
+              <textarea
+                value={blockNotes}
+                onChange={(event) => setBlockNotes(event.target.value)}
+                rows={3}
+              />
+            </label>
+            <div className="form-actions full-width">
+              <button
+                className="primary-button"
+                type="submit"
+                disabled={savingBlock}
+              >
+                {savingBlock ? "Saving..." : "Save time block"}
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => setShowBlockForm(false)}
+              >
+                Cancel
+              </button>
+              {editingBlockId && (
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => void deleteTimeBlock()}
+                  disabled={savingBlock}
+                >
+                  Delete block
+                </button>
+              )}
+            </div>
+          </form>
+        </section>
       )}
 
       {showForm && (
@@ -1043,6 +1374,7 @@ function Calendar({
               </div>,
               ...visibleDays.map((day) => {
                 const occupiedSlots = appointmentsInSlot(day, slot);
+                const blockedSlots = blocksInSlot(day, slot);
                 return (
                   <button
                     key={`${day.toISOString()}-${slot}`}
@@ -1067,7 +1399,7 @@ function Calendar({
                       border: 0,
                       borderRight: "1px solid #d7e0dd",
                       borderBottom: "1px solid #d7e0dd",
-                      background: "#ffffff",
+                      background: blockedSlots.length ? "#f5efff" : "#ffffff",
                       cursor: occupiedSlots.length ? "default" : "pointer",
                       textAlign: "left",
                       color: "#183b34",
@@ -1079,6 +1411,43 @@ function Calendar({
                         : "Create an appointment at this time"
                     }
                   >
+                    {blockedSlots.map((block) => {
+                      const employee = staff.find(
+                        (person) => person.id === block.staff_id,
+                      );
+                      return (
+                        <span
+                          key={block.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openBlockForm(undefined, block);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.stopPropagation();
+                              openBlockForm(undefined, block);
+                            }
+                          }}
+                          style={{
+                            display: "block",
+                            background: "#7253a3",
+                            color: "white",
+                            borderRadius: 5,
+                            padding: 5,
+                            marginBottom: 3,
+                            fontSize: 12,
+                          }}
+                        >
+                          🔒{" "}
+                          {employee
+                            ? `${employee.first_name} ${employee.last_name}`
+                            : "Staff"}{" "}
+                          unavailable
+                        </span>
+                      );
+                    })}
                     {occupiedSlots.length > 0 && (
                       <span
                         className={`calendar-overlap-stack count-${occupiedSlots.length}`}
@@ -1357,7 +1726,13 @@ function Calendar({
               </div>
             </div>
 
-            <p className={selectedAppointment.client_confirmed_at ? "confirmation-status confirmed" : "confirmation-status"}>
+            <p
+              className={
+                selectedAppointment.client_confirmed_at
+                  ? "confirmation-status confirmed"
+                  : "confirmation-status"
+              }
+            >
               {selectedAppointment.client_confirmed_at
                 ? `Client confirmed by text ${new Date(selectedAppointment.client_confirmed_at).toLocaleString()}`
                 : "Awaiting client text confirmation"}
@@ -1423,7 +1798,9 @@ function Calendar({
                 disabled={sendingReminder}
                 style={{ width: "100%", marginTop: 16 }}
               >
-                {sendingReminder ? "Sending reminder…" : "Send text reminder now"}
+                {sendingReminder
+                  ? "Sending reminder…"
+                  : "Send text reminder now"}
               </button>
             )}
 
