@@ -131,6 +131,9 @@ function Calendar({
     today.setHours(0, 0, 0, 0);
     return today;
   });
+  const [mobileCalendarView, setMobileCalendarView] = useState<"month" | "day">(
+    "month",
+  );
   const [isMobile, setIsMobile] = useState(
     () => window.matchMedia("(max-width: 720px)").matches,
   );
@@ -184,7 +187,6 @@ function Calendar({
         .from("service")
         .select("id, name, duration_minutes, base_price")
         .eq("business_id", businessId)
-        .eq("is_active", true)
         .order("name"),
       supabase
         .from("STAFF")
@@ -319,11 +321,90 @@ function Calendar({
 
   const visibleDays = isMobile ? [mobileDate] : weekDays;
 
+  // Appointment starts determine which day receives its estimated service value.
+  // These are catalog base prices, not invoice totals or collected payments.
+  const calendarDaySummary = useMemo(() => {
+    const priceByService = new Map(
+      services.map((service) => [service.id, service.base_price]),
+    );
+    const linksByAppointment = new Map<string, AppointmentService[]>();
+    for (const link of appointmentServices) {
+      const existing = linksByAppointment.get(link.appointment_id) ?? [];
+      existing.push(link);
+      linksByAppointment.set(link.appointment_id, existing);
+    }
+    const summaries = new Map<
+      string,
+      { count: number; estimated: number; incomplete: boolean }
+    >();
+    for (const appointment of appointments) {
+      if (["cancelled", "void", "no_show"].includes(appointment.status))
+        continue;
+      const start = new Date(appointment.start_at);
+      const key = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+      const summary = summaries.get(key) ?? {
+        count: 0,
+        estimated: 0,
+        incomplete: false,
+      };
+      summary.count += 1;
+      const links = linksByAppointment.get(appointment.id) ?? [];
+      if (!links.length) summary.incomplete = true;
+      for (const link of links) {
+        const price = priceByService.get(link.service_id);
+        if (price == null || !Number.isFinite(Number(price)))
+          summary.incomplete = true;
+        else summary.estimated += Number(price);
+      }
+      summaries.set(key, summary);
+    }
+    return summaries;
+  }, [appointments, appointmentServices, services]);
+
+  const monthDays = useMemo(() => {
+    const first = new Date(mobileDate.getFullYear(), mobileDate.getMonth(), 1);
+    const leading = first.getDay();
+    const daysInMonth = new Date(
+      first.getFullYear(),
+      first.getMonth() + 1,
+      0,
+    ).getDate();
+    return Array.from(
+      { length: Math.ceil((leading + daysInMonth) / 7) * 7 },
+      (_, index) => {
+        const day = index - leading + 1;
+        return day >= 1 && day <= daysInMonth ? day : null;
+      },
+    );
+  }, [mobileDate]);
+
+  const monthlyProjection = useMemo(() => {
+    const prefix = `${mobileDate.getFullYear()}-${String(mobileDate.getMonth() + 1).padStart(2, "0")}-`;
+    let estimated = 0;
+    let incomplete = false;
+    for (const [key, summary] of calendarDaySummary) {
+      if (key.startsWith(prefix)) {
+        estimated += summary.estimated;
+        incomplete ||= summary.incomplete;
+      }
+    }
+    return { estimated, incomplete };
+  }, [calendarDaySummary, mobileDate]);
+
+  const formatEstimatedRevenue = (value: number) =>
+    new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(value);
+
   function moveCalendar(amount: number) {
     if (isMobile) {
       setMobileDate((current) => {
         const next = new Date(current);
-        next.setDate(next.getDate() + amount);
+        if (mobileCalendarView === "month")
+          next.setMonth(next.getMonth() + amount, 1);
+        else next.setDate(next.getDate() + amount);
         return next;
       });
       return;
@@ -1483,14 +1564,23 @@ function Calendar({
         >
           <div>
             <p className="eyebrow">
-              {isMobile ? "Daily schedule" : "Weekly schedule"}
+              {isMobile
+                ? mobileCalendarView === "month"
+                  ? "Monthly overview"
+                  : "Daily schedule"
+                : "Weekly schedule"}
             </p>
             <h3>
-              {visibleDays[0].toLocaleDateString(undefined, {
-                weekday: isMobile ? "long" : undefined,
-                month: "long",
-                day: "numeric",
-              })}
+              {isMobile && mobileCalendarView === "month"
+                ? mobileDate.toLocaleDateString(undefined, {
+                    month: "long",
+                    year: "numeric",
+                  })
+                : visibleDays[0].toLocaleDateString(undefined, {
+                    weekday: isMobile ? "long" : undefined,
+                    month: "long",
+                    day: "numeric",
+                  })}
               {!isMobile && (
                 <>
                   {" – "}
@@ -1538,233 +1628,411 @@ function Calendar({
           </div>
         </div>
 
-        <p style={{ marginTop: 0, color: "#58716b" }}>
-          {readOnly
-            ? "Click an appointment to view its details."
-            : "Click an open time to add an appointment or block personal time, or drag an appointment to reschedule it."}
-        </p>
+        {isMobile && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <button
+              type="button"
+              className={
+                mobileCalendarView === "month"
+                  ? "primary-button"
+                  : "secondary-button"
+              }
+              onClick={() => setMobileCalendarView("month")}
+            >
+              Month
+            </button>
+            <button
+              type="button"
+              className={
+                mobileCalendarView === "day"
+                  ? "primary-button"
+                  : "secondary-button"
+              }
+              onClick={() => setMobileCalendarView("day")}
+            >
+              Day
+            </button>
+          </div>
+        )}
 
-        <div className="calendar-scroll">
-          <div
-            className="calendar-grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile
-                ? "70px minmax(0, 1fr)"
-                : "84px repeat(7, minmax(135px, 1fr))",
-              minWidth: isMobile ? 0 : 1030,
-              borderTop: "1px solid #d7e0dd",
-              borderLeft: "1px solid #d7e0dd",
-            }}
-          >
+        {isMobile && mobileCalendarView === "month" && (
+          <div aria-label="Monthly appointment and revenue overview">
             <div
               style={{
-                padding: 12,
-                borderRight: "1px solid #d7e0dd",
-                borderBottom: "1px solid #d7e0dd",
+                background: "#eaf4f0",
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 14,
               }}
-            />
-            {visibleDays.map((day) => {
-              const isToday = day.toDateString() === new Date().toDateString();
-              return (
+            >
+              <div style={{ color: "#45675d", fontSize: 13 }}>
+                Estimated monthly service value
+              </div>
+              <strong
+                style={{ display: "block", fontSize: 27, color: "#183b34" }}
+              >
+                {formatEstimatedRevenue(monthlyProjection.estimated)}
+                {monthlyProjection.incomplete ? "+" : ""}
+              </strong>
+              {monthlyProjection.incomplete && (
+                <small>
+                  Some appointment prices are unavailable; this is a partial
+                  estimate.
+                </small>
+              )}
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+                gap: 3,
+              }}
+            >
+              {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
                 <div
-                  key={day.toISOString()}
+                  key={`${day}-${index}`}
                   style={{
-                    padding: 12,
                     textAlign: "center",
-                    borderRight: "1px solid #d7e0dd",
-                    borderBottom: "1px solid #d7e0dd",
-                    background: isToday ? "#e1eeea" : "#f7faf9",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    paddingBottom: 6,
                   }}
                 >
-                  <strong>
-                    {day.toLocaleDateString(undefined, { weekday: "short" })}
-                  </strong>
-                  <div>
-                    {day.toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                    })}
-                  </div>
+                  {day}
                 </div>
-              );
-            })}
-
-            {timeSlots.flatMap((slot) => [
-              <div
-                key={`time-${slot}`}
-                style={{
-                  padding: "10px 8px",
-                  color: "#58716b",
-                  fontSize: 13,
-                  textAlign: "right",
-                  borderRight: "1px solid #d7e0dd",
-                  borderBottom: "1px solid #d7e0dd",
-                  background: "#f7faf9",
-                }}
-              >
-                {formatSlotTime(slot)}
-              </div>,
-              ...visibleDays.map((day) => {
-                const occupiedSlots = appointmentsInSlot(day, slot);
-                const blockedSlots = blocksInSlot(day, slot);
+              ))}
+              {monthDays.map((day, index) => {
+                if (day === null) return <div key={`empty-${index}`} />;
+                const date = new Date(
+                  mobileDate.getFullYear(),
+                  mobileDate.getMonth(),
+                  day,
+                );
+                const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                const summary = calendarDaySummary.get(key);
+                const today = date.toDateString() === new Date().toDateString();
                 return (
                   <button
-                    key={`${day.toISOString()}-${slot}`}
+                    key={key}
                     type="button"
+                    aria-label={`${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}: ${summary?.count ?? 0} appointments, ${formatEstimatedRevenue(summary?.estimated ?? 0)} estimated${summary?.incomplete ? ", incomplete pricing" : ""}. Open daily schedule`}
                     onClick={() => {
-                      if (occupiedSlots.length === 1) {
-                        setSelectedAppointment(occupiedSlots[0].appointment);
-                      } else {
-                        selectTimeSlot(day, slot);
-                      }
-                    }}
-                    onDragOver={(event) => {
-                      if (!readOnly && draggingAppointmentId)
-                        event.preventDefault();
-                    }}
-                    onDrop={(event) => {
-                      if (!readOnly) void moveAppointment(event, day, slot);
+                      setMobileDate(date);
+                      setMobileCalendarView("day");
                     }}
                     style={{
-                      minHeight: 62,
-                      padding: 5,
-                      border: 0,
-                      borderRight: "1px solid #d7e0dd",
-                      borderBottom: "1px solid #d7e0dd",
-                      background: blockedSlots.length ? "#f5efff" : "#ffffff",
-                      cursor: occupiedSlots.length ? "default" : "pointer",
-                      textAlign: "left",
+                      minWidth: 0,
+                      minHeight: 68,
+                      padding: "7px 1px",
+                      border: today ? "2px solid #315f55" : "1px solid #d7e0dd",
+                      borderRadius: 7,
+                      background: summary?.count ? "#f0f8f4" : "#fff",
                       color: "#183b34",
-                      opacity: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "flex-start",
+                      gap: 5,
+                      cursor: "pointer",
                     }}
-                    title={
-                      occupiedSlots.length
-                        ? `${occupiedSlots.length} appointment${occupiedSlots.length === 1 ? "" : "s"} in this time slot`
-                        : "Add an appointment or block personal time"
-                    }
                   >
-                    {blockedSlots.map((block) => {
-                      const employee = staff.find(
-                        (person) => person.id === block.staff_id,
-                      );
-                      return (
-                        <span
-                          key={block.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openBlockForm(undefined, block);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.stopPropagation();
-                              openBlockForm(undefined, block);
-                            }
-                          }}
-                          style={{
-                            display: "block",
-                            background: "#7253a3",
-                            color: "white",
-                            borderRadius: 5,
-                            padding: 5,
-                            marginBottom: 3,
-                            fontSize: 12,
-                          }}
-                        >
-                          🔒{" "}
-                          {employee
-                            ? `${employee.first_name} ${employee.last_name}`
-                            : "Staff"}{" "}
-                          — {block.title || "Unavailable"}
-                        </span>
-                      );
-                    })}
-                    {occupiedSlots.length > 0 && (
-                      <span
-                        className={`calendar-overlap-stack count-${occupiedSlots.length}`}
-                      >
-                        {occupiedSlots.map((occupiedSlot) => (
+                    <span
+                      style={{ fontSize: 13, fontWeight: today ? 800 : 500 }}
+                    >
+                      {day}
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      style={{ display: "flex", gap: 2, height: 6 }}
+                    >
+                      {Array.from(
+                        { length: Math.min(summary?.count ?? 0, 3) },
+                        (_, dot) => (
                           <span
-                            key={occupiedSlot.appointment.id}
-                            draggable={!readOnly && occupiedSlot.isFirstSlot}
-                            role="button"
-                            tabIndex={0}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setSelectedAppointment(occupiedSlot.appointment);
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                setSelectedAppointment(
-                                  occupiedSlot.appointment,
-                                );
-                              }
-                            }}
-                            onDragStart={(event) => {
-                              if (readOnly || !occupiedSlot.isFirstSlot) return;
-                              event.stopPropagation();
-                              event.dataTransfer.effectAllowed = "move";
-                              event.dataTransfer.setData(
-                                "text/plain",
-                                occupiedSlot.appointment.id,
-                              );
-                              setDraggingAppointmentId(
-                                occupiedSlot.appointment.id,
-                              );
-                            }}
-                            onDragEnd={() => setDraggingAppointmentId(null)}
+                            key={dot}
                             style={{
-                              display: "block",
-                              height: "100%",
-                              minHeight: 44,
-                              padding: "6px 7px",
-                              borderRadius: occupiedSlot.isFirstSlot
-                                ? "6px 6px 0 0"
-                                : 0,
-                              background: statusColor(
-                                occupiedSlot.appointment.status,
-                              ),
-                              color: "white",
-                              fontSize: 12,
-                              lineHeight: 1.25,
-                              cursor:
-                                !readOnly && occupiedSlot.isFirstSlot
-                                  ? "grab"
-                                  : occupiedSlot.isFirstSlot
-                                    ? "pointer"
-                                    : "default",
+                              width: 5,
+                              height: 5,
+                              borderRadius: "50%",
+                              background: "#25836a",
                             }}
-                          >
-                            {occupiedSlot.isFirstSlot ? (
-                              <>
-                                <strong>
-                                  {petName(occupiedSlot.appointment.id)}
-                                </strong>
-                                <br />
-                                {serviceName(occupiedSlot.appointment.id)}
-                                <br />
-                                <span style={{ opacity: 0.85 }}>
-                                  {formatStatus(
-                                    occupiedSlot.appointment.status,
-                                  )}
-                                </span>
-                              </>
-                            ) : (
-                              <span style={{ opacity: 0.8 }}>Continues</span>
-                            )}
-                          </span>
-                        ))}
+                          />
+                        ),
+                      )}
+                    </span>
+                    {summary && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          lineHeight: 1.1,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {formatEstimatedRevenue(summary.estimated)}
+                        {summary.incomplete ? "+" : ""}
                       </span>
                     )}
                   </button>
                 );
-              }),
-            ])}
+              })}
+            </div>
+            <p style={{ color: "#58716b", fontSize: 12, marginTop: 12 }}>
+              Green dots show appointments. Amounts are estimated from service
+              base prices, not payments collected. Tap a date to see available
+              times.
+            </p>
           </div>
-        </div>
+        )}
+
+        {(!isMobile || mobileCalendarView === "day") && (
+          <>
+            <p style={{ marginTop: 0, color: "#58716b" }}>
+              {readOnly
+                ? "Click an appointment to view its details."
+                : "Click an open time to add an appointment or block personal time, or drag an appointment to reschedule it."}
+            </p>
+
+            <div className="calendar-scroll">
+              <div
+                className="calendar-grid"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile
+                    ? "70px minmax(0, 1fr)"
+                    : "84px repeat(7, minmax(135px, 1fr))",
+                  minWidth: isMobile ? 0 : 1030,
+                  borderTop: "1px solid #d7e0dd",
+                  borderLeft: "1px solid #d7e0dd",
+                }}
+              >
+                <div
+                  style={{
+                    padding: 12,
+                    borderRight: "1px solid #d7e0dd",
+                    borderBottom: "1px solid #d7e0dd",
+                  }}
+                />
+                {visibleDays.map((day) => {
+                  const isToday =
+                    day.toDateString() === new Date().toDateString();
+                  return (
+                    <div
+                      key={day.toISOString()}
+                      style={{
+                        padding: 12,
+                        textAlign: "center",
+                        borderRight: "1px solid #d7e0dd",
+                        borderBottom: "1px solid #d7e0dd",
+                        background: isToday ? "#e1eeea" : "#f7faf9",
+                      }}
+                    >
+                      <strong>
+                        {day.toLocaleDateString(undefined, {
+                          weekday: "short",
+                        })}
+                      </strong>
+                      <div>
+                        {day.toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {timeSlots.flatMap((slot) => [
+                  <div
+                    key={`time-${slot}`}
+                    style={{
+                      padding: "10px 8px",
+                      color: "#58716b",
+                      fontSize: 13,
+                      textAlign: "right",
+                      borderRight: "1px solid #d7e0dd",
+                      borderBottom: "1px solid #d7e0dd",
+                      background: "#f7faf9",
+                    }}
+                  >
+                    {formatSlotTime(slot)}
+                  </div>,
+                  ...visibleDays.map((day) => {
+                    const occupiedSlots = appointmentsInSlot(day, slot);
+                    const blockedSlots = blocksInSlot(day, slot);
+                    return (
+                      <button
+                        key={`${day.toISOString()}-${slot}`}
+                        type="button"
+                        onClick={() => {
+                          if (occupiedSlots.length === 1) {
+                            setSelectedAppointment(
+                              occupiedSlots[0].appointment,
+                            );
+                          } else {
+                            selectTimeSlot(day, slot);
+                          }
+                        }}
+                        onDragOver={(event) => {
+                          if (!readOnly && draggingAppointmentId)
+                            event.preventDefault();
+                        }}
+                        onDrop={(event) => {
+                          if (!readOnly) void moveAppointment(event, day, slot);
+                        }}
+                        style={{
+                          minHeight: 62,
+                          padding: 5,
+                          border: 0,
+                          borderRight: "1px solid #d7e0dd",
+                          borderBottom: "1px solid #d7e0dd",
+                          background: blockedSlots.length
+                            ? "#f5efff"
+                            : "#ffffff",
+                          cursor: occupiedSlots.length ? "default" : "pointer",
+                          textAlign: "left",
+                          color: "#183b34",
+                          opacity: 1,
+                        }}
+                        title={
+                          occupiedSlots.length
+                            ? `${occupiedSlots.length} appointment${occupiedSlots.length === 1 ? "" : "s"} in this time slot`
+                            : "Add an appointment or block personal time"
+                        }
+                      >
+                        {blockedSlots.map((block) => {
+                          const employee = staff.find(
+                            (person) => person.id === block.staff_id,
+                          );
+                          return (
+                            <span
+                              key={block.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openBlockForm(undefined, block);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.stopPropagation();
+                                  openBlockForm(undefined, block);
+                                }
+                              }}
+                              style={{
+                                display: "block",
+                                background: "#7253a3",
+                                color: "white",
+                                borderRadius: 5,
+                                padding: 5,
+                                marginBottom: 3,
+                                fontSize: 12,
+                              }}
+                            >
+                              🔒{" "}
+                              {employee
+                                ? `${employee.first_name} ${employee.last_name}`
+                                : "Staff"}{" "}
+                              — {block.title || "Unavailable"}
+                            </span>
+                          );
+                        })}
+                        {occupiedSlots.length > 0 && (
+                          <span
+                            className={`calendar-overlap-stack count-${occupiedSlots.length}`}
+                          >
+                            {occupiedSlots.map((occupiedSlot) => (
+                              <span
+                                key={occupiedSlot.appointment.id}
+                                draggable={
+                                  !readOnly && occupiedSlot.isFirstSlot
+                                }
+                                role="button"
+                                tabIndex={0}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setSelectedAppointment(
+                                    occupiedSlot.appointment,
+                                  );
+                                }}
+                                onKeyDown={(event) => {
+                                  if (
+                                    event.key === "Enter" ||
+                                    event.key === " "
+                                  ) {
+                                    event.preventDefault();
+                                    setSelectedAppointment(
+                                      occupiedSlot.appointment,
+                                    );
+                                  }
+                                }}
+                                onDragStart={(event) => {
+                                  if (readOnly || !occupiedSlot.isFirstSlot)
+                                    return;
+                                  event.stopPropagation();
+                                  event.dataTransfer.effectAllowed = "move";
+                                  event.dataTransfer.setData(
+                                    "text/plain",
+                                    occupiedSlot.appointment.id,
+                                  );
+                                  setDraggingAppointmentId(
+                                    occupiedSlot.appointment.id,
+                                  );
+                                }}
+                                onDragEnd={() => setDraggingAppointmentId(null)}
+                                style={{
+                                  display: "block",
+                                  height: "100%",
+                                  minHeight: 44,
+                                  padding: "6px 7px",
+                                  borderRadius: occupiedSlot.isFirstSlot
+                                    ? "6px 6px 0 0"
+                                    : 0,
+                                  background: statusColor(
+                                    occupiedSlot.appointment.status,
+                                  ),
+                                  color: "white",
+                                  fontSize: 12,
+                                  lineHeight: 1.25,
+                                  cursor:
+                                    !readOnly && occupiedSlot.isFirstSlot
+                                      ? "grab"
+                                      : occupiedSlot.isFirstSlot
+                                        ? "pointer"
+                                        : "default",
+                                }}
+                              >
+                                {occupiedSlot.isFirstSlot ? (
+                                  <>
+                                    <strong>
+                                      {petName(occupiedSlot.appointment.id)}
+                                    </strong>
+                                    <br />
+                                    {serviceName(occupiedSlot.appointment.id)}
+                                    <br />
+                                    <span style={{ opacity: 0.85 }}>
+                                      {formatStatus(
+                                        occupiedSlot.appointment.status,
+                                      )}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span style={{ opacity: 0.8 }}>
+                                    Continues
+                                  </span>
+                                )}
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  }),
+                ])}
+              </div>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="dashboard-panel upcoming-panel">
