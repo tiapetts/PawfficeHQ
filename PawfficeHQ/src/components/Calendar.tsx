@@ -361,6 +361,40 @@ function Calendar({
     return summaries;
   }, [appointments, appointmentServices, services]);
 
+  // Mark every local calendar date overlapped by a staff time block,
+  // including overnight and multi-day blocks. Blocks do not affect revenue.
+  const blockedDayCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const block of timeBlocks) {
+      const start = new Date(block.start_at);
+      const end = new Date(block.end_at);
+      if (
+        !Number.isFinite(start.getTime()) ||
+        !Number.isFinite(end.getTime()) ||
+        end <= start
+      )
+        continue;
+      const day = new Date(
+        start.getFullYear(),
+        start.getMonth(),
+        start.getDate(),
+      );
+      while (day < end) {
+        const nextDay = new Date(
+          day.getFullYear(),
+          day.getMonth(),
+          day.getDate() + 1,
+        );
+        if (start < nextDay && end > day) {
+          const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+          counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
+        day.setDate(day.getDate() + 1);
+      }
+    }
+    return counts;
+  }, [timeBlocks]);
+
   const monthDays = useMemo(() => {
     const first = new Date(mobileDate.getFullYear(), mobileDate.getMonth(), 1);
     const leading = first.getDay();
@@ -1710,12 +1744,13 @@ function Calendar({
                 );
                 const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                 const summary = calendarDaySummary.get(key);
+                const blockedCount = blockedDayCounts.get(key) ?? 0;
                 const today = date.toDateString() === new Date().toDateString();
                 return (
                   <button
                     key={key}
                     type="button"
-                    aria-label={`${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}: ${summary?.count ?? 0} appointments, ${formatEstimatedRevenue(summary?.estimated ?? 0)} estimated${summary?.incomplete ? ", incomplete pricing" : ""}. Open daily schedule`}
+                    aria-label={`${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}: ${summary?.count ?? 0} appointments, ${blockedCount} blocked time${blockedCount === 1 ? "" : "s"}, ${formatEstimatedRevenue(summary?.estimated ?? 0)} estimated${summary?.incomplete ? ", incomplete pricing" : ""}. Open daily schedule`}
                     onClick={() => {
                       setMobileDate(date);
                       setMobileCalendarView("day");
@@ -1726,7 +1761,11 @@ function Calendar({
                       padding: "7px 1px",
                       border: today ? "2px solid #315f55" : "1px solid #d7e0dd",
                       borderRadius: 7,
-                      background: summary?.count ? "#f0f8f4" : "#fff",
+                      background: summary?.count
+                        ? "#f0f8f4"
+                        : blockedCount
+                          ? "#f7f1ff"
+                          : "#fff",
                       color: "#183b34",
                       display: "flex",
                       flexDirection: "column",
@@ -1759,6 +1798,17 @@ function Calendar({
                           />
                         ),
                       )}
+                      {blockedCount > 0 && (
+                        <span
+                          title={`${blockedCount} blocked time${blockedCount === 1 ? "" : "s"}`}
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            background: "#7253a3",
+                          }}
+                        />
+                      )}
                     </span>
                     {summary && (
                       <span
@@ -1778,9 +1828,9 @@ function Calendar({
               })}
             </div>
             <p style={{ color: "#58716b", fontSize: 12, marginTop: 12 }}>
-              Green dots show appointments. Amounts are estimated from service
-              base prices, not payments collected. Tap a date to see available
-              times.
+              Green dots show appointments; purple dots show blocked staff time.
+              Amounts are estimated from service base prices, not payments
+              collected. Tap a date to see available times.
             </p>
           </div>
         )}
