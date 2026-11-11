@@ -35,7 +35,7 @@ function App() {
   const [staff, setStaff] = useState<StaffProfile | null>(null);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [adminView, setAdminView] = useState<"platform" | "business">(
-    "platform",
+    "business",
   );
   const [loading, setLoading] = useState(true);
   const [profileLoaded, setProfileLoaded] = useState(false);
@@ -135,7 +135,7 @@ function App() {
         setSession(null);
         setStaff(null);
         setIsPlatformAdmin(false);
-        setAdminView("platform");
+        setAdminView("business");
         setProfileLoaded(false);
         setLoading(false);
         return;
@@ -167,7 +167,7 @@ function App() {
         setSubscriptionAccess(null);
         setStaff(null);
         setIsPlatformAdmin(false);
-        setAdminView("platform");
+        setAdminView("business");
         setProfileLoaded(false);
         setProfileError("");
         setLoading(false);
@@ -181,7 +181,7 @@ function App() {
         setStaff(null);
         setSubscriptionAccess(null);
         setIsPlatformAdmin(false);
-        setAdminView("platform");
+        setAdminView("business");
         setProfileLoaded(false);
         setLoading(true);
         window.setTimeout(() => {
@@ -290,6 +290,7 @@ function App() {
         <Dashboard
           businessId={staff.business_id}
           firstName={staff.first_name}
+          onOpenPlatformAdmin={() => setAdminView("platform")}
         />
       </div>
     );

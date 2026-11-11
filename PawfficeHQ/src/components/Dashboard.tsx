@@ -35,6 +35,7 @@ type DashboardProps = {
   readOnly?: boolean;
   subscriptionAccess?: SubscriptionAccess | null;
   onSubscriptionRefresh?: () => void;
+  onOpenPlatformAdmin?: () => void;
 };
 
 type Business = {
@@ -61,8 +62,20 @@ type Pet = {
   species?: string;
 };
 
-type VaccineRequirement = { id: string; name: string; species: string; alert_days_before: number; is_active: boolean };
-type VaccinationRecord = { id: string; pet_id: number; requirement_id: string | null; vaccine_name: string; expires_on: string };
+type VaccineRequirement = {
+  id: string;
+  name: string;
+  species: string;
+  alert_days_before: number;
+  is_active: boolean;
+};
+type VaccinationRecord = {
+  id: string;
+  pet_id: number;
+  requirement_id: string | null;
+  vaccine_name: string;
+  expires_on: string;
+};
 
 type AppointmentPet = {
   appointment_id: string;
@@ -111,19 +124,29 @@ function Dashboard({
   readOnly = false,
   subscriptionAccess = null,
   onSubscriptionRefresh,
+  onOpenPlatformAdmin,
 }: DashboardProps) {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const refreshUnreadMessages = useCallback(async () => {
-    const { data, error } = await supabase.rpc("messaging_unread_count", { p_business_id: businessId });
+    const { data, error } = await supabase.rpc("messaging_unread_count", {
+      p_business_id: businessId,
+    });
     if (!error) setUnreadMessages(Number(data ?? 0));
   }, [businessId]);
   useEffect(() => {
     const initial = window.setTimeout(() => void refreshUnreadMessages(), 0);
-    const timer = window.setInterval(() => { if (!document.hidden) void refreshUnreadMessages(); }, 15_000);
-    return () => { window.clearTimeout(initial); window.clearInterval(timer); };
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void refreshUnreadMessages();
+    }, 15_000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
   }, [refreshUnreadMessages]);
   const [activePage, setActivePage] = useState<ActivePage>("dashboard");
-  const [requestedInvoiceId, setRequestedInvoiceId] = useState<string | null>(null);
+  const [requestedInvoiceId, setRequestedInvoiceId] = useState<string | null>(
+    null,
+  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [business, setBusiness] = useState<Business | null>(null);
   const [businessLogo, setBusinessLogo] = useState<string | null>(null);
@@ -142,16 +165,36 @@ function Dashboard({
   >([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
-  const [enabledModules, setEnabledModules] = useState<Array<"grooming"|"pet_sitting"|"boarding_daycare"|"veterinary">>([]);
-  const [expandedModules, setExpandedModules] = useState<Record<"grooming"|"pet_sitting"|"boarding_daycare"|"veterinary",boolean>>({grooming:true,pet_sitting:true,boarding_daycare:true,veterinary:true});
-  const [boardingDraftDate, setBoardingDraftDate] = useState<string | null>(null);
+  const [enabledModules, setEnabledModules] = useState<
+    Array<"grooming" | "pet_sitting" | "boarding_daycare" | "veterinary">
+  >([]);
+  const [expandedModules, setExpandedModules] = useState<
+    Record<
+      "grooming" | "pet_sitting" | "boarding_daycare" | "veterinary",
+      boolean
+    >
+  >({
+    grooming: true,
+    pet_sitting: true,
+    boarding_daycare: true,
+    veterinary: true,
+  });
+  const [boardingDraftDate, setBoardingDraftDate] = useState<string | null>(
+    null,
+  );
   const [dashboardNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (readOnly) return;
-    void supabase.rpc("record_platform_activity", { p_event_type: "page_view", p_page_key: activePage });
+    void supabase.rpc("record_platform_activity", {
+      p_event_type: "page_view",
+      p_page_key: activePage,
+    });
     const heartbeat = window.setInterval(() => {
-      void supabase.rpc("record_platform_activity", { p_event_type: "activity_ping", p_page_key: activePage });
+      void supabase.rpc("record_platform_activity", {
+        p_event_type: "activity_ping",
+        p_page_key: activePage,
+      });
     }, 300_000);
     return () => window.clearInterval(heartbeat);
   }, [activePage, readOnly]);
@@ -219,11 +262,29 @@ function Dashboard({
           .select("id, name")
           .eq("business_id", businessId),
         supabase.rpc("get_business_settings", { p_business_id: businessId }),
-        supabase.from("vaccine_requirement").select("id, name, species, alert_days_before, is_active").eq("business_id", businessId).eq("is_active", true),
-        supabase.from("pet_vaccination").select("id, pet_id, requirement_id, vaccine_name, expires_on").eq("business_id", businessId),
-        supabase.from("business_module").select("module_key").eq("business_id",businessId).eq("is_enabled",true),
-        supabase.from("business_module_entitlement").select("module_key, status, expires_at").eq("business_id",businessId).in("status",["active","trialing"]),
-        supabase.from("complimentary_module_access").select("module_key, expires_at").eq("business_id",businessId),
+        supabase
+          .from("vaccine_requirement")
+          .select("id, name, species, alert_days_before, is_active")
+          .eq("business_id", businessId)
+          .eq("is_active", true),
+        supabase
+          .from("pet_vaccination")
+          .select("id, pet_id, requirement_id, vaccine_name, expires_on")
+          .eq("business_id", businessId),
+        supabase
+          .from("business_module")
+          .select("module_key")
+          .eq("business_id", businessId)
+          .eq("is_enabled", true),
+        supabase
+          .from("business_module_entitlement")
+          .select("module_key, status, expires_at")
+          .eq("business_id", businessId)
+          .in("status", ["active", "trialing"]),
+        supabase
+          .from("complimentary_module_access")
+          .select("module_key, expires_at")
+          .eq("business_id", businessId),
       ]);
 
       const firstError = [
@@ -299,19 +360,69 @@ function Dashboard({
       setClients(clientsResult.data ?? []);
       setPets(petsResult.data ?? []);
       const dashboardPets = (petsResult.data as Pet[] | null) ?? [];
-      const dashboardRequirements = (requirementsResult.data as VaccineRequirement[] | null) ?? [];
-      const dashboardVaccinations = (vaccinationsResult.data as VaccinationRecord[] | null) ?? [];
-      const alertCount = dashboardPets.reduce((count, pet) => count + dashboardRequirements.filter((requirement) => {
-        if (requirement.species !== "All" && requirement.species !== pet.species) return false;
-        const record = dashboardVaccinations
-          .filter((item) => item.pet_id === pet.id && (item.requirement_id === requirement.id || item.vaccine_name.toLowerCase() === requirement.name.toLowerCase()))
-          .sort((a, b) => b.expires_on.localeCompare(a.expires_on))[0];
-        return vaccinationState(record, requirement) !== "current";
-      }).length, 0);
+      const dashboardRequirements =
+        (requirementsResult.data as VaccineRequirement[] | null) ?? [];
+      const dashboardVaccinations =
+        (vaccinationsResult.data as VaccinationRecord[] | null) ?? [];
+      const alertCount = dashboardPets.reduce(
+        (count, pet) =>
+          count +
+          dashboardRequirements.filter((requirement) => {
+            if (
+              requirement.species !== "All" &&
+              requirement.species !== pet.species
+            )
+              return false;
+            const record = dashboardVaccinations
+              .filter(
+                (item) =>
+                  item.pet_id === pet.id &&
+                  (item.requirement_id === requirement.id ||
+                    item.vaccine_name.toLowerCase() ===
+                      requirement.name.toLowerCase()),
+              )
+              .sort((a, b) => b.expires_on.localeCompare(a.expires_on))[0];
+            return vaccinationState(record, requirement) !== "current";
+          }).length,
+        0,
+      );
       setVaccinationAlertCount(alertCount);
-      const entitledKeys = new Set(((moduleEntitlementsResult.data as Array<{module_key:string;status:string;expires_at:string|null}>|null)??[]).filter(row=>!row.expires_at||new Date(row.expires_at)>new Date()).map(row=>row.module_key));
-      ((complimentaryModulesResult.data as Array<{module_key:string;expires_at:string|null}>|null)??[]).filter(row=>!row.expires_at||new Date(row.expires_at)>new Date()).forEach(row=>entitledKeys.add(row.module_key));
-      setEnabledModules(((modulesResult.data as Array<{module_key:"grooming"|"pet_sitting"|"boarding_daycare"|"veterinary"}>|null)??[]).filter(row=>entitledKeys.has(row.module_key)).map(row=>row.module_key));
+      const entitledKeys = new Set(
+        (
+          (moduleEntitlementsResult.data as Array<{
+            module_key: string;
+            status: string;
+            expires_at: string | null;
+          }> | null) ?? []
+        )
+          .filter(
+            (row) => !row.expires_at || new Date(row.expires_at) > new Date(),
+          )
+          .map((row) => row.module_key),
+      );
+      (
+        (complimentaryModulesResult.data as Array<{
+          module_key: string;
+          expires_at: string | null;
+        }> | null) ?? []
+      )
+        .filter(
+          (row) => !row.expires_at || new Date(row.expires_at) > new Date(),
+        )
+        .forEach((row) => entitledKeys.add(row.module_key));
+      setEnabledModules(
+        (
+          (modulesResult.data as Array<{
+            module_key:
+              | "grooming"
+              | "pet_sitting"
+              | "boarding_daycare"
+              | "veterinary";
+          }> | null) ?? []
+        )
+          .filter((row) => entitledKeys.has(row.module_key))
+          .map((row) => row.module_key),
+      );
       setServices(servicesResult.data ?? []);
       setAppointmentPets(loadedAppointmentPets);
       setAppointmentServices(loadedAppointmentServices);
@@ -352,14 +463,26 @@ function Dashboard({
 
   function subscriptionLabel() {
     if (!subscriptionAccess) return null;
-    if (subscriptionAccess.is_complimentary) return `Complimentary ${subscriptionAccess.plan === "pro" ? "Pro" : "Basic"}`;
+    if (subscriptionAccess.is_complimentary)
+      return `Complimentary ${subscriptionAccess.plan === "pro" ? "Pro" : "Basic"}`;
     if (subscriptionAccess.status === "trialing") {
       const remaining = subscriptionAccess.trial_end
-        ? Math.max(0, Math.ceil((new Date(subscriptionAccess.trial_end).getTime() - dashboardNow) / 86_400_000))
+        ? Math.max(
+            0,
+            Math.ceil(
+              (new Date(subscriptionAccess.trial_end).getTime() -
+                dashboardNow) /
+                86_400_000,
+            ),
+          )
         : 0;
       return `Pro trial · ${remaining} day${remaining === 1 ? "" : "s"} left`;
     }
-    if (["past_due", "unpaid", "incomplete", "incomplete_expired"].includes(subscriptionAccess.status)) {
+    if (
+      ["past_due", "unpaid", "incomplete", "incomplete_expired"].includes(
+        subscriptionAccess.status,
+      )
+    ) {
       return "Payment required";
     }
     return `${subscriptionAccess.plan === "pro" ? "Pro" : "Basic"} · Active`;
@@ -438,10 +561,184 @@ function Dashboard({
             Pets
           </button>
           <div className="core-nav-divider" />
-          {enabledModules.includes("grooming")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.grooming} onClick={()=>setExpandedModules(current=>({...current,grooming:!current.grooming}))}><span>Grooming</span><span>⌄</span></button>{expandedModules.grooming&&<div className="module-nav-items"><button className={`nav-button ${activePage==="history"?"active":""}`} onClick={()=>openPage("history")}>Appointment history</button><button className={`nav-button ${activePage==="services"?"active":""}`} onClick={()=>openPage("services")}>Grooming services</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Grooming report cards</button><button className={`nav-button ${activePage==="mobile_grooming"?"active":""}`} onClick={()=>openPage("mobile_grooming")}>Route planner</button><button className={`nav-button ${activePage==="staff_earnings"?"active":""}`} onClick={()=>openPage("staff_earnings")}>Staff earnings</button></div>}</div>}
-          {enabledModules.includes("pet_sitting")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.pet_sitting} onClick={()=>setExpandedModules(current=>({...current,pet_sitting:!current.pet_sitting}))}><span>Pet sitting</span><span>⌄</span></button>{expandedModules.pet_sitting&&<div className="module-nav-items"><button className={`nav-button ${activePage==="pet_sitting_module"?"active":""}`} onClick={()=>openPage("pet_sitting_module")}>Bookings & care plans</button><button className={`nav-button ${activePage==="pet_sitting_calendar"?"active":""}`} onClick={()=>openPage("pet_sitting_calendar")}>Visit calendar</button><button className={`nav-button ${activePage==="pet_sitting_reports"?"active":""}`} onClick={()=>openPage("pet_sitting_reports")}>Visit reports</button></div>}</div>}
-          {enabledModules.includes("boarding_daycare")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.boarding_daycare} onClick={()=>setExpandedModules(current=>({...current,boarding_daycare:!current.boarding_daycare}))}><span>Boarding & daycare</span><span>⌄</span></button>{expandedModules.boarding_daycare&&<div className="module-nav-items"><button className={`nav-button ${activePage==="boarding_daycare_module"?"active":""}`} onClick={()=>openPage("boarding_daycare_module")}>Reservations & occupancy</button><button className={`nav-button ${activePage==="boarding_calendar"?"active":""}`} onClick={()=>openPage("boarding_calendar")}>Stay calendar</button><button className={`nav-button ${activePage==="boarding_services"?"active":""}`} onClick={()=>openPage("boarding_services")}>Boarding services</button><button className={`nav-button ${activePage==="report_cards"?"active":""}`} onClick={()=>openPage("report_cards")}>Care reports</button></div>}</div>}
-          {enabledModules.includes("veterinary")&&<div className="module-nav-group"><button type="button" className="module-nav-heading" aria-expanded={expandedModules.veterinary} onClick={()=>setExpandedModules(current=>({...current,veterinary:!current.veterinary}))}><span>Veterinary</span><span>⌄</span></button>{expandedModules.veterinary&&<div className="module-nav-items"><button className={`nav-button ${activePage==="veterinary_module"?"active":""}`} onClick={()=>openPage("veterinary_module")}>Encounters & records</button><button className={`nav-button ${activePage==="veterinary_medications"?"active":""}`} onClick={()=>openPage("veterinary_medications")}>Medications</button><button className={`nav-button ${activePage==="vaccinations"?"active":""}`} onClick={()=>openPage("vaccinations")}>Vaccinations</button></div>}</div>}
+          {enabledModules.includes("grooming") && (
+            <div className="module-nav-group">
+              <button
+                type="button"
+                className="module-nav-heading"
+                aria-expanded={expandedModules.grooming}
+                onClick={() =>
+                  setExpandedModules((current) => ({
+                    ...current,
+                    grooming: !current.grooming,
+                  }))
+                }
+              >
+                <span>Grooming</span>
+                <span>⌄</span>
+              </button>
+              {expandedModules.grooming && (
+                <div className="module-nav-items">
+                  <button
+                    className={`nav-button ${activePage === "history" ? "active" : ""}`}
+                    onClick={() => openPage("history")}
+                  >
+                    Appointment history
+                  </button>
+                  <button
+                    className={`nav-button ${activePage === "services" ? "active" : ""}`}
+                    onClick={() => openPage("services")}
+                  >
+                    Grooming services
+                  </button>
+                  <button
+                    className={`nav-button ${activePage === "report_cards" ? "active" : ""}`}
+                    onClick={() => openPage("report_cards")}
+                  >
+                    Grooming report cards
+                  </button>
+                  <button
+                    className={`nav-button ${activePage === "mobile_grooming" ? "active" : ""}`}
+                    onClick={() => openPage("mobile_grooming")}
+                  >
+                    Route planner
+                  </button>
+                  <button
+                    className={`nav-button ${activePage === "staff_earnings" ? "active" : ""}`}
+                    onClick={() => openPage("staff_earnings")}
+                  >
+                    Staff earnings
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {enabledModules.includes("pet_sitting") && (
+            <div className="module-nav-group">
+              <button
+                type="button"
+                className="module-nav-heading"
+                aria-expanded={expandedModules.pet_sitting}
+                onClick={() =>
+                  setExpandedModules((current) => ({
+                    ...current,
+                    pet_sitting: !current.pet_sitting,
+                  }))
+                }
+              >
+                <span>Pet sitting</span>
+                <span>⌄</span>
+              </button>
+              {expandedModules.pet_sitting && (
+                <div className="module-nav-items">
+                  <button
+                    className={`nav-button ${activePage === "pet_sitting_module" ? "active" : ""}`}
+                    onClick={() => openPage("pet_sitting_module")}
+                  >
+                    Bookings & care plans
+                  </button>
+                  <button
+                    className={`nav-button ${activePage === "pet_sitting_calendar" ? "active" : ""}`}
+                    onClick={() => openPage("pet_sitting_calendar")}
+                  >
+                    Visit calendar
+                  </button>
+                  <button
+                    className={`nav-button ${activePage === "pet_sitting_reports" ? "active" : ""}`}
+                    onClick={() => openPage("pet_sitting_reports")}
+                  >
+                    Visit reports
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {enabledModules.includes("boarding_daycare") && (
+            <div className="module-nav-group">
+              <button
+                type="button"
+                className="module-nav-heading"
+                aria-expanded={expandedModules.boarding_daycare}
+                onClick={() =>
+                  setExpandedModules((current) => ({
+                    ...current,
+                    boarding_daycare: !current.boarding_daycare,
+                  }))
+                }
+              >
+                <span>Boarding & daycare</span>
+                <span>⌄</span>
+              </button>
+              {expandedModules.boarding_daycare && (
+                <div className="module-nav-items">
+                  <button
+                    className={`nav-button ${activePage === "boarding_daycare_module" ? "active" : ""}`}
+                    onClick={() => openPage("boarding_daycare_module")}
+                  >
+                    Reservations & occupancy
+                  </button>
+                  <button
+                    className={`nav-button ${activePage === "boarding_calendar" ? "active" : ""}`}
+                    onClick={() => openPage("boarding_calendar")}
+                  >
+                    Stay calendar
+                  </button>
+                  <button
+                    className={`nav-button ${activePage === "boarding_services" ? "active" : ""}`}
+                    onClick={() => openPage("boarding_services")}
+                  >
+                    Boarding services
+                  </button>
+                  <button
+                    className={`nav-button ${activePage === "report_cards" ? "active" : ""}`}
+                    onClick={() => openPage("report_cards")}
+                  >
+                    Care reports
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {enabledModules.includes("veterinary") && (
+            <div className="module-nav-group">
+              <button
+                type="button"
+                className="module-nav-heading"
+                aria-expanded={expandedModules.veterinary}
+                onClick={() =>
+                  setExpandedModules((current) => ({
+                    ...current,
+                    veterinary: !current.veterinary,
+                  }))
+                }
+              >
+                <span>Veterinary</span>
+                <span>⌄</span>
+              </button>
+              {expandedModules.veterinary && (
+                <div className="module-nav-items">
+                  <button
+                    className={`nav-button ${activePage === "veterinary_module" ? "active" : ""}`}
+                    onClick={() => openPage("veterinary_module")}
+                  >
+                    Encounters & records
+                  </button>
+                  <button
+                    className={`nav-button ${activePage === "veterinary_medications" ? "active" : ""}`}
+                    onClick={() => openPage("veterinary_medications")}
+                  >
+                    Medications
+                  </button>
+                  <button
+                    className={`nav-button ${activePage === "vaccinations" ? "active" : ""}`}
+                    onClick={() => openPage("vaccinations")}
+                  >
+                    Vaccinations
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <div className="core-nav-divider" />
           <button
             className={`nav-button ${activePage === "staff" ? "active" : ""}`}
@@ -463,6 +760,16 @@ function Dashboard({
           >
             Settings
           </button>
+
+          {onOpenPlatformAdmin && (
+            <button
+              type="button"
+              className="nav-button"
+              onClick={onOpenPlatformAdmin}
+            >
+              ⚙️ Admin Dashboard
+            </button>
+          )}
         </nav>
 
         <button
@@ -475,11 +782,29 @@ function Dashboard({
 
       <main className="dashboard-main">
         {activePage === "calendar" ? (
-          <Calendar businessId={businessId} readOnly={readOnly} onOpenInvoice={(invoiceId) => { setRequestedInvoiceId(invoiceId); setActivePage("invoices"); }} />
+          <Calendar
+            businessId={businessId}
+            readOnly={readOnly}
+            onOpenInvoice={(invoiceId) => {
+              setRequestedInvoiceId(invoiceId);
+              setActivePage("invoices");
+            }}
+          />
         ) : activePage === "messages" ? (
-          <Messages key={businessId} businessId={businessId} readOnly={readOnly} onUnreadChange={refreshUnreadMessages} />
+          <Messages
+            key={businessId}
+            businessId={businessId}
+            readOnly={readOnly}
+            onUnreadChange={refreshUnreadMessages}
+          />
         ) : activePage === "history" ? (
-          <AppointmentHistory businessId={businessId} onOpenInvoice={(invoiceId) => { setRequestedInvoiceId(invoiceId); setActivePage("invoices"); }} />
+          <AppointmentHistory
+            businessId={businessId}
+            onOpenInvoice={(invoiceId) => {
+              setRequestedInvoiceId(invoiceId);
+              setActivePage("invoices");
+            }}
+          />
         ) : activePage === "invoices" ? (
           <Invoices
             businessId={businessId}
@@ -502,21 +827,62 @@ function Dashboard({
         ) : activePage === "pet_sitting_module" ? (
           <PetSitting businessId={businessId} readOnly={readOnly} />
         ) : activePage === "pet_sitting_calendar" ? (
-          <><header className="dashboard-header"><div><p className="eyebrow">Pet sitting</p><h2>Visit calendar</h2></div></header><PetSittingCalendarView businessId={businessId} focused /></>
+          <>
+            <header className="dashboard-header">
+              <div>
+                <p className="eyebrow">Pet sitting</p>
+                <h2>Visit calendar</h2>
+              </div>
+            </header>
+            <PetSittingCalendarView businessId={businessId} focused />
+          </>
         ) : activePage === "pet_sitting_reports" ? (
           <PetSittingReports businessId={businessId} />
         ) : activePage === "boarding_daycare_module" ? (
-          <BoardingDaycare businessId={businessId} readOnly={readOnly} initialDate={boardingDraftDate} onInitialDateUsed={() => setBoardingDraftDate(null)} onOpenInvoice={(invoiceId) => { setRequestedInvoiceId(invoiceId); setActivePage("invoices"); }} />
+          <BoardingDaycare
+            businessId={businessId}
+            readOnly={readOnly}
+            initialDate={boardingDraftDate}
+            onInitialDateUsed={() => setBoardingDraftDate(null)}
+            onOpenInvoice={(invoiceId) => {
+              setRequestedInvoiceId(invoiceId);
+              setActivePage("invoices");
+            }}
+          />
         ) : activePage === "boarding_calendar" ? (
-          <BoardingCalendar businessId={businessId} onNewReservation={(date) => {setBoardingDraftDate(date);openPage("boarding_daycare_module")}} />
+          <BoardingCalendar
+            businessId={businessId}
+            onNewReservation={(date) => {
+              setBoardingDraftDate(date);
+              openPage("boarding_daycare_module");
+            }}
+          />
         ) : activePage === "boarding_services" ? (
           <BoardingServices businessId={businessId} readOnly={readOnly} />
         ) : activePage === "veterinary_module" ? (
-          <VeterinaryWorkspace businessId={businessId} readOnly={readOnly} onOpenInvoice={(invoiceId) => { setRequestedInvoiceId(invoiceId); setActivePage("invoices"); }} />
+          <VeterinaryWorkspace
+            businessId={businessId}
+            readOnly={readOnly}
+            onOpenInvoice={(invoiceId) => {
+              setRequestedInvoiceId(invoiceId);
+              setActivePage("invoices");
+            }}
+          />
         ) : activePage === "veterinary_medications" ? (
-          <VeterinaryMedicationWorkspace businessId={businessId} readOnly={readOnly} />
+          <VeterinaryMedicationWorkspace
+            businessId={businessId}
+            readOnly={readOnly}
+          />
         ) : activePage.endsWith("_module") ? (
-          <ModuleWorkspace moduleKey={activePage.replace("_module","") as "grooming"|"pet_sitting"|"boarding_daycare"|"veterinary"} />
+          <ModuleWorkspace
+            moduleKey={
+              activePage.replace("_module", "") as
+                | "grooming"
+                | "pet_sitting"
+                | "boarding_daycare"
+                | "veterinary"
+            }
+          />
         ) : activePage === "services" ? (
           <Services businessId={businessId} />
         ) : activePage === "staff" ? (
@@ -538,13 +904,47 @@ function Dashboard({
             onModulesChanged={(modules) => {
               setEnabledModules(modules);
               setActivePage((current) => {
-                if (current.endsWith("_module") && !modules.includes(current.replace("_module","") as "grooming"|"pet_sitting"|"boarding_daycare"|"veterinary")) return "settings";
-                if (current === "pet_sitting_calendar" && !modules.includes("pet_sitting")) return "settings";
-                if (current === "pet_sitting_reports" && !modules.includes("pet_sitting")) return "settings";
-                if (current === "boarding_calendar" && !modules.includes("boarding_daycare")) return "settings";
-                if (!modules.includes("grooming") && ["history","services"].includes(current)) return "settings";
-                if (!modules.includes("veterinary") && current === "vaccinations") return "settings";
-                if (!modules.includes("veterinary") && current === "veterinary_medications") return "settings";
+                if (
+                  current.endsWith("_module") &&
+                  !modules.includes(
+                    current.replace("_module", "") as
+                      | "grooming"
+                      | "pet_sitting"
+                      | "boarding_daycare"
+                      | "veterinary",
+                  )
+                )
+                  return "settings";
+                if (
+                  current === "pet_sitting_calendar" &&
+                  !modules.includes("pet_sitting")
+                )
+                  return "settings";
+                if (
+                  current === "pet_sitting_reports" &&
+                  !modules.includes("pet_sitting")
+                )
+                  return "settings";
+                if (
+                  current === "boarding_calendar" &&
+                  !modules.includes("boarding_daycare")
+                )
+                  return "settings";
+                if (
+                  !modules.includes("grooming") &&
+                  ["history", "services"].includes(current)
+                )
+                  return "settings";
+                if (
+                  !modules.includes("veterinary") &&
+                  current === "vaccinations"
+                )
+                  return "settings";
+                if (
+                  !modules.includes("veterinary") &&
+                  current === "veterinary_medications"
+                )
+                  return "settings";
                 return current;
               });
             }}
@@ -573,25 +973,46 @@ function Dashboard({
             )}
 
             <section className="summary-grid">
-              <button type="button" className="summary-card clickable-summary-card" onClick={() => openPage("calendar")}>
+              <button
+                type="button"
+                className="summary-card clickable-summary-card"
+                onClick={() => openPage("calendar")}
+              >
                 <span>Today’s appointments</span>
                 <strong>{loading ? "—" : todayAppointments.length}</strong>
                 <small>Open schedule →</small>
               </button>
-              <button type="button" className="summary-card clickable-summary-card" onClick={() => openPage("pets")}>
+              <button
+                type="button"
+                className="summary-card clickable-summary-card"
+                onClick={() => openPage("pets")}
+              >
                 <span>Total pets</span>
                 <strong>{loading ? "—" : petCount}</strong>
                 <small>Open pet records →</small>
               </button>
-              <button type="button" className="summary-card clickable-summary-card" onClick={() => openPage("clients")}>
+              <button
+                type="button"
+                className="summary-card clickable-summary-card"
+                onClick={() => openPage("clients")}
+              >
                 <span>Total clients</span>
                 <strong>{loading ? "—" : clientCount}</strong>
                 <small>Open client records →</small>
               </button>
-              <button type="button" className="summary-card clickable-summary-card" onClick={() => openPage("vaccinations")} disabled={!enabledModules.includes("veterinary")}>
+              <button
+                type="button"
+                className="summary-card clickable-summary-card"
+                onClick={() => openPage("vaccinations")}
+                disabled={!enabledModules.includes("veterinary")}
+              >
                 <span>Vaccination alerts</span>
                 <strong>{loading ? "—" : vaccinationAlertCount}</strong>
-                <small>{enabledModules.includes("veterinary") ? "Review alerts →" : "Veterinary module required"}</small>
+                <small>
+                  {enabledModules.includes("veterinary")
+                    ? "Review alerts →"
+                    : "Veterinary module required"}
+                </small>
               </button>
             </section>
 
@@ -651,7 +1072,11 @@ function Dashboard({
               )}
             </section>
 
-            <RevenueOverview businessId={businessId} onOpenProjected={() => openPage("history")} onOpenEarned={() => openPage("invoices")} />
+            <RevenueOverview
+              businessId={businessId}
+              onOpenProjected={() => openPage("history")}
+              onOpenEarned={() => openPage("invoices")}
+            />
           </>
         )}
       </main>
