@@ -28,6 +28,7 @@ import type { SubscriptionAccess } from "./SubscriptionGate";
 import { applyBusinessTheme } from "./Settings";
 import "./Responsive.css";
 import "./ModuleNavigation.css";
+import SupportCenter from "./SupportCenter";
 
 type DashboardProps = {
   businessId: string;
@@ -116,7 +117,8 @@ type ActivePage =
   | "boarding_services"
   | "veterinary_module"
   | "veterinary_medications"
-  | "settings";
+  | "settings"
+  | "support";
 
 function Dashboard({
   businessId,
@@ -761,6 +763,14 @@ function Dashboard({
             Settings
           </button>
 
+          <button
+            type="button"
+            className={`nav-button ${activePage === "support" ? "active" : ""}`}
+            onClick={() => openPage("support")}
+          >
+            🐾 Help & Support
+          </button>
+
           {onOpenPlatformAdmin && (
             <button
               type="button"
@@ -893,6 +903,8 @@ function Dashboard({
             access={subscriptionAccess}
             onRefresh={onSubscriptionRefresh}
           />
+        ) : activePage === "support" ? (
+          <SupportCenter />
         ) : activePage === "settings" ? (
           <Settings
             businessId={businessId}

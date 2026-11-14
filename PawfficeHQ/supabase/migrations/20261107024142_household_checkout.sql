@@ -1,3 +1,5 @@
+BEGIN;
+
 -- Preserve each appointment while allowing one invoice/payment for a household.
 create table public.invoice_appointment (
   invoice_id uuid not null references public.invoice(id) on delete cascade,
@@ -61,6 +63,8 @@ $$;
 create trigger sync_invoice_appointments after insert or update of status,appointment_id,business_id,client_id
 on public.invoice for each row execute function public.sync_invoice_appointments();
 revoke all on function public.validate_invoice_appointment(),public.sync_invoice_appointments() from public,anon,authenticated;
+
+COMMIT;
 
 create function public.create_invoice_from_appointments(p_appointment_ids uuid[])
 returns uuid language plpgsql security definer set search_path = '' as $$
@@ -174,3 +178,6 @@ end;
 $$;
 revoke all on function public.get_household_checkout(uuid,timestamptz,timestamptz) from public,anon,authenticated;
 grant execute on function public.get_household_checkout(uuid,timestamptz,timestamptz) to authenticated;
+
+COMMIT;
+
