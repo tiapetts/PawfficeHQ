@@ -278,9 +278,15 @@ export default function PlatformAdmin({
     );
     setComplimentaryCandidate(business);
     setComplimentaryPlan(existing?.access_override_plan ?? "pro");
+
     setComplimentaryDuration(
-      existing?.access_override_expires_at ? "custom" : "90",
+      existing?.access_override_plan
+        ? existing.access_override_expires_at
+          ? "custom"
+          : "never"
+        : "90",
     );
+
     setComplimentaryExpires(
       existing?.access_override_expires_at?.slice(0, 10) ?? "",
     );
