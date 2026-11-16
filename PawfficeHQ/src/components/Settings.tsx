@@ -1445,14 +1445,14 @@ function Settings({
                         </p>
                         <button
                           type="button"
-                          className="settings-button"
+                          className="reminder-remove-button"
                           onClick={() => {
                             alert("Remove reminder functionality coming next!");
                           }}
                           title="Remove this reminder"
                           aria-label="Remove this reminder"
                         >
-                          ✕ Remove
+                          <span aria-hidden="true">✕</span> Remove
                         </button>
                       </div>
                     ))}
