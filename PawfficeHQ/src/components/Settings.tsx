@@ -1443,6 +1443,17 @@ function Settings({
                           {" — "}
                           {schedule.enabled ? "Enabled" : "Disabled"}
                         </p>
+                        <button
+                          type="button"
+                          className="settings-button"
+                          onClick={() => {
+                            alert("Remove reminder functionality coming next!");
+                          }}
+                          title="Remove this reminder"
+                          aria-label="Remove this reminder"
+                        >
+                          ✕ Remove
+                        </button>
                       </div>
                     ))}
                   </div>
