@@ -1428,9 +1428,10 @@ function Settings({
                     No custom reminders configured yet.
                   </p>
                 ) : (
-                  <div className="settings-switches">
+                  <div className="reminder-schedule-list">
                     {reminderSchedules.map((schedule) => (
-                      <div key={schedule.id}>
+                      <div className="reminder-schedule-row" key={schedule.id}>
+                        {" "}
                         <strong>
                           {schedule.minutes_before % 1440 === 0
                             ? `${schedule.minutes_before / 1440} day(s) before`
