@@ -423,6 +423,49 @@ function Settings({
     }
   }
 
+  async function removeReminderSchedule(schedule: ReminderSchedule) {
+    if (readOnly || reminderSchedulesSaving) return;
+
+    const confirmed = window.confirm(
+      `Remove the reminder scheduled ${schedule.minutes_before / 1440} day(s) before the appointment?\n\nThis cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    setReminderSchedulesSaving(true);
+    setMessage("");
+    setIsError(false);
+
+    try {
+      const { data, error } = await supabase
+        .from("business_appointment_reminder_schedule")
+        .delete()
+        .eq("id", schedule.id)
+        .eq("business_id", businessId)
+        .select("id");
+
+      if (error) throw error;
+
+      if (!data?.length) {
+        throw new Error(
+          "The reminder could not be removed. Please check your permissions.",
+        );
+      }
+
+      await loadReminderSchedules();
+      setMessage("Reminder schedule removed successfully.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not remove reminder schedule.",
+      );
+      setIsError(true);
+    } finally {
+      setReminderSchedulesSaving(false);
+    }
+  }
+
   async function saveNotificationSettings() {
     setNotificationSaving(true);
     setMessage("");
@@ -1447,9 +1490,8 @@ function Settings({
                         <button
                           type="button"
                           className="reminder-remove-button"
-                          onClick={() => {
-                            alert("Remove reminder functionality coming next!");
-                          }}
+                          onClick={() => void removeReminderSchedule(schedule)}
+                          disabled={readOnly || reminderSchedulesSaving}
                           title="Remove this reminder"
                           aria-label="Remove this reminder"
                         >
