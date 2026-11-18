@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import Dashboard from "./Dashboard";
+import SmsOnboardingAdmin from "./SmsOnboardingAdmin";
 import "./StaffEarnings.css";
 
 type PlatformOverview = {
@@ -813,6 +814,8 @@ export default function PlatformAdmin({
             {message}
           </p>
         )}
+
+        <SmsOnboardingAdmin />
 
         <section className="summary-grid" style={{ marginBottom: 32 }}>
           <article className="summary-card">

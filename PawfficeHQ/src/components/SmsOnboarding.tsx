@@ -85,7 +85,6 @@ export default function SmsOnboarding({
   }, [businessId]);
 
   async function submit() {
-    event.preventDefault();
     if (readOnly || saving || status !== "not_started") return;
     setSaving(true);
     setError("");
