@@ -1,0 +1,255 @@
+import { useEffect, useState } from "react";
+import { supabase } from "../lib/supabase";
+import "./SmsOnboarding.css";
+
+type Status =
+  | "not_started"
+  | "submitted"
+  | "under_review"
+  | "registration_pending"
+  | "approved"
+  | "rejected";
+type RequestFields = {
+  legal_business_name: string;
+  contact_name: string;
+  contact_email: string;
+  business_address: string;
+  website_url: string;
+  use_case_description: string;
+  consent_description: string;
+};
+const blank: RequestFields = {
+  legal_business_name: "",
+  contact_name: "",
+  contact_email: "",
+  business_address: "",
+  website_url: "",
+  use_case_description: "Appointment reminders and two-way client messages",
+  consent_description: "",
+};
+const labels: Record<Status, string> = {
+  not_started: "Not activated",
+  submitted: "Request received",
+  under_review: "Under review",
+  registration_pending: "Registration pending",
+  approved: "Approved for setup",
+  rejected: "Needs attention",
+};
+
+export default function SmsOnboarding({
+  businessId,
+  readOnly = false,
+}: {
+  businessId: string;
+  readOnly?: boolean;
+}) {
+  const [status, setStatus] = useState<Status>("not_started");
+  const [assignedNumber, setAssignedNumber] = useState<string | null>(null);
+  const [fields, setFields] = useState<RequestFields>(blank);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError("");
+    setSuccess("");
+    setFields(blank);
+    setStatus("not_started");
+    setAssignedNumber(null);
+    async function load() {
+      const [request, number] = await Promise.all([
+        supabase
+          .from("business_sms_onboarding")
+          .select("status")
+          .eq("business_id", businessId)
+          .maybeSingle(),
+        // This table is service-role only; number display requires a separate safe status endpoint later.
+        Promise.resolve({ data: null as { phone_number: string } | null }),
+      ]);
+      if (!active) return;
+      if (request.error) setError(request.error.message);
+      else
+        setStatus(
+          (request.data?.status as Status | undefined) ?? "not_started",
+        );
+      setAssignedNumber(number.data?.phone_number ?? null);
+      setLoading(false);
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [businessId]);
+
+  async function submit() {
+    event.preventDefault();
+    if (readOnly || saving || status !== "not_started") return;
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    const { error: insertError } = await supabase
+      .from("business_sms_onboarding")
+      .insert({
+        business_id: businessId,
+        status: "submitted",
+        ...fields,
+        submitted_at: new Date().toISOString(),
+      });
+    if (insertError)
+      setError(
+        insertError.code === "23505"
+          ? "A request already exists for this business. Refresh the page."
+          : insertError.message,
+      );
+    else {
+      setStatus("submitted");
+      setSuccess(
+        "Request submitted. Messaging is not yet active; we will review registration details first.",
+      );
+    }
+    setSaving(false);
+  }
+
+  return (
+    <section className="sms-setup" aria-labelledby="sms-onboarding-title">
+      <div className="sms-setup__header">
+        <div className="sms-setup__icon" aria-hidden="true">
+          ✉
+        </div>
+        <div className="sms-setup__heading">
+          <p className="sms-setup__eyebrow">COMMUNICATIONS</p>
+          <h3 id="sms-onboarding-title">Business Text Messaging</h3>
+          <p>
+            Give your business a dedicated texting number for client
+            conversations and appointment reminders.
+          </p>
+        </div>
+        <span
+          className={`sms-setup__status sms-setup__status--${assignedNumber ? "approved" : status}`}
+        >
+          <span className="sms-setup__dot" aria-hidden="true" />
+          {loading
+            ? "Checking setup"
+            : assignedNumber
+              ? "Number assigned"
+              : labels[status]}
+        </span>
+      </div>
+      {loading ? (
+        <p className="sms-setup__notice">Checking messaging setup…</p>
+      ) : (
+        <div className="sms-setup__body">
+          {assignedNumber && (
+            <p className="sms-setup__notice">
+              <strong>Business number:</strong> {assignedNumber}
+            </p>
+          )}
+          {error && (
+            <p className="sms-setup__error" role="alert">
+              {error}
+            </p>
+          )}
+          {success && (
+            <p className="sms-setup__success" role="status">
+              {success}
+            </p>
+          )}
+          {status === "not_started" && !assignedNumber ? (
+            <div className="sms-setup__form">
+              <div className="sms-setup__intro">
+                <h4>Request your business number</h4>
+                <p>
+                  Tell us about your business and how clients consent to texts.
+                  Submitting a request does not purchase a number or activate
+                  messaging.
+                </p>
+              </div>
+              <div className="sms-setup__grid">
+                {(
+                  [
+                    ["legal_business_name", "Legal business name"],
+                    ["contact_name", "Contact name"],
+                    ["contact_email", "Contact email"],
+                    [
+                      "business_address",
+                      "Business street address, city, state, ZIP",
+                    ],
+                    ["website_url", "Business website (optional)"],
+                    ["use_case_description", "How will you use texting?"],
+                    [
+                      "consent_description",
+                      "How do clients agree to receive texts?",
+                    ],
+                  ] as [keyof RequestFields, string][]
+                ).map(([key, label]) => (
+                  <label
+                    key={key}
+                    className={`sms-setup__field ${["business_address", "use_case_description", "consent_description"].includes(key) ? "sms-setup__field--wide" : ""}`}
+                  >
+                    <span>{label}</span>
+                    {key === "use_case_description" ||
+                    key === "consent_description" ? (
+                      <textarea
+                        value={fields[key]}
+                        required
+                        disabled={readOnly || saving}
+                        onChange={(event) =>
+                          setFields((prev) => ({
+                            ...prev,
+                            [key]: event.target.value,
+                          }))
+                        }
+                        rows={3}
+                      />
+                    ) : (
+                      <input
+                        type={
+                          key === "contact_email"
+                            ? "email"
+                            : key === "website_url"
+                              ? "url"
+                              : "text"
+                        }
+                        value={fields[key]}
+                        required={key !== "website_url"}
+                        disabled={readOnly || saving}
+                        onChange={(event) =>
+                          setFields((prev) => ({
+                            ...prev,
+                            [key]: event.target.value,
+                          }))
+                        }
+                      />
+                    )}
+                  </label>
+                ))}
+              </div>
+              <div className="sms-setup__footer">
+                <p>
+                  SMS activation is subject to business verification and carrier
+                  approval.
+                </p>
+                <button
+                  className="primary-button sms-setup__submit"
+                  type="button"
+                  onClick={() => void submit()}
+                  disabled={readOnly || saving}
+                >
+                  {saving ? "Submitting…" : "Request SMS setup"}
+                </button>
+              </div>
+            </div>
+          ) : !assignedNumber ? (
+            <div className="sms-setup__notice">
+              <strong>Request received.</strong> Registration review and number
+              assignment must be completed before messaging can begin.
+            </div>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}

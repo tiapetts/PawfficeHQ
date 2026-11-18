@@ -8,6 +8,7 @@ import {
 import { supabase } from "../lib/supabase";
 import BusinessModules from "./BusinessModules";
 import SquareConnection from "./SquareConnection";
+import SmsOnboarding from "./SmsOnboarding";
 import "./Settings.css";
 
 type SettingsProps = {
@@ -1745,6 +1746,8 @@ function Settings({
             </div>
           )}
         </section>
+
+        <SmsOnboarding businessId={businessId} readOnly={readOnly} />
 
         <section className="dashboard-panel settings-section">
           <div>
