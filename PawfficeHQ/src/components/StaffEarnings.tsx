@@ -171,6 +171,63 @@ export default function StaffEarnings({ businessId, readOnly = false }: Props) {
     };
   });
   const selected = totals.find(item => item.member.id === selectedStaff);
+  // Export the same payment-based ledger shown on this page, including tip allocations.
+  // This is a business revenue report, not a payroll or tax-return calculation.
+  function downloadEarningsCsv(staffId?: string) {
+    const exportTotals = staffId ? totals.filter(item => item.member.id === staffId) : totals;
+    const header = [
+      "Payment date", "Employee", "Invoice", "Payment method",
+      "Service revenue (USD)", "Allocated tips (USD)",
+      "Refunds (USD)", "Net collected (USD)",
+    ];
+    const csvCell = (value: string | number) => {
+      const raw = String(value);
+      // Escape formula-like cells so spreadsheet applications treat them as text.
+      const safe = /^[=+@\-\t\r]/.test(raw) && typeof value === "string" ? "'" + raw : raw;
+      return '"' + safe.replace(/"/g, '""') + '"';
+    };
+    const lines: (string | number)[][] = [header];
+    for (const item of exportTotals) {
+      for (const row of item.rows) {
+        lines.push([
+          new Date(row.date).toISOString().slice(0, 10),
+          `${item.member.first_name} ${item.member.last_name}`,
+          row.invoiceNumber,
+          row.method,
+          row.service.toFixed(2),
+          row.tip.toFixed(2),
+          row.refund.toFixed(2),
+          (row.service + row.tip).toFixed(2),
+        ]);
+      }
+    }
+    const sum = (key: "service" | "tips" | "refunds") =>
+      exportTotals.reduce((total, item) => total + item[key], 0);
+    const servicesTotal = sum("service");
+    const tipsTotal = sum("tips");
+    lines.push([
+      "", "TOTAL", "", "",
+      servicesTotal.toFixed(2), tipsTotal.toFixed(2),
+      sum("refunds").toFixed(2), (servicesTotal + tipsTotal).toFixed(2),
+    ]);
+    if (!staffId && report.unallocatedTips > 0) {
+      lines.push(["", "UNALLOCATED TIPS (not included above)", "", "", "",
+        report.unallocatedTips.toFixed(2), "", ""]);
+    }
+    const csv = "\uFEFF" + lines.map(line => line.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const from = localDate(bounds.start);
+    const through = localDate(bounds.end);
+    link.download = `pawfficehq-earnings-${staffId ? "employee-" + staffId : "all-staff"}-${from}-to-${through}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
 
   return <div className="staff-earnings">
     <header className="dashboard-header"><div><p className="eyebrow">Grooming</p><h2>Staff earnings</h2><p>Collected service revenue, tips, and refunds by employee.</p></div></header>
@@ -179,7 +236,7 @@ export default function StaffEarnings({ businessId, readOnly = false }: Props) {
       <div className="earnings-range">{(["today","week","month","custom"] as Range[]).map(value => <button key={value} className={range === value ? "active" : ""} onClick={() => setRange(value)}>{value === "week" ? "This week" : value === "month" ? "This month" : value[0].toUpperCase() + value.slice(1)}</button>)}</div>
       {range === "custom" && <div className="earnings-dates"><label>From<input type="date" value={customStart} onChange={event => setCustomStart(event.target.value)} /></label><label>Through<input type="date" value={customEnd} onChange={event => setCustomEnd(event.target.value)} /></label></div>}
     </section>
-    {loading ? <p>Calculating staff earnings…</p> : <>
+    {!loading && <div className="earnings-toolbar"><button type="button" className="primary-button" onClick={() => downloadEarningsCsv()}>Download earnings CSV</button><small>Includes collected service revenue, allocated tips, and refunds for the selected period. Unallocated tips are listed separately; this is not a payroll tax statement.</small></div>}\n    {loading ? <p>Calculating staff earnings…</p> : <>
       <section className="earnings-summary">
         <button type="button" className="clickable-summary-card" onClick={() => document.querySelector(".earnings-card-grid")?.scrollIntoView({ behavior: "smooth", block: "start" })}><span>Net service revenue</span><strong>{money.format(totals.reduce((sum, item) => sum + item.service, 0))}</strong><small>Open staff ledgers →</small></button>
         <button type="button" className="clickable-summary-card" onClick={() => document.querySelector(".earnings-card-grid")?.scrollIntoView({ behavior: "smooth", block: "start" })}><span>Allocated tips</span><strong>{money.format(totals.reduce((sum, item) => sum + item.tips, 0))}</strong><small>Open staff ledgers →</small></button>
@@ -188,7 +245,7 @@ export default function StaffEarnings({ businessId, readOnly = false }: Props) {
       </section>
       <section className="earnings-card-grid">{totals.map(item => <button className="earnings-staff-card" key={item.member.id} onClick={() => setSelectedStaff(item.member.id)}><div><span>{item.member.is_active ? "Active" : "Inactive"}</span><h3>{item.member.first_name} {item.member.last_name}</h3><p>{item.member.job_title || "Staff member"}</p></div><dl><div><dt>Net services</dt><dd>{money.format(item.service)}</dd></div><div><dt>Tips</dt><dd>{money.format(item.tips)}</dd></div><div><dt>Refunds</dt><dd>{money.format(item.refunds)}</dd></div><div><dt>Total</dt><dd>{money.format(item.service + item.tips)}</dd></div><div><dt>Appointments</dt><dd>{item.appointments}</dd></div></dl><small>View earnings ledger →</small></button>)}</section>
       {report.pending.length > 0 && <section className="tip-allocation-panel"><div><p className="eyebrow">Needs attention</p><h3>Allocate shared tips</h3><p>These appointments had more than one assigned employee.</p></div>{report.pending.map(payment => <article key={payment.id}><div><strong>{money.format(Number(payment.tip_amount))} tip</strong><span>{new Date(payment.paid_at ?? payment.created_at).toLocaleDateString()} · {payment.method.replaceAll("_", " ")}</span></div><div className="tip-allocation-inputs">{staffForPayment(payment).map(staffId => { const member = staff.find(item => item.id === staffId); return <label key={staffId}>{member?.first_name} {member?.last_name}<input type="number" min="0" step="0.01" value={draftValue(payment, staffId)} onChange={event => setDrafts(current => ({ ...current, [payment.id]: { ...current[payment.id], [staffId]: event.target.value } }))} /></label>})}</div>{!readOnly && <button className="primary-button" disabled={savingPayment === payment.id} onClick={() => void saveAllocation(payment)}>{savingPayment === payment.id ? "Saving…" : "Save tip split"}</button>}</article>)}</section>}
-      {selected && <div className="earnings-modal-backdrop" onClick={() => setSelectedStaff(null)}><section className="earnings-ledger" onClick={event => event.stopPropagation()}><header><div><p className="eyebrow">Earnings ledger</p><h3>{selected.member.first_name} {selected.member.last_name}</h3></div><button onClick={() => setSelectedStaff(null)}>Close</button></header>{selected.rows.length === 0 ? <p>No collected earnings in this period.</p> : <div className="earnings-ledger-list">{selected.rows.sort((a,b) => b.date.localeCompare(a.date)).map(row => <article key={`${row.paymentId}-${row.appointmentId}`}><div><strong>{new Date(row.date).toLocaleDateString()}</strong><span>{row.invoiceNumber} · {row.method.replaceAll("_", " ")}</span></div><div><span>Services {money.format(row.service)}</span><span>Tips {money.format(row.tip)}</span>{row.refund > 0 && <span>Refunded {money.format(row.refund)}</span>}<strong>{money.format(row.service + row.tip)}</strong></div></article>)}</div>}</section></div>}
+      {selected && <div className="earnings-modal-backdrop" onClick={() => setSelectedStaff(null)}><section className="earnings-ledger" onClick={event => event.stopPropagation()}><header><div><p className="eyebrow">Earnings ledger</p><h3>{selected.member.first_name} {selected.member.last_name}</h3></div><div><button type="button" onClick={() => downloadEarningsCsv(selected.member.id)}>Download CSV</button><button onClick={() => setSelectedStaff(null)}>Close</button></div></header>{selected.rows.length === 0 ? <p>No collected earnings in this period.</p> : <div className="earnings-ledger-list">{selected.rows.sort((a,b) => b.date.localeCompare(a.date)).map(row => <article key={`${row.paymentId}-${row.appointmentId}`}><div><strong>{new Date(row.date).toLocaleDateString()}</strong><span>{row.invoiceNumber} · {row.method.replaceAll("_", " ")}</span></div><div><span>Services {money.format(row.service)}</span><span>Tips {money.format(row.tip)}</span>{row.refund > 0 && <span>Refunded {money.format(row.refund)}</span>}<strong>{money.format(row.service + row.tip)}</strong></div></article>)}</div>}</section></div>}
     </>}
   </div>;
 }
