@@ -103,22 +103,26 @@ export default function SupportCenter() {
       );
 
       if (error) {
-        let message = "We couldn't submit your request. Please try again.";
-
-        // Read the Edge Function's actual error response when available.
-        if ("context" in error && error.context instanceof Response) {
+        // FunctionHttpError contains a Response; network and CORS errors do not.
+        // Show a useful message without exposing internal details or auth tokens.
+        const context = "context" in error ? error.context : undefined;
+        if (context instanceof Response) {
+          let detail = "";
           try {
-            const responseBody = await error.context.clone().json();
-
-            if (typeof responseBody?.error === "string") {
-              message = responseBody.error;
-            }
+            const body = await context.clone().json();
+            if (typeof body?.error === "string") detail = body.error;
           } catch {
-            // Keep the friendly fallback message.
+            // The function may have returned a non-JSON error page.
           }
+          throw new Error(
+            detail || `Support service returned HTTP ${context.status}. Please try again or contact support.`,
+          );
         }
 
-        throw new Error(message);
+        console.error("Support submission transport failure:", error);
+        throw new Error(
+          "Unable to reach the support service. Check your connection, refresh the page, and try again. If it continues, please contact PawfficeHQ support directly.",
+        );
       }
 
       if (!data?.success || !data?.ticket_id) {
