@@ -31,6 +31,7 @@ export default function SmsOnboardingAdmin() {
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [plans, setPlans] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<Record<string, {outcome:string; checks:Record<string,boolean>}>>({});
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,6 +63,21 @@ export default function SmsOnboardingAdmin() {
     else {
       setNotice(`Review status changed to ${labels[status]}.`);
       await load();
+    }
+    setSaving(null);
+  }
+  async function planSubaccount(businessId: string) {
+    setSaving(businessId);
+    setError("");
+    setNotice("");
+    const { data, error: planError } = await supabase.rpc("plan_sms_subaccount", {
+      p_business_id: businessId,
+    });
+    if (planError) setError(planError.message);
+    else {
+      const state = (data as { state?: string } | null)?.state ?? "planned";
+      setPlans((current) => ({ ...current, [businessId]: state }));
+      setNotice("Local subaccount plan saved. No Twilio resources were created.");
     }
     setSaving(null);
   }
@@ -181,6 +197,16 @@ export default function SmsOnboardingAdmin() {
                   {saving === item.business_id ? "Checking…" : "Run safe dry-run"}
                 </button>
               </div>
+              {item.status === "registration_pending" && (
+                <div className="sms-admin__actions" style={{ marginTop: 12 }}>
+                  <span>Subaccount planning</span>
+                  <button type="button" disabled={saving === item.business_id}
+                    onClick={() => void planSubaccount(item.business_id)}>
+                    {saving === item.business_id ? "Saving…" : "Save local subaccount plan"}
+                  </button>
+                  {plans[item.business_id] && <strong>Plan: {plans[item.business_id]}</strong>}
+                </div>
+              )}
               {preview[item.business_id] && (
                 <div role="status" style={{ padding: 14, marginTop: 10, border: "1px solid #b9d6dc", borderRadius: 8 }}>
                   <strong>{preview[item.business_id].outcome === "ready_for_registration" ? "Ready for registration review" : "Blocked — prerequisites missing"}</strong>
