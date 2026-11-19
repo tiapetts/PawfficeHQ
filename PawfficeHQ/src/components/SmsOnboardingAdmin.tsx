@@ -31,6 +31,7 @@ export default function SmsOnboardingAdmin() {
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [preview, setPreview] = useState<Record<string, {outcome:string; checks:Record<string,boolean>}>>({});
   const load = useCallback(async () => {
     setLoading(true);
     const { data, error: loadError } = await supabase
@@ -61,6 +62,18 @@ export default function SmsOnboardingAdmin() {
     else {
       setNotice(`Review status changed to ${labels[status]}.`);
       await load();
+    }
+    setSaving(null);
+  }
+  async function dryRun(businessId: string) {
+    setSaving(businessId);
+    setError("");
+    setNotice("");
+    const { data, error: previewError } = await supabase.rpc("preview_sms_provisioning", { p_business_id: businessId });
+    if (previewError) setError(previewError.message);
+    else if (data) {
+      setPreview((current) => ({ ...current, [businessId]: data as {outcome:string; checks:Record<string,boolean>} }));
+      setNotice("Dry run complete. No Twilio calls or purchases were made.");
     }
     setSaving(null);
   }
@@ -161,6 +174,24 @@ export default function SmsOnboardingAdmin() {
                   </button>
                 ))}
               </div>
+              <div className="sms-admin__actions" style={{ marginTop: 12 }}>
+                <span>Provisioning preview</span>
+                <button type="button" disabled={saving === item.business_id}
+                  onClick={() => void dryRun(item.business_id)}>
+                  {saving === item.business_id ? "Checking…" : "Run safe dry-run"}
+                </button>
+              </div>
+              {preview[item.business_id] && (
+                <div role="status" style={{ padding: 14, marginTop: 10, border: "1px solid #b9d6dc", borderRadius: 8 }}>
+                  <strong>{preview[item.business_id].outcome === "ready_for_registration" ? "Ready for registration review" : "Blocked — prerequisites missing"}</strong>
+                  <p>No Twilio API call, phone-number purchase, or activation was performed.</p>
+                  <ul>
+                    {Object.entries(preview[item.business_id].checks).map(([key, passed]) => (
+                      <li key={key}>{passed ? "✓" : "✗"} {key.replace(/_/g, " ")}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </article>
           ))}
         </div>
