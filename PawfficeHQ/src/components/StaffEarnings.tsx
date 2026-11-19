@@ -11,7 +11,7 @@ type Invoice = { invoice_appointment?: { appointment_id: string }[]; id: string;
 type Payment = { id: string; invoice_id: string; amount: number; tip_amount: number; method: string; status: string; paid_at: string | null; created_at: string };
 type Refund = { payment_id: string; amount: number; status: string };
 type Allocation = { id: string; payment_id: string; staff_id: string; amount: number };
-type Range = "today" | "week" | "month" | "custom";
+type Range = "today" | "week" | "month" | "year" | "custom";
 type LedgerRow = { paymentId: string; appointmentId: string; date: string; invoiceNumber: string; method: string; service: number; tip: number; refund: number };
 
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
@@ -31,7 +31,7 @@ export default function StaffEarnings({ businessId, readOnly = false }: Props) {
   const [refunds, setRefunds] = useState<Refund[]>([]);
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [range, setRange] = useState<Range>("month");
-  const [customStart, setCustomStart] = useState(localDate(new Date()));
+  const [reportYear, setReportYear] = useState(new Date().getFullYear());\n  const [customStart, setCustomStart] = useState(localDate(new Date()));
   const [customEnd, setCustomEnd] = useState(localDate(new Date()));
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({});
@@ -78,12 +78,12 @@ export default function StaffEarnings({ businessId, readOnly = false }: Props) {
     } else if (range === "month") {
       start = new Date(now.getFullYear(), now.getMonth(), 1);
       end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    } else if (range === "custom") {
+    } else if (range === "year") {\n      start = new Date(reportYear, 0, 1);\n      end = new Date(reportYear + 1, 0, 1);\n    } else if (range === "custom") {
       start = new Date(`${customStart}T00:00:00`);
       end = new Date(`${customEnd}T23:59:59.999`);
     }
     return { start, end };
-  }, [range, customStart, customEnd]);
+  }, [range, reportYear, customStart, customEnd]);
 
   const report = useMemo(() => {
     const rows = new Map<string, LedgerRow[]>();
@@ -233,8 +233,8 @@ export default function StaffEarnings({ businessId, readOnly = false }: Props) {
     <header className="dashboard-header"><div><p className="eyebrow">Grooming</p><h2>Staff earnings</h2><p>Collected service revenue, tips, and refunds by employee.</p></div></header>
     {message && <p className="settings-success-message">{message}</p>}
     <section className="earnings-toolbar">
-      <div className="earnings-range">{(["today","week","month","custom"] as Range[]).map(value => <button key={value} className={range === value ? "active" : ""} onClick={() => setRange(value)}>{value === "week" ? "This week" : value === "month" ? "This month" : value[0].toUpperCase() + value.slice(1)}</button>)}</div>
-      {range === "custom" && <div className="earnings-dates"><label>From<input type="date" value={customStart} onChange={event => setCustomStart(event.target.value)} /></label><label>Through<input type="date" value={customEnd} onChange={event => setCustomEnd(event.target.value)} /></label></div>}
+      <div className="earnings-range">{(["today","week","month","year","custom"] as Range[]).map(value => <button key={value} className={range === value ? "active" : ""} onClick={() => setRange(value)}>{value === "week" ? "This week" : value === "month" ? "This month" : value === "year" ? "Full year" : value[0].toUpperCase() + value.slice(1)}</button>)}</div>
+      {range === "year" && <div className="earnings-dates"><label>Tax year<input type="number" min="2000" max="2100" step="1" value={reportYear} onChange={event => setReportYear(Number(event.target.value))} /></label></div>}\n      {range === "custom" && <div className="earnings-dates"><label>From<input type="date" value={customStart} onChange={event => setCustomStart(event.target.value)} /></label><label>Through<input type="date" value={customEnd} onChange={event => setCustomEnd(event.target.value)} /></label></div>}
     </section>
     {!loading && <div className="earnings-toolbar"><button type="button" className="primary-button" onClick={() => downloadEarningsCsv()}>Download earnings CSV</button><small>Includes collected service revenue, allocated tips, and refunds for the selected period. Unallocated tips are listed separately; this is not a payroll tax statement.</small></div>}\n    {loading ? <p>Calculating staff earnings…</p> : <>
       <section className="earnings-summary">
