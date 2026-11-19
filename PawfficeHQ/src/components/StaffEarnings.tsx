@@ -311,16 +311,14 @@ export default function StaffEarnings({ businessId, readOnly = false }: Props) {
       setSavingPayment(null);
       return;
     }
-    const inserted = await supabase
-      .from("staff_tip_allocation")
-      .insert(
-        entries.map((entry) => ({
-          business_id: businessId,
-          payment_id: payment.id,
-          staff_id: entry.staffId,
-          amount: entry.amount,
-        })),
-      );
+    const inserted = await supabase.from("staff_tip_allocation").insert(
+      entries.map((entry) => ({
+        business_id: businessId,
+        payment_id: payment.id,
+        staff_id: entry.staffId,
+        amount: entry.amount,
+      })),
+    );
     if (inserted.error) setMessage(inserted.error.message);
     else {
       setMessage("Tip allocation saved.");
@@ -464,8 +462,7 @@ export default function StaffEarnings({ businessId, readOnly = false }: Props) {
               />
             </label>
           </div>
-        )}
-        \n{" "}
+        )}{" "}
         {range === "custom" && (
           <div className="earnings-dates">
             <label>
@@ -502,8 +499,7 @@ export default function StaffEarnings({ businessId, readOnly = false }: Props) {
             not a payroll tax statement.
           </small>
         </div>
-      )}
-      \n{" "}
+      )}{" "}
       {loading ? (
         <p>Calculating staff earnings…</p>
       ) : (
