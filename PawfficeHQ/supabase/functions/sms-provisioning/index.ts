@@ -44,7 +44,9 @@ Deno.serve(async (req) => {
   if (!input || typeof input.businessId !== "string" || !uuid.test(input.businessId)) {
     return respond({ error: "Invalid business ID" }, 400);
   }
-  if (input.action !== "inspect") return respond({ error: "Unsupported action" }, 400);
+  if (input.action !== "inspect" && input.action !== "test_twilio") {
+    return respond({ error: "Unsupported action" }, 400);
+  }
 
   // Use user-scoped RLS rather than service role for the actual business data read.
   const { data: plan, error: planError } = await userClient
@@ -54,6 +56,48 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (planError) return respond({ error: "Could not inspect plan" }, 500);
   if (!plan) return respond({ error: "No local plan found" }, 404);
+
+  // Administrator-only, read-only Twilio credential check. No response body or
+  // credentials from Twilio are returned to the caller.
+  if (input.action === "test_twilio") {
+    const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
+    const keySid = Deno.env.get("TWILIO_API_KEY_SID");
+    const keySecret = Deno.env.get("TWILIO_API_KEY_SECRET");
+    if (!accountSid || !keySid || !keySecret) {
+      return respond({ error: "Twilio credentials are not configured." }, 503);
+    }
+    if (!/^AC[0-9a-f]{32}$/i.test(accountSid) || !/^SK[0-9a-f]{32}$/i.test(keySid)) {
+      return respond({ error: "Twilio credential format is invalid." }, 503);
+    }
+    try {
+      const response = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PageSize=1`,
+        {
+          method: "GET",
+          headers: { Authorization: `Basic ${btoa(`${keySid}:${keySecret}`)}` },
+          signal: AbortSignal.timeout(10000),
+        },
+      );
+      if (!response.ok) {
+        return respond({
+          connected: false,
+          error: "Twilio authentication or permission check failed.",
+          twilioStatus: response.status,
+        }, 502);
+      }
+      return respond({
+        mode: "dry_run",
+        connected: true,
+        message: "Read-only Twilio API check succeeded.",
+        subaccountCreated: false,
+        numberPurchased: false,
+        messageSent: false,
+      });
+    } catch {
+      return respond({ connected: false, error: "Could not reach the Twilio API." }, 502);
+    }
+  }
+
 
   return respond({
     mode: "dry_run",
