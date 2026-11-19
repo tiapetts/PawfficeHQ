@@ -381,9 +381,12 @@ function Settings({
   }, [businessId]);
 
   useEffect(() => {
-    void loadReminderSchedules();
-  }, [loadReminderSchedules]);
+    const timeoutId = window.setTimeout(() => {
+      void loadReminderSchedules();
+    }, 0);
 
+    return () => window.clearTimeout(timeoutId);
+  }, [loadReminderSchedules]);
   async function addReminderSchedule() {
     if (readOnly || reminderSchedulesSaving) return;
 

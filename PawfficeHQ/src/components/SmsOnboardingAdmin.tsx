@@ -51,7 +51,13 @@ export default function SmsOnboardingAdmin() {
     setLoading(false);
   }, []);
   useEffect(() => {
-    void load();
+    const scheduleLoad = () => {
+      void load();
+    };
+
+    const timeoutId = window.setTimeout(scheduleLoad, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [load]);
   async function review(businessId: string, status: ReviewStatus) {
     setSaving(businessId);

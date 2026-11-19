@@ -53,34 +53,49 @@ export default function SmsOnboarding({
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError("");
-    setSuccess("");
-    setFields(blank);
-    setStatus("not_started");
-    setAssignedNumber(null);
-    async function load() {
-      const [request, number] = await Promise.all([
-        supabase
-          .from("business_sms_onboarding")
-          .select("status")
-          .eq("business_id", businessId)
-          .maybeSingle(),
-        // This table is service-role only; number display requires a separate safe status endpoint later.
-        Promise.resolve({ data: null as { phone_number: string } | null }),
-      ]);
+
+    const timeoutId = window.setTimeout(() => {
       if (!active) return;
-      if (request.error) setError(request.error.message);
-      else
-        setStatus(
-          (request.data?.status as Status | undefined) ?? "not_started",
-        );
-      setAssignedNumber(number.data?.phone_number ?? null);
-      setLoading(false);
-    }
-    void load();
+
+      setLoading(true);
+      setError("");
+      setSuccess("");
+      setFields(blank);
+      setStatus("not_started");
+      setAssignedNumber(null);
+
+      async function load() {
+        const [request, number] = await Promise.all([
+          supabase
+            .from("business_sms_onboarding")
+            .select("status")
+            .eq("business_id", businessId)
+            .maybeSingle(),
+          Promise.resolve({
+            data: null as { phone_number: string } | null,
+          }),
+        ]);
+
+        if (!active) return;
+
+        if (request.error) {
+          setError(request.error.message);
+        } else {
+          setStatus(
+            (request.data?.status as Status | undefined) ?? "not_started",
+          );
+        }
+
+        setAssignedNumber(number.data?.phone_number ?? null);
+        setLoading(false);
+      }
+
+      void load();
+    }, 0);
+
     return () => {
       active = false;
+      window.clearTimeout(timeoutId);
     };
   }, [businessId]);
 
