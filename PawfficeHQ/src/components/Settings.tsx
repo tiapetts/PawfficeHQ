@@ -1,14 +1,25 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import { supabase } from "../lib/supabase";
 import BusinessModules from "./BusinessModules";
 import SquareConnection from "./SquareConnection";
+import SmsOnboarding from "./SmsOnboarding";
 import "./Settings.css";
 
 type SettingsProps = {
   businessId: string;
   readOnly?: boolean;
   onSaved?: (businessName: string, logoUrl: string | null) => void;
-  onModulesChanged?: (enabled: Array<"grooming"|"pet_sitting"|"boarding_daycare"|"veterinary">) => void;
+  onModulesChanged?: (
+    enabled: Array<
+      "grooming" | "pet_sitting" | "boarding_daycare" | "veterinary"
+    >,
+  ) => void;
 };
 
 type DayHours = { open: boolean; start: string; end: string };
@@ -51,6 +62,17 @@ type NotificationSettings = {
   initial_reminder_hours: 24 | 48;
   one_hour_reminder_enabled: boolean;
   reminder_message_template: string;
+};
+
+type ReminderSchedule = {
+  id: string;
+  business_id: string;
+  minutes_before: number;
+  message_type: "reminder" | "confirmation";
+  message_template: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
 };
 
 type PushState =
@@ -191,8 +213,10 @@ function contrastText(hex: string) {
 
 export function applyBusinessTheme(primary: string, accent: string) {
   // Automatically upgrade businesses still using the original Pawffice colors.
-  const resolvedPrimary = primary.toLowerCase() === "#183f37" ? "#00b4d8" : primary;
-  const resolvedAccent = accent.toLowerCase() === "#32685c" ? "#0077b6" : accent;
+  const resolvedPrimary =
+    primary.toLowerCase() === "#183f37" ? "#00b4d8" : primary;
+  const resolvedAccent =
+    accent.toLowerCase() === "#32685c" ? "#0077b6" : accent;
   const root = document.documentElement;
   root.style.setProperty("--brand-primary", resolvedPrimary);
   root.style.setProperty("--brand-accent", resolvedAccent);
@@ -200,7 +224,12 @@ export function applyBusinessTheme(primary: string, accent: string) {
   root.style.setProperty("--brand-on-accent", contrastText(resolvedAccent));
 }
 
-function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: SettingsProps) {
+function Settings({
+  businessId,
+  readOnly = false,
+  onSaved,
+  onModulesChanged,
+}: SettingsProps) {
   const [form, setForm] = useState<SettingsForm>(defaults);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -211,6 +240,38 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
   const [stripeConnecting, setStripeConnecting] = useState(false);
   const [notificationSettings, setNotificationSettings] =
     useState<NotificationSettings>(defaultNotificationSettings);
+
+  const [reminderSchedules, setReminderSchedules] = useState<
+    ReminderSchedule[]
+  >([]);
+
+  const [editingReminderId, setEditingReminderId] = useState<string | null>(
+    null,
+  );
+
+  const [editReminderDays, setEditReminderDays] = useState(0);
+
+  const [editReminderType, setEditReminderType] = useState<
+    "reminder" | "confirmation"
+  >("reminder");
+
+  const [editReminderMessage, setEditReminderMessage] = useState("");
+
+  const [reminderSchedulesLoading, setReminderSchedulesLoading] =
+    useState(true);
+
+  const [reminderSchedulesSaving, setReminderSchedulesSaving] = useState(false);
+
+  const [newReminderDays, setNewReminderDays] = useState(7);
+
+  const [newReminderType, setNewReminderType] = useState<
+    "reminder" | "confirmation"
+  >("confirmation");
+
+  const [newReminderMessage, setNewReminderMessage] = useState(
+    "Hi {client_first_name}, {pet_names} has an appointment with {business_name} on {appointment_date} at {appointment_time}. Reply YES to confirm.",
+  );
+
   const [notificationLoading, setNotificationLoading] = useState(true);
   const [notificationSaving, setNotificationSaving] = useState(false);
   const [pushChanging, setPushChanging] = useState(false);
@@ -290,6 +351,234 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
     value: NotificationSettings[K],
   ) {
     setNotificationSettings((current) => ({ ...current, [key]: value }));
+  }
+
+  const loadReminderSchedules = useCallback(async () => {
+    if (!businessId) {
+      setReminderSchedules([]);
+      setReminderSchedulesLoading(false);
+      return;
+    }
+
+    setReminderSchedulesLoading(true);
+
+    try {
+      const { data, error } = await supabase
+        .from("business_appointment_reminder_schedule")
+        .select("*")
+        .eq("business_id", businessId)
+        .order("minutes_before", { ascending: false });
+
+      if (error) throw error;
+
+      setReminderSchedules((data ?? []) as ReminderSchedule[]);
+    } catch (error) {
+      console.error("Failed to load reminder schedules:", error);
+      setReminderSchedules([]);
+    } finally {
+      setReminderSchedulesLoading(false);
+    }
+  }, [businessId]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadReminderSchedules();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadReminderSchedules]);
+  async function addReminderSchedule() {
+    if (readOnly || reminderSchedulesSaving) return;
+
+    const minutesBefore = newReminderDays * 1440;
+
+    if (
+      !Number.isInteger(newReminderDays) ||
+      newReminderDays < 0 ||
+      newReminderDays > 30
+    ) {
+      setMessage("Choose a number of days between 0 and 30.");
+      setIsError(true);
+      return;
+    }
+
+    if (!newReminderMessage.trim()) {
+      setMessage("Please enter a reminder message.");
+      setIsError(true);
+      return;
+    }
+
+    setReminderSchedulesSaving(true);
+    setMessage("");
+    setIsError(false);
+
+    try {
+      const { error } = await supabase
+        .from("business_appointment_reminder_schedule")
+        .insert({
+          business_id: businessId,
+          minutes_before: minutesBefore,
+          message_type: newReminderType,
+          message_template: newReminderMessage.trim(),
+          enabled: true,
+        });
+
+      if (error) throw error;
+
+      await loadReminderSchedules();
+      setMessage("Custom reminder schedule added.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not add reminder schedule.",
+      );
+      setIsError(true);
+    } finally {
+      setReminderSchedulesSaving(false);
+    }
+  }
+
+  function startEditingReminder(schedule: ReminderSchedule) {
+    if (readOnly || reminderSchedulesSaving) return;
+
+    setEditingReminderId(schedule.id);
+    setEditReminderDays(schedule.minutes_before / 1440);
+    setEditReminderType(schedule.message_type);
+    setEditReminderMessage(schedule.message_template);
+  }
+
+  function cancelEditingReminder() {
+    setEditingReminderId(null);
+    setEditReminderDays(0);
+    setEditReminderType("reminder");
+    setEditReminderMessage("");
+  }
+
+  async function saveEditedReminder(schedule: ReminderSchedule) {
+    if (
+      readOnly ||
+      reminderSchedulesSaving ||
+      editingReminderId !== schedule.id
+    )
+      return;
+
+    if (
+      !Number.isInteger(editReminderDays) ||
+      editReminderDays < 0 ||
+      editReminderDays > 30
+    ) {
+      setMessage("Choose a whole number of days between 0 and 30.");
+      setIsError(true);
+      return;
+    }
+
+    if (!editReminderMessage.trim()) {
+      setMessage("Please enter a reminder message.");
+      setIsError(true);
+      return;
+    }
+
+    if (editReminderMessage.trim().length > 600) {
+      setMessage("Reminder messages must be 600 characters or fewer.");
+      setIsError(true);
+      return;
+    }
+
+    const minutesBefore = editReminderDays * 1440;
+    if (
+      reminderSchedules.some(
+        (item) =>
+          item.id !== schedule.id && item.minutes_before === minutesBefore,
+      )
+    ) {
+      setMessage(
+        "Another reminder already uses that schedule. Choose a different number of days.",
+      );
+      setIsError(true);
+      return;
+    }
+
+    setReminderSchedulesSaving(true);
+    setMessage("");
+    setIsError(false);
+
+    try {
+      const { data, error } = await supabase
+        .from("business_appointment_reminder_schedule")
+        .update({
+          minutes_before: minutesBefore,
+          message_type: editReminderType,
+          message_template: editReminderMessage.trim(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", schedule.id)
+        .eq("business_id", businessId)
+        .select("id");
+
+      if (error) throw error;
+      if (!data?.length) {
+        throw new Error(
+          "The reminder could not be updated. Please check your permissions.",
+        );
+      }
+
+      await loadReminderSchedules();
+      cancelEditingReminder();
+      setMessage("Reminder schedule updated successfully.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not update reminder schedule.",
+      );
+      setIsError(true);
+    } finally {
+      setReminderSchedulesSaving(false);
+    }
+  }
+
+  async function removeReminderSchedule(schedule: ReminderSchedule) {
+    if (readOnly || reminderSchedulesSaving) return;
+
+    const confirmed = window.confirm(
+      `Remove the reminder scheduled ${schedule.minutes_before / 1440} day(s) before the appointment?\n\nThis cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    setReminderSchedulesSaving(true);
+    setMessage("");
+    setIsError(false);
+
+    try {
+      const { data, error } = await supabase
+        .from("business_appointment_reminder_schedule")
+        .delete()
+        .eq("id", schedule.id)
+        .eq("business_id", businessId)
+        .select("id");
+
+      if (error) throw error;
+
+      if (!data?.length) {
+        throw new Error(
+          "The reminder could not be removed. Please check your permissions.",
+        );
+      }
+
+      await loadReminderSchedules();
+      setMessage("Reminder schedule removed successfully.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not remove reminder schedule.",
+      );
+      setIsError(true);
+    } finally {
+      setReminderSchedulesSaving(false);
+    }
   }
 
   async function saveNotificationSettings() {
@@ -716,7 +1005,11 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
       )}
 
       <div className="settings-layout">
-        <BusinessModules businessId={businessId} readOnly={readOnly} onChanged={onModulesChanged} />
+        <BusinessModules
+          businessId={businessId}
+          readOnly={readOnly}
+          onChanged={onModulesChanged}
+        />
         <SquareConnection businessId={businessId} readOnly={readOnly} />
         <section className="dashboard-panel settings-section">
           <div>
@@ -1128,17 +1421,35 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
                     type="checkbox"
                     disabled={readOnly}
                     checked={notificationSettings.client_sms_reminders_enabled}
-                    onChange={(event) => updateNotification("client_sms_reminders_enabled", event.target.checked)}
+                    onChange={(event) =>
+                      updateNotification(
+                        "client_sms_reminders_enabled",
+                        event.target.checked,
+                      )
+                    }
                   />
-                  <span><strong>Send automatic client reminders</strong><small>Send the first reminder before each eligible appointment.</small></span>
+                  <span>
+                    <strong>Send automatic client reminders</strong>
+                    <small>
+                      Send the first reminder before each eligible appointment.
+                    </small>
+                  </span>
                 </label>
                 <div className="settings-form-grid">
                   <label>
                     First reminder
                     <select
-                      disabled={readOnly || !notificationSettings.client_sms_reminders_enabled}
+                      disabled={
+                        readOnly ||
+                        !notificationSettings.client_sms_reminders_enabled
+                      }
                       value={notificationSettings.initial_reminder_hours}
-                      onChange={(event) => updateNotification("initial_reminder_hours", Number(event.target.value) as 24 | 48)}
+                      onChange={(event) =>
+                        updateNotification(
+                          "initial_reminder_hours",
+                          Number(event.target.value) as 24 | 48,
+                        )
+                      }
                     >
                       <option value={24}>24 hours before</option>
                       <option value={48}>48 hours before</option>
@@ -1147,11 +1458,24 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
                   <label className="client-reminder-toggle compact">
                     <input
                       type="checkbox"
-                      disabled={readOnly || !notificationSettings.client_sms_reminders_enabled}
+                      disabled={
+                        readOnly ||
+                        !notificationSettings.client_sms_reminders_enabled
+                      }
                       checked={notificationSettings.one_hour_reminder_enabled}
-                      onChange={(event) => updateNotification("one_hour_reminder_enabled", event.target.checked)}
+                      onChange={(event) =>
+                        updateNotification(
+                          "one_hour_reminder_enabled",
+                          event.target.checked,
+                        )
+                      }
                     />
-                    <span><strong>One-hour reminder</strong><small>Send a second text one hour before the appointment.</small></span>
+                    <span>
+                      <strong>One-hour reminder</strong>
+                      <small>
+                        Send a second text one hour before the appointment.
+                      </small>
+                    </span>
                   </label>
                 </div>
                 <label>
@@ -1159,12 +1483,253 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
                   <textarea
                     rows={4}
                     maxLength={600}
-                    disabled={readOnly || !notificationSettings.client_sms_reminders_enabled}
+                    disabled={
+                      readOnly ||
+                      !notificationSettings.client_sms_reminders_enabled
+                    }
                     value={notificationSettings.reminder_message_template}
-                    onChange={(event) => updateNotification("reminder_message_template", event.target.value)}
+                    onChange={(event) =>
+                      updateNotification(
+                        "reminder_message_template",
+                        event.target.value,
+                      )
+                    }
                   />
-                  <small>Available: {"{client_first_name}"}, {"{business_name}"}, {"{pet_names}"}, {"{appointment_date}"}, {"{appointment_time}"}. Keep “Reply C to confirm” in the message.</small>
+                  <small>
+                    Available: {"{client_first_name}"}, {"{business_name}"},{" "}
+                    {"{pet_names}"}, {"{appointment_date}"},{" "}
+                    {"{appointment_time}"}. Keep “Reply C to confirm” in the
+                    message.
+                  </small>
                 </label>
+              </div>
+
+              <div className="client-reminder-settings">
+                <div>
+                  <p className="eyebrow">Custom reminder schedules</p>
+                  <h4>Scheduled client messages</h4>
+                  <p className="settings-help">
+                    Manage when clients receive appointment reminders and
+                    confirmation requests.
+                  </p>
+                </div>
+
+                <div className="settings-form-grid">
+                  <label>
+                    Days before appointment
+                    <input
+                      type="number"
+                      min={0}
+                      max={30}
+                      step={1}
+                      disabled={readOnly || reminderSchedulesSaving}
+                      value={newReminderDays}
+                      onChange={(event) =>
+                        setNewReminderDays(Number(event.target.value))
+                      }
+                    />
+                    <small>0 = day of appointment, 7 = one week before.</small>
+                  </label>
+
+                  <label>
+                    Message type
+                    <select
+                      disabled={readOnly || reminderSchedulesSaving}
+                      value={newReminderType}
+                      onChange={(event) =>
+                        setNewReminderType(
+                          event.target.value as "reminder" | "confirmation",
+                        )
+                      }
+                    >
+                      <option value="confirmation">Confirmation request</option>
+                      <option value="reminder">Appointment reminder</option>
+                    </select>
+                  </label>
+
+                  <label className="settings-full">
+                    Text message
+                    <textarea
+                      rows={4}
+                      maxLength={600}
+                      disabled={readOnly || reminderSchedulesSaving}
+                      value={newReminderMessage}
+                      onChange={(event) =>
+                        setNewReminderMessage(event.target.value)
+                      }
+                    />
+                    <small>
+                      Available: {"{client_first_name}"}, {"{business_name}"},{" "}
+                      {"{pet_names}"}, {"{appointment_date}"},{" "}
+                      {"{appointment_time}"}.
+                    </small>
+                  </label>
+                </div>
+
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={reminderSchedulesSaving}
+                    onClick={() => void addReminderSchedule()}
+                  >
+                    {reminderSchedulesSaving
+                      ? "Adding reminder..."
+                      : "Add reminder schedule"}
+                  </button>
+                )}
+
+                {reminderSchedulesLoading ? (
+                  <p>Loading reminder schedules...</p>
+                ) : reminderSchedules.length === 0 ? (
+                  <p className="settings-help">
+                    No custom reminders configured yet.
+                  </p>
+                ) : (
+                  <div className="reminder-schedule-list">
+                    {reminderSchedules.map((schedule) => (
+                      <div key={schedule.id} className="reminder-schedule-item">
+                        <div className="reminder-schedule-row">
+                          <strong>
+                            {schedule.minutes_before % 1440 === 0
+                              ? `${schedule.minutes_before / 1440} day(s) before`
+                              : `${schedule.minutes_before / 60} hour(s) before`}
+                          </strong>
+                          <p className="settings-help">
+                            {schedule.message_type === "confirmation"
+                              ? "Confirmation request"
+                              : "Appointment reminder"}
+                            {" — "}
+                            {schedule.enabled ? "Enabled" : "Disabled"}
+                          </p>
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              className="reminder-edit-button"
+                              onClick={() =>
+                                editingReminderId === schedule.id
+                                  ? cancelEditingReminder()
+                                  : startEditingReminder(schedule)
+                              }
+                              disabled={reminderSchedulesSaving}
+                            >
+                              ✏️{" "}
+                              {editingReminderId === schedule.id
+                                ? "Cancel Edit"
+                                : "Edit"}
+                            </button>
+                          )}
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              className="reminder-remove-button"
+                              onClick={() =>
+                                void removeReminderSchedule(schedule)
+                              }
+                              disabled={reminderSchedulesSaving}
+                              title="Remove this reminder"
+                              aria-label="Remove this reminder"
+                            >
+                              <span aria-hidden="true">✕</span> Remove
+                            </button>
+                          )}
+                        </div>
+
+                        {editingReminderId === schedule.id && !readOnly && (
+                          <div
+                            className="reminder-edit-panel"
+                            style={{
+                              display: "grid",
+                              gap: 12,
+                              padding: 16,
+                              border: "1px solid #d2ddda",
+                              borderTop: "none",
+                              borderRadius: "0 0 12px 12px",
+                              background: "#fff",
+                            }}
+                          >
+                            <label>
+                              Days before appointment
+                              <input
+                                type="number"
+                                min={0}
+                                max={30}
+                                step={1}
+                                value={editReminderDays}
+                                onChange={(e) =>
+                                  setEditReminderDays(Number(e.target.value))
+                                }
+                                disabled={reminderSchedulesSaving}
+                              />
+                            </label>
+                            <label>
+                              Message type
+                              <select
+                                value={editReminderType}
+                                onChange={(e) =>
+                                  setEditReminderType(
+                                    e.target.value as
+                                      | "reminder"
+                                      | "confirmation",
+                                  )
+                                }
+                                disabled={reminderSchedulesSaving}
+                              >
+                                <option value="confirmation">
+                                  Confirmation request
+                                </option>
+                                <option value="reminder">
+                                  Appointment reminder
+                                </option>
+                              </select>
+                            </label>
+                            <label>
+                              Text message
+                              <textarea
+                                rows={4}
+                                maxLength={600}
+                                value={editReminderMessage}
+                                onChange={(e) =>
+                                  setEditReminderMessage(e.target.value)
+                                }
+                                disabled={reminderSchedulesSaving}
+                              />
+                            </label>
+                            <div
+                              className="reminder-edit-actions"
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 10,
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={cancelEditingReminder}
+                                disabled={reminderSchedulesSaving}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                className="primary-button"
+                                onClick={() =>
+                                  void saveEditedReminder(schedule)
+                                }
+                                disabled={reminderSchedulesSaving}
+                              >
+                                {reminderSchedulesSaving
+                                  ? "Saving…"
+                                  : "Save Changes"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {!readOnly && (
@@ -1184,6 +1749,8 @@ function Settings({ businessId, readOnly = false, onSaved, onModulesChanged }: S
             </div>
           )}
         </section>
+
+        <SmsOnboarding businessId={businessId} readOnly={readOnly} />
 
         <section className="dashboard-panel settings-section">
           <div>

@@ -1,0 +1,130 @@
+.sms-admin {
+    display: grid;
+    gap: 20px;
+    margin-bottom: 32px
+}
+
+.sms-admin__heading,
+.sms-admin__request-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap
+}
+
+.sms-admin__heading h2 {
+    margin: 4px 0 8px
+}
+
+.sms-admin__heading p {
+    color: #58716e;
+    max-width: 750px
+}
+
+.sms-admin__refresh,
+.sms-admin__actions button {
+    border: 1px solid #a8c6c7;
+    background: #fff;
+    color: #15586b;
+    border-radius: 9px;
+    padding: 10px 14px;
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer
+}
+
+.sms-admin__refresh:hover,
+.sms-admin__actions button:hover:not(:disabled) {
+    background: #e8f7fa
+}
+
+.sms-admin__actions button:disabled {
+    opacity: .5;
+    cursor: default
+}
+
+.sms-admin__list {
+    display: grid;
+    gap: 18px
+}
+
+.sms-admin__request {
+    border: 1px solid #d7e5e4;
+    border-radius: 15px;
+    padding: 20px;
+    background: #fbfefe
+}
+
+.sms-admin__request h3 {
+    margin: 0 0 6px
+}
+
+.sms-admin__request small {
+    color: #607c79
+}
+
+.sms-admin__badge {
+    background: #e5f3f6;
+    color: #08607c;
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: .85rem;
+    font-weight: 700
+}
+
+.sms-admin__details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 20px 0
+}
+
+.sms-admin__details>div {
+    min-width: 0;
+    background: #f1f7f7;
+    border-radius: 10px;
+    padding: 13px
+}
+
+.sms-admin__details p {
+    overflow-wrap: anywhere;
+    margin: 7px 0 0;
+    white-space: pre-wrap
+}
+
+.sms-admin__actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    border-top: 1px solid #d7e5e4;
+    padding-top: 16px
+}
+
+.sms-admin__actions span {
+    font-weight: 700;
+    margin-right: 6px
+}
+
+.sms-admin__error {
+    color: #a32020
+}
+
+.sms-admin__notice {
+    color: #17634f
+}
+
+@media(max-width:700px) {
+    .sms-admin__details {
+        grid-template-columns: 1fr
+    }
+
+    .sms-admin__request {
+        padding: 14px
+    }
+
+    .sms-admin__actions button {
+        width: 100%
+    }
+}
