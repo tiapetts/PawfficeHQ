@@ -849,31 +849,61 @@ function Settings({
 
   async function uploadLogo(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      setMessage("Logo files must be smaller than 2 MB.");
+    // Allow selecting the same file again after an error.
+    event.target.value = "";
+    if (!file || readOnly || uploading) return;
+
+    const allowedTypes = new Set([
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/svg+xml",
+    ]);
+    if (!allowedTypes.has(file.type)) {
+      setMessage("Choose a PNG, JPG, WebP, or SVG logo.");
       setIsError(true);
       return;
     }
+    if (file.size === 0 || file.size > 2 * 1024 * 1024) {
+      setMessage("Logo files must be between 1 byte and 2 MB.");
+      setIsError(true);
+      return;
+    }
+
     setUploading(true);
     setMessage("");
-    const path = `${businessId}/logo`;
-    const { error } = await supabase.storage
-      .from("business-branding")
-      .upload(path, file, { upsert: true, contentType: file.type });
-    if (error) {
-      setMessage(error.message);
-      setIsError(true);
-      setUploading(false);
-      return;
-    }
-    const { data } = supabase.storage
-      .from("business-branding")
-      .getPublicUrl(path);
-    update("logo_url", `${data.publicUrl}?v=${Date.now()}`);
-    setUploading(false);
-    setMessage("Logo uploaded. Save settings to finish.");
     setIsError(false);
+    try {
+      const extension =
+        file.type === "image/png"
+          ? "png"
+          : file.type === "image/jpeg"
+            ? "jpg"
+            : file.type === "image/webp"
+              ? "webp"
+              : "svg";
+      const path = `${businessId}/logo.${extension}`;
+      const { error } = await supabase.storage
+        .from("business-branding")
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (error) throw error;
+
+      const { data } = supabase.storage
+        .from("business-branding")
+        .getPublicUrl(path);
+      update("logo_url", `${data.publicUrl}?v=${Date.now()}`);
+      setMessage("Logo uploaded. Save settings to finish.");
+    } catch (error) {
+      console.error("Business logo upload failed:", error);
+      setMessage(
+        error instanceof Error
+          ? `Logo upload failed: ${error.message}`
+          : "Logo upload failed. Please try again.",
+      );
+      setIsError(true);
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function save(event: FormEvent) {
