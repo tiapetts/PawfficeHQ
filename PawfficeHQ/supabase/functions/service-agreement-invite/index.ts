@@ -39,6 +39,21 @@ Deno.serve(async request => {
    if(error||!signed)return respond({error:"Unable to load agreement"},503);
    return respond({title:template.title,pdf_url:signed.signedUrl,expires_at:invitation.expires_at,signing_available:false});
   }
+  if(body.action==="signed_document"){
+   const bearer=request.headers.get("Authorization");
+   if(!bearer?.startsWith("Bearer "))return respond({error:"Unauthorized"},401);
+   const userDb=createClient(url,anon,{global:{headers:{Authorization:bearer}},auth:{persistSession:false}});
+   const {data:{user}}=await userDb.auth.getUser(bearer.slice(7));
+   if(!user)return respond({error:"Unauthorized"},401);
+   const businessId=String(body.business_id??""),requestId=String(body.request_id??"");
+   const {data:staff}=await db.from("STAFF").select("id").eq("auth_user_id",user.id).eq("business_id",businessId).eq("is_active",true).maybeSingle();
+   if(!staff)return respond({error:"Forbidden"},403);
+   const {data:signature}=await db.from("service_agreement_signature").select("signed_document_path").eq("business_id",businessId).eq("request_id",requestId).maybeSingle();
+   if(!signature)return respond({error:"Signed document not found"},404);
+   const {data:link,error:linkError}=await db.storage.from("service-agreements").createSignedUrl(signature.signed_document_path,120);
+   if(linkError||!link)return respond({error:"Unable to open document"},503);
+   return respond({url:link.signedUrl});
+  }
   if(body.action==="sign"){
    const token=String(body.token??""), signer=String(body.signer_name??"").trim(), accepted=body.accepted===true;
    const consent="I have reviewed the service agreement and agree to sign it electronically.";
