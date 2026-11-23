@@ -25,14 +25,14 @@ alter table public.service_agreement_template add constraint service_agreement_a
  references public.service_agreement_version(id,template_id,business_id) deferrable initially deferred;
 -- Prevent cross-tenant household references even for privileged writers.
 create or replace function public.validate_agreement_household()
-returns trigger language plpgsql set search_path = '' as $
+returns trigger language plpgsql set search_path = '' as $body$
 begin
  if not exists(select 1 from public."CLIENT" c where c.id = new.client_id and c.business_id = new.business_id) then
   raise exception 'Agreement client must belong to the same business';
  end if;
  return new;
 end;
-$;
+$body$;
 revoke all on function public.validate_agreement_household() from public, anon, authenticated;
 create table if not exists public.service_agreement_request (
  id uuid primary key default gen_random_uuid(),
