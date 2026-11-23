@@ -11,6 +11,18 @@ export default function ServiceAgreementProfile({ businessId, clientId }: { busi
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState("");
+  const [inviteError, setInviteError] = useState("");
+  async function createInvitation(templateId: string) {
+    setBusy(true); setInviteUrl(""); setInviteError("");
+    try {
+      const { data, error } = await supabase.functions.invoke("service-agreement-invite", { body: { action: "create", business_id: businessId, client_id: clientId, template_id: templateId } });
+      if (error || data?.error || !data?.token) throw new Error(data?.error ?? error?.message ?? "Unable to create link");
+      setInviteUrl(`${window.location.origin}/?agreement_token=${encodeURIComponent(data.token)}`);
+    } catch (cause) { setInviteError(cause instanceof Error ? cause.message : "Unable to create link"); }
+    finally { setBusy(false); }
+  }
   useEffect(() => {
     let active = true;
     async function load() {
@@ -46,8 +58,11 @@ export default function ServiceAgreementProfile({ businessId, clientId }: { busi
           <strong>{template.title}</strong>
           <p><strong>Status:</strong> {template.active_version_id ? status : "Not published"}</p>
           {signed && <p>Signed {new Date(signed.signed_at ?? signed.created_at).toLocaleDateString()}</p>}
-          <p style={{ fontSize: "0.9em" }}>Agreement sending and signing will become available after secure delivery and signing are implemented.</p>
+          {template.active_version_id && !signed && <button type="button" disabled={busy} onClick={() => void createInvitation(template.id)}>{busy ? "Creating link…" : "Create review link"}</button>}
+          <p style={{ fontSize: "0.9em" }}>Review links expire after seven days. Electronic signing and delivery are not enabled yet.</p>
         </article>;
       })}
+    {inviteUrl && <div><label>Private review link (copy and share securely)<input readOnly value={inviteUrl} onFocus={e => e.target.select()} /></label><button type="button" onClick={() => void navigator.clipboard.writeText(inviteUrl)}>Copy link</button></div>}
+    {inviteError && <p role="alert">{inviteError}</p>}
   </section>;
 }
