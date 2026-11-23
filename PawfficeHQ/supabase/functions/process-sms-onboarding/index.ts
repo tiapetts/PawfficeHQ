@@ -35,7 +35,7 @@ Deno.serve(async (request) => {
        application.use_case_description, application.consent_description]
         .every((value) => typeof value === "string" && value.trim().length > 0);
     // Never claim carrier approval or allocate a number in this stage.
-    const state = appError || !complete ? "action_required" : "awaiting_carrier";
+    const state = appError || !complete ? "action_required" : "validated";
     const { error: updateError } = await db.from("sms_onboarding_job")
       .update({ state, locked_at: null,
         last_error: appError ? "Application lookup failed" :
