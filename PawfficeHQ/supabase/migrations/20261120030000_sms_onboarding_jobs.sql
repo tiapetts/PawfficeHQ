@@ -11,6 +11,7 @@ create table if not exists public.sms_onboarding_job (
 );
 alter table public.sms_onboarding_job enable row level security;
 -- Deliberately no client write policies: only trusted backend/service role may operate jobs.
+drop policy if exists "Business staff see SMS setup progress" on public.sms_onboarding_job;
 create policy "Business staff see SMS setup progress"
 on public.sms_onboarding_job for select to authenticated
 using (exists (
@@ -38,3 +39,6 @@ for each row execute function public.enqueue_sms_onboarding_request();
 insert into public.sms_onboarding_job (business_id)
 select business_id from public.business_sms_onboarding where status = 'submitted'
 on conflict (business_id) do nothing;
+
+-- Do not grant direct queue mutations to application clients.
+revoke insert, update, delete on public.sms_onboarding_job from anon, authenticated;
