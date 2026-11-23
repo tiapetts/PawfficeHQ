@@ -14,6 +14,12 @@ export default function ServiceAgreementProfile({ businessId, clientId }: { busi
   const [busy, setBusy] = useState(false);
   const [inviteUrl, setInviteUrl] = useState("");
   const [inviteError, setInviteError] = useState("");
+  async function openSignedDocument(requestId: string) {
+    setInviteError("");
+    const {data,error:failure}=await supabase.functions.invoke("service-agreement-invite",{body:{action:"signed_document",business_id:businessId,request_id:requestId}});
+    if(failure||data?.error||!data?.url){setInviteError(data?.error??failure?.message??"Unable to open document");return;}
+    window.open(data.url,"_blank","noopener,noreferrer");
+  }
   async function createInvitation(templateId: string) {
     setBusy(true); setInviteUrl(""); setInviteError("");
     try {
@@ -57,7 +63,7 @@ export default function ServiceAgreementProfile({ businessId, clientId }: { busi
         return <article key={template.id} style={{ padding: "12px 0", borderTop: "1px solid var(--border-color, #ddd)" }}>
           <strong>{template.title}</strong>
           <p><strong>Status:</strong> {template.active_version_id ? status : "Not published"}</p>
-          {signed && <p>Signed {new Date(signed.signed_at ?? signed.created_at).toLocaleDateString()}</p>}
+          {signed && <><p>Signed {new Date(signed.signed_at ?? signed.created_at).toLocaleDateString()}</p><button type="button" onClick={() => void openSignedDocument(signed.id)}>View signed PDF</button></>}
           {template.active_version_id && !signed && <button type="button" disabled={busy} onClick={() => void createInvitation(template.id)}>{busy ? "Creating link…" : "Create review link"}</button>}
           <p style={{ fontSize: "0.9em" }}>Review links expire after seven days. Electronic signing and delivery are not enabled yet.</p>
         </article>;
