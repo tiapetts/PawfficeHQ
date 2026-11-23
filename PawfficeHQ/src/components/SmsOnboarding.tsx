@@ -87,7 +87,6 @@ export default function SmsOnboarding({
           );
         }
 
-        if (number.error) setError((prev) => prev || number.error.message);
         setAssignedNumber(number.data?.phone_number ?? null);
         if (!job.error) setJobState(job.data?.state ?? null);
         setLoading(false);
