@@ -9,6 +9,7 @@ import { supabase } from "../lib/supabase";
 import BusinessModules from "./BusinessModules";
 import SquareConnection from "./SquareConnection";
 import SmsOnboarding from "./SmsOnboarding";
+import ServiceAgreementSettings from "./ServiceAgreementSettings";
 import "./Settings.css";
 
 type SettingsProps = {
@@ -986,6 +987,7 @@ function Settings({
   if (loading) return <p>Loading settings…</p>;
 
   return (
+    <>
     <form onSubmit={save}>
       <header className="dashboard-header">
         <div>
@@ -1985,6 +1987,8 @@ function Settings({
         </section>
       </div>
     </form>
+    <ServiceAgreementSettings businessId={businessId} readOnly={readOnly} />
+    </>
   );
 }
 
