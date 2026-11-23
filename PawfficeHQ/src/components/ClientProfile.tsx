@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { Client } from "./Clients";
 import ProfilePhoto from "./ProfilePhoto";
+import ServiceAgreementProfile from "./ServiceAgreementProfile";
 import "./ClientProfile.css";
 
 type Pet = {
@@ -61,6 +62,7 @@ export default function ClientProfile({ businessId, client, onBack, onEdit }: Pr
           : "Not required"}{client.booking_deposit_reason && <p>{client.booking_deposit_reason}</p>}</dd></div>
       </dl>
     </section>
+    <ServiceAgreementProfile businessId={businessId} clientId={client.id} />
     <section className="dashboard-panel" aria-label="Client pets">
       <h3>Animals in this household</h3>
       {loading ? <p role="status">Loading pets…</p> : error ? <p role="alert">{error}</p> :
