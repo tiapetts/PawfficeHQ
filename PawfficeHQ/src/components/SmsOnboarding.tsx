@@ -44,7 +44,6 @@ export default function SmsOnboarding({
   readOnly?: boolean;
 }) {
   const [status, setStatus] = useState<Status>("not_started");
-  const [assignedNumber, setAssignedNumber] = useState<string | null>(null);
   const [jobState, setJobState] = useState<string | null>(null);
   const [fields, setFields] = useState<RequestFields>(blank);
   const [loading, setLoading] = useState(true);
@@ -63,17 +62,15 @@ export default function SmsOnboarding({
       setSuccess("");
       setFields(blank);
       setStatus("not_started");
-      setAssignedNumber(null);
       setJobState(null);
 
       async function load() {
-        const [request, number, job] = await Promise.all([
+        const [request, job] = await Promise.all([
           supabase
             .from("business_sms_onboarding")
             .select("status")
             .eq("business_id", businessId)
             .maybeSingle(),
-          Promise.resolve({ data: null as { phone_number: string } | null, error: null }),
           supabase.from("sms_onboarding_job").select("state").eq("business_id", businessId).maybeSingle(),
         ]);
 
@@ -87,7 +84,6 @@ export default function SmsOnboarding({
           );
         }
 
-        setAssignedNumber(number.data?.phone_number ?? null);
         if (!job.error) setJobState(job.data?.state ?? null);
         setLoading(false);
       }
@@ -144,25 +140,18 @@ export default function SmsOnboarding({
           </p>
         </div>
         <span
-          className={`sms-setup__status sms-setup__status--${assignedNumber ? "approved" : status}`}
+          className={`sms-setup__status sms-setup__status--${status}`}
         >
           <span className="sms-setup__dot" aria-hidden="true" />
           {loading
             ? "Checking setup"
-            : assignedNumber
-              ? "Number assigned"
-              : labels[status]}
+            : labels[status]}
         </span>
       </div>
       {loading ? (
         <p className="sms-setup__notice">Checking messaging setup…</p>
       ) : (
         <div className="sms-setup__body">
-          {assignedNumber && (
-            <p className="sms-setup__notice">
-              <strong>Business number:</strong> {assignedNumber}
-            </p>
-          )}
           {error && (
             <p className="sms-setup__error" role="alert">
               {error}
@@ -173,7 +162,7 @@ export default function SmsOnboarding({
               {success}
             </p>
           )}
-          {status === "not_started" && !assignedNumber ? (
+          {status === "not_started" ? (
             <div className="sms-setup__form">
               <div className="sms-setup__intro">
                 <h4>Request your business number</h4>
@@ -258,11 +247,11 @@ export default function SmsOnboarding({
                 </button>
               </div>
             </div>
-          ) : !assignedNumber ? (
+          ) : (
             <div className="sms-setup__notice">
-              <strong>{jobState === "action_required" || jobState === "failed" ? "Setup needs attention." : "Setup in progress."}</strong> {jobState === "awaiting_carrier" ? "Waiting for carrier approval." : jobState === "action_required" || jobState === "failed" ? "Please contact support for assistance." : "We are preparing your business texting service. Number assignment and messaging activation require carrier approval."}
+              <strong>{jobState === "action_required" || jobState === "failed" ? "Setup needs attention." : "Setup in progress."}</strong> {jobState === "awaiting_carrier" ? "Waiting for carrier approval." : jobState === "validated" ? "Your application details have been checked. Carrier registration and number assignment have not started." : jobState === "action_required" || jobState === "failed" ? "Please contact support for assistance." : "We are preparing your business texting service. Number assignment and messaging activation require carrier approval."}
             </div>
-          ) : null}
+          )}
         </div>
       )}
     </section>
