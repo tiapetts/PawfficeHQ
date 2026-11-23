@@ -23,6 +23,17 @@ create table if not exists public.service_agreement_version (
 alter table public.service_agreement_template add constraint service_agreement_active_version_fk
  foreign key(active_version_id,id,business_id)
  references public.service_agreement_version(id,template_id,business_id) deferrable initially deferred;
+-- Prevent cross-tenant household references even for privileged writers.
+create or replace function public.validate_agreement_household()
+returns trigger language plpgsql set search_path = '' as $
+begin
+ if not exists(select 1 from public."CLIENT" c where c.id = new.client_id and c.business_id = new.business_id) then
+  raise exception 'Agreement client must belong to the same business';
+ end if;
+ return new;
+end;
+$;
+revoke all on function public.validate_agreement_household() from public, anon, authenticated;
 create table if not exists public.service_agreement_request (
  id uuid primary key default gen_random_uuid(),
  business_id uuid not null,
@@ -41,6 +52,8 @@ create table if not exists public.service_agreement_request (
  foreign key(version_id,template_id,business_id) references public.service_agreement_version(id,template_id,business_id) on delete restrict,
  unique(id,business_id,client_id)
 );
+create trigger validate_agreement_request_household before insert or update on public.service_agreement_request
+for each row execute function public.validate_agreement_household();
 create table if not exists public.service_agreement_signature (
  id uuid primary key default gen_random_uuid(),
  request_id uuid not null unique,
