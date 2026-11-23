@@ -45,6 +45,7 @@ export default function SmsOnboarding({
 }) {
   const [status, setStatus] = useState<Status>("not_started");
   const [assignedNumber, setAssignedNumber] = useState<string | null>(null);
+  const [jobState, setJobState] = useState<string | null>(null);
   const [fields, setFields] = useState<RequestFields>(blank);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -63,17 +64,17 @@ export default function SmsOnboarding({
       setFields(blank);
       setStatus("not_started");
       setAssignedNumber(null);
+      setJobState(null);
 
       async function load() {
-        const [request, number] = await Promise.all([
+        const [request, number, job] = await Promise.all([
           supabase
             .from("business_sms_onboarding")
             .select("status")
             .eq("business_id", businessId)
             .maybeSingle(),
-          Promise.resolve({
-            data: null as { phone_number: string } | null,
-          }),
+          supabase.from("business_sms_number").select("phone_number").eq("business_id", businessId).maybeSingle(),
+          supabase.from("sms_onboarding_job").select("state").eq("business_id", businessId).maybeSingle(),
         ]);
 
         if (!active) return;
@@ -86,7 +87,9 @@ export default function SmsOnboarding({
           );
         }
 
+        if (number.error) setError((prev) => prev || number.error.message);
         setAssignedNumber(number.data?.phone_number ?? null);
+        if (!job.error) setJobState(job.data?.state ?? null);
         setLoading(false);
       }
 
@@ -121,7 +124,7 @@ export default function SmsOnboarding({
     else {
       setStatus("submitted");
       setSuccess(
-        "Request submitted. Messaging is not yet active; we will review registration details first.",
+        "Request submitted. Setup is queued automatically; messaging will activate after required carrier approval.",
       );
     }
     setSaving(false);
@@ -258,8 +261,7 @@ export default function SmsOnboarding({
             </div>
           ) : !assignedNumber ? (
             <div className="sms-setup__notice">
-              <strong>Request received.</strong> Registration review and number
-              assignment must be completed before messaging can begin.
+              <strong>{jobState === "action_required" || jobState === "failed" ? "Setup needs attention." : "Setup in progress."}</strong> {jobState === "awaiting_carrier" ? "Waiting for carrier approval." : jobState === "action_required" || jobState === "failed" ? "Please contact support for assistance." : "We are preparing your business texting service. Number assignment and messaging activation require carrier approval."}
             </div>
           ) : null}
         </div>
