@@ -1,7 +1,7 @@
 -- Stage 1: durable, idempotent SMS onboarding jobs. This does NOT buy phone numbers.
 create table if not exists public.sms_onboarding_job (
   business_id uuid primary key references public.business_sms_onboarding(business_id) on delete cascade,
-  state text not null default 'queued' check (state in ('queued','processing','awaiting_carrier','ready','action_required','failed')),
+  state text not null default 'queued' check (state in ('queued','processing','validated','awaiting_carrier','ready','action_required','failed')),
   attempt_count integer not null default 0 check (attempt_count >= 0),
   next_attempt_at timestamptz not null default now(),
   last_error text,
