@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
+import AgreementReview from "./components/AgreementReview.tsx";
 import { Analytics } from "@vercel/analytics/react";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import { initializeMonitoring } from "./lib/monitoring.ts";
@@ -11,6 +12,7 @@ initializeMonitoring();
 registerPawfficeServiceWorker();
 
 const isStaging = import.meta.env.VITE_APP_ENV === "staging";
+const agreementToken = new URLSearchParams(window.location.search).get("agreement_token");
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -20,7 +22,7 @@ createRoot(document.getElementById("root")!).render(
           STAGING — TEST DATA ONLY
         </div>
       ) : null}
-      <App />
+      {agreementToken ? <AgreementReview token={agreementToken} /> : <App />}
       <Analytics />
     </ErrorBoundary>
   </StrictMode>,
