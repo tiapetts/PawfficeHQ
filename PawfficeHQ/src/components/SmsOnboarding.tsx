@@ -73,7 +73,7 @@ export default function SmsOnboarding({
             .select("status")
             .eq("business_id", businessId)
             .maybeSingle(),
-          supabase.from("business_sms_number").select("phone_number").eq("business_id", businessId).maybeSingle(),
+          Promise.resolve({ data: null as { phone_number: string } | null, error: null }),
           supabase.from("sms_onboarding_job").select("state").eq("business_id", businessId).maybeSingle(),
         ]);
 
