@@ -6,12 +6,21 @@ type Template = { id: string; title: string; active_version_id: string | null; v
 type Request = { id: string; template_id: string; version_id: string; status: string; signed_at: string | null; created_at: string };
 type Signature = { request_id: string; signed_at: string; signer_name: string };
 
+// Read wall-clock time only in the timer subscription, never during render.
+function scheduleExpiration(expiration: number, onTick: (timestamp: number) => void) {
+  // Browser timers cannot represent delays longer than a signed 32-bit integer.
+  const delay = Math.min(2_147_483_647, Math.max(1, expiration - Date.now()));
+  const timer = window.setTimeout(() => onTick(Date.now()), delay);
+  return () => window.clearTimeout(timer);
+}
+
 export default function ServiceAgreementProfile({ businessId, clientId }: { businessId: string; clientId: number }) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [requests, setRequests] = useState<Request[]>([]);
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [inviteUrl, setInviteUrl] = useState("");
   const [inviteError, setInviteError] = useState("");
@@ -43,6 +52,7 @@ export default function ServiceAgreementProfile({ businessId, clientId }: { busi
       if (!active) return;
       if (t.error || r.error || s.error) setError("Service agreements are not available yet. The database setup may still be pending.");
       else {
+        setNow(Date.now());
         setTemplates(t.data ?? []);
         setRequests(r.data ?? []);
         setSignatures(s.data ?? []);
@@ -52,16 +62,27 @@ export default function ServiceAgreementProfile({ businessId, clientId }: { busi
     void load();
     return () => { active = false; };
   }, [businessId,clientId]);
+  const agreements = templates.map(template => {
+    const latest = requests.find(r => r.template_id === template.id);
+    const signedRecord = requests.find(r => r.template_id === template.id && r.version_id === template.active_version_id && r.status === "signed" && signatures.some(s => s.request_id === r.id));
+    const signedAt = signedRecord && (signatures.find(s => s.request_id === signedRecord.id)?.signed_at ?? signedRecord.signed_at);
+    const expiration = signedAt ? new Date(new Date(signedAt).getTime() + template.validity_days * 86400000) : null;
+    return { template, latest, signedRecord, signedAt, expiration };
+  });
+  const nextExpiration = agreements.reduce((next, { expiration }) => {
+    const timestamp = expiration?.getTime();
+    return timestamp !== undefined && timestamp > now ? Math.min(next, timestamp) : next;
+  }, Infinity);
+  useEffect(() => {
+    if (loading || error || !Number.isFinite(nextExpiration)) return;
+    return scheduleExpiration(nextExpiration, setNow);
+  }, [loading, error, nextExpiration, now]);
   return <section className="dashboard-panel agreement-profile" aria-label="Service agreements">
     <h3>Service agreements</h3>
     {loading ? <p role="status">Checking agreement status…</p> : error ? <p role="status">{error}</p> :
-      templates.length === 0 ? <p>No service agreement has been published for this business yet.</p> :
-      templates.map(template => {
-        const latest = requests.find(r => r.template_id === template.id);
-        const signedRecord = requests.find(r => r.template_id === template.id && r.version_id === template.active_version_id && r.status === "signed" && signatures.some(s => s.request_id === r.id));
-        const signedAt = signedRecord && (signatures.find(s => s.request_id === signedRecord.id)?.signed_at ?? signedRecord.signed_at);
-        const expiration = signedAt ? new Date(new Date(signedAt).getTime() + template.validity_days * 86400000) : null;
-        const expired = Boolean(expiration && expiration.getTime() <= Date.now());
+      agreements.length === 0 ? <p>No service agreement has been published for this business yet.</p> :
+      agreements.map(({ template, latest, signedRecord, signedAt, expiration }) => {
+        const expired = Boolean(expiration && expiration.getTime() <= now);
         const signed = signedRecord && !expired ? signedRecord : null;
         const prior = requests.some(r => r.template_id === template.id && r.status === "signed");
         const status = signed ? "Signed" : latest?.status === "sent" || latest?.status === "viewed" ? "Pending signature" : expired ? "Expired" : prior ? "Outdated agreement" : "Not signed";
