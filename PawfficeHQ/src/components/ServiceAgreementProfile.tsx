@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import "./ServiceAgreement.css";
 
 type Template = { id: string; title: string; active_version_id: string | null };
 type Request = { id: string; template_id: string; version_id: string; status: string; signed_at: string | null; created_at: string };
@@ -51,7 +52,7 @@ export default function ServiceAgreementProfile({ businessId, clientId }: { busi
     void load();
     return () => { active = false; };
   }, [businessId,clientId]);
-  return <section className="dashboard-panel" aria-label="Service agreements">
+  return <section className="dashboard-panel agreement-profile" aria-label="Service agreements">
     <h3>Service agreements</h3>
     {loading ? <p role="status">Checking agreement status…</p> : error ? <p role="status">{error}</p> :
       templates.length === 0 ? <p>No service agreement has been published for this business yet.</p> :
@@ -60,15 +61,15 @@ export default function ServiceAgreementProfile({ businessId, clientId }: { busi
         const signed = requests.find(r => r.template_id === template.id && r.version_id === template.active_version_id && r.status === "signed" && signatures.some(s => s.request_id === r.id));
         const prior = requests.some(r => r.template_id === template.id && r.status === "signed");
         const status = signed ? "Signed" : latest?.status === "sent" || latest?.status === "viewed" ? "Pending signature" : prior ? "Outdated agreement" : "Not signed";
-        return <article key={template.id} style={{ padding: "12px 0", borderTop: "1px solid var(--border-color, #ddd)" }}>
-          <strong>{template.title}</strong>
-          <p><strong>Status:</strong> {template.active_version_id ? status : "Not published"}</p>
-          {signed && <><p>Signed {new Date(signed.signed_at ?? signed.created_at).toLocaleDateString()}</p><button type="button" onClick={() => void openSignedDocument(signed.id)}>View signed PDF</button></>}
-          {template.active_version_id && !signed && <button type="button" disabled={busy} onClick={() => void createInvitation(template.id)}>{busy ? "Creating link…" : "Create review link"}</button>}
-          <p style={{ fontSize: "0.9em" }}>Review links expire after seven days. Electronic signing and delivery are not enabled yet.</p>
+        const statusType = !template.active_version_id ? "unpublished" : signed ? "signed" : status === "Pending signature" ? "pending" : status === "Outdated agreement" ? "outdated" : "unsigned";
+        return <article key={template.id} className="agreement-item">
+          <div className="agreement-item-header"><strong className="agreement-title">{template.title}</strong><span className={`agreement-status agreement-status--${statusType}`}>{template.active_version_id ? status : "Not published"}</span></div>
+          {signed && <><p className="agreement-meta">Signed {new Date(signed.signed_at ?? signed.created_at).toLocaleDateString()}</p><div className="agreement-actions"><button type="button" className="agreement-button agreement-button--secondary" onClick={() => void openSignedDocument(signed.id)}>View signed PDF</button></div></>}
+          {template.active_version_id && !signed && <button type="button" className="agreement-button agreement-button--primary" disabled={busy} onClick={() => void createInvitation(template.id)}>{busy ? "Creating link…" : "Create signing link"}</button>}
+          <p className="agreement-note">Signing links expire after seven days. Share links privately; automatic email and SMS delivery are not available yet.</p>
         </article>;
       })}
-    {inviteUrl && <div><label>Private review link (copy and share securely)<input readOnly value={inviteUrl} onFocus={e => e.target.select()} /></label><button type="button" onClick={() => void navigator.clipboard.writeText(inviteUrl)}>Copy link</button></div>}
+    {inviteUrl && <div className="agreement-link-box"><label>Private signing link (share securely)<input readOnly value={inviteUrl} onFocus={e => e.target.select()} /></label><div className="agreement-actions"><button type="button" className="agreement-button agreement-button--secondary" onClick={() => void navigator.clipboard.writeText(inviteUrl)}>Copy link</button></div></div>}
     {inviteError && <p role="alert">{inviteError}</p>}
   </section>;
 }
