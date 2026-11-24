@@ -21,6 +21,8 @@ Deno.serve(async (request) => {
     const title = String(form.get("title") ?? "").trim();
     const templateId = String(form.get("template_id") ?? "") || null;
     const renewal = String(form.get("requires_renewal") ?? "true") !== "false";
+    const validityDays = Number(form.get("validity_days") ?? 365);
+    if (!Number.isInteger(validityDays) || validityDays < 1 || validityDays > 3650) return reply("Validity must be between 1 and 3650 days", 400);
     const file = form.get("file");
     if (!/^[0-9a-f-]{36}$/i.test(businessId) || title.length < 1 || title.length > 160 || !(file instanceof File)) return reply("Invalid upload fields", 400);
     if (file.size < 8 || file.size > 10 * 1024 * 1024 || file.type !== "application/pdf") return reply("PDF required (maximum 10 MB)", 400);
@@ -39,6 +41,10 @@ Deno.serve(async (request) => {
       await db.storage.from("service-agreements").remove([path]);
       return reply("Unable to publish agreement", 500);
     }
+    const { data: publishedVersion, error: versionError } = await db.from("service_agreement_version").select("template_id").eq("id",versionId).eq("business_id",businessId).single();
+    if (versionError || !publishedVersion) return reply("Agreement published, but validity settings could not be loaded", 500);
+    const { error: validityError } = await db.from("service_agreement_template").update({validity_days:validityDays}).eq("id",publishedVersion.template_id).eq("business_id",businessId);
+    if (validityError) return reply("Agreement published, but validity settings could not be saved", 500);
     return new Response(JSON.stringify({ version_id: versionId }), { status: 200, headers: { ...headers, "Content-Type": "application/json" } });
   } catch {
     return reply("Unable to process upload", 500);
