@@ -2,6 +2,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 
 type Template = { id: string; title: string; active_version_id: string | null; validity_days: number };
+async function fetchTemplates(businessId: string) {
+  return supabase.from("service_agreement_template").select("id,title,active_version_id,validity_days")
+    .eq("business_id",businessId).order("created_at",{ascending:false});
+}
+
 export default function ServiceAgreementSettings({ businessId, readOnly = false }: { businessId: string; readOnly?: boolean }) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [title, setTitle] = useState("Service agreement");
@@ -12,13 +17,15 @@ export default function ServiceAgreementSettings({ businessId, readOnly = false 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  async function refresh() {
-    const { data, error: loadError } = await supabase.from("service_agreement_template")
-      .select("id,title,active_version_id,validity_days").eq("business_id",businessId).order("created_at",{ascending:false});
-    if (loadError) setError(loadError.message);
-    else setTemplates(data ?? []);
-  }
-  useEffect(() => { void refresh(); }, [businessId]);
+  useEffect(() => {
+    let active = true;
+    void fetchTemplates(businessId).then(({ data, error: loadError }) => {
+      if (!active) return;
+      if (loadError) setError(loadError.message);
+      else setTemplates(data ?? []);
+    });
+    return () => { active = false; };
+  }, [businessId]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!file || busy || readOnly) return;
@@ -37,7 +44,9 @@ export default function ServiceAgreementSettings({ businessId, readOnly = false 
       setFile(null);
       const input = document.getElementById("service-agreement-file") as HTMLInputElement | null;
       if (input) input.value = "";
-      await refresh();
+      const { data: refreshedTemplates, error: loadError } = await fetchTemplates(businessId);
+      if (loadError) setError(loadError.message);
+      else setTemplates(refreshedTemplates ?? []);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to publish agreement");
     } finally { setBusy(false); }
