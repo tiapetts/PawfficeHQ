@@ -1,19 +1,20 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { supabase } from "../lib/supabase";
 
-type Template = { id: string; title: string; active_version_id: string | null };
+type Template = { id: string; title: string; active_version_id: string | null; validity_days: number };
 export default function ServiceAgreementSettings({ businessId, readOnly = false }: { businessId: string; readOnly?: boolean }) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [title, setTitle] = useState("Service agreement");
   const [file, setFile] = useState<File | null>(null);
   const [templateId, setTemplateId] = useState("");
   const [requiresRenewal, setRequiresRenewal] = useState(true);
+  const [validityDays, setValidityDays] = useState(365);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   async function refresh() {
     const { data, error: loadError } = await supabase.from("service_agreement_template")
-      .select("id,title,active_version_id").eq("business_id",businessId).order("created_at",{ascending:false});
+      .select("id,title,active_version_id,validity_days").eq("business_id",businessId).order("created_at",{ascending:false});
     if (loadError) setError(loadError.message);
     else setTemplates(data ?? []);
   }
@@ -27,6 +28,7 @@ export default function ServiceAgreementSettings({ businessId, readOnly = false 
       form.set("business_id", businessId);
       form.set("title", title.trim());
       form.set("requires_renewal", String(requiresRenewal));
+      form.set("validity_days", String(validityDays));
       if (templateId) form.set("template_id", templateId);
       form.set("file", file);
       const { data, error: uploadError } = await supabase.functions.invoke("upload-service-agreement", { body: form });
@@ -42,11 +44,11 @@ export default function ServiceAgreementSettings({ businessId, readOnly = false 
   }
   return <section className="dashboard-panel settings-section" aria-label="Service agreement management">
     <div><p className="eyebrow">Client paperwork</p><h3>Service agreements</h3>
-      <p className="settings-help">Upload one PDF agreement for the whole client household. Signed copies will be kept separately when digital signing is enabled.</p></div>
+      <p className="settings-help">Upload one PDF agreement for the whole client household. Signed copies are stored separately and can be reviewed on client profiles.</p></div>
     {templates.length > 0 && <div><strong>Published agreements</strong><ul>{templates.map(t => <li key={t.id}>{t.title} — {t.active_version_id ? "Published" : "Draft"}</li>)}</ul></div>}
     <form onSubmit={e => void submit(e)} className="settings-form-grid">
       <label>Agreement to publish
-        <select disabled={readOnly || busy} value={templateId} onChange={e => { const id=e.target.value; setTemplateId(id); const t=templates.find(x=>x.id===id); if(t) setTitle(t.title); }}>
+        <select disabled={readOnly || busy} value={templateId} onChange={e => { const id=e.target.value; setTemplateId(id); const t=templates.find(x=>x.id===id); if(t) { setTitle(t.title); setValidityDays(t.validity_days); } else setValidityDays(365); }}>
           <option value="">New agreement</option>
           {templates.map(t=><option key={t.id} value={t.id}>New version of {t.title}</option>)}
         </select>
@@ -57,11 +59,14 @@ export default function ServiceAgreementSettings({ businessId, readOnly = false 
       <label>PDF file (maximum 10 MB)
         <input id="service-agreement-file" required type="file" accept="application/pdf,.pdf" disabled={readOnly || busy} onChange={e=>setFile(e.target.files?.[0] ?? null)} />
       </label>
+      <label>Agreement valid for (days)
+        <input type="number" min={1} max={3650} required value={validityDays} disabled={readOnly || busy} onChange={e=>setValidityDays(Number(e.target.value))} />
+      </label>
       <label><input type="checkbox" checked={requiresRenewal} disabled={readOnly || busy} onChange={e=>setRequiresRenewal(e.target.checked)} /> Require existing clients to sign a new version</label>
       <div><button type="submit" className="primary-button" disabled={readOnly || busy || !file || !title.trim()}>{busy ? "Uploading…" : "Publish agreement"}</button></div>
     </form>
     {message && <p role="status">{message}</p>}
     {error && <p role="alert">{error}</p>}
-    <p className="settings-help">Sending links and collecting signatures are coming next. Publishing does not send anything to clients.</p>
+    <p className="settings-help">Signing links can be created from client profiles. Publishing does not automatically send anything to clients.</p>
   </section>;
 }
