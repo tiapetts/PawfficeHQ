@@ -1,0 +1,30 @@
+.agreement-profile .agreement-item{padding:18px 0;border-top:1px solid #dce4e1;display:grid;gap:12px}
+.agreement-profile .agreement-item:first-of-type{margin-top:12px}
+.agreement-profile .agreement-item-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.agreement-profile .agreement-title{font-size:1.05rem;color:#20332e}
+.agreement-status{display:inline-flex;align-items:center;gap:7px;width:max-content;padding:7px 12px;border-radius:999px;border:1px solid transparent;font-size:.83rem;font-weight:750;line-height:1.2}
+.agreement-status::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.agreement-status--signed{background:#e3f4e9;border-color:#a8d8b7;color:#176b3c}
+.agreement-status--pending{background:#fff3d9;border-color:#f1d38a;color:#875700}
+.agreement-status--unsigned,.agreement-status--outdated{background:#fce8e8;border-color:#edb2b2;color:#a42f32}
+.agreement-status--unpublished{background:#edf1f4;border-color:#ccd5da;color:#53616b}
+.agreement-meta{color:#586d66;font-size:.9rem;margin:0}
+.agreement-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.agreement-profile .agreement-button,.agreement-review .agreement-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:9px;padding:11px 16px;font-weight:700;cursor:pointer;min-height:43px;text-decoration:none;transition:background .15s,border-color .15s}
+.agreement-button--primary{background:#0077b6;color:#fff;border:1px solid #0077b6}
+.agreement-button--primary:hover:not(:disabled){background:#005e91}
+.agreement-button--secondary{background:#fff;color:#006b9f;border:1px solid #93c8df}
+.agreement-button--secondary:hover:not(:disabled){background:#e8f8fc}
+.agreement-button:disabled{opacity:.55;cursor:not-allowed}
+.agreement-link-box{display:grid;gap:10px;margin-top:16px;padding:16px;background:#f1f8fa;border:1px solid #b7dce8;border-radius:12px}
+.agreement-link-box label{display:grid;gap:8px;font-weight:650}
+.agreement-link-box input,.agreement-review input[type="text"]{width:100%;min-width:0;border:1px solid #aab8b4;border-radius:8px;padding:12px;color:#20332e;background:#fff}
+.agreement-profile .agreement-note{font-size:.85rem;color:#65766f}
+.agreement-review{max-width:960px;margin:32px auto;padding:24px;color:#20332e}
+.agreement-review .agreement-review-card{padding:24px;background:#fff;border:1px solid #dce4e1;border-radius:14px;box-shadow:0 5px 16px rgb(31 61 53 / 6%)}
+.agreement-review .agreement-review-form{display:grid;gap:16px;margin-top:24px}
+.agreement-review .agreement-review-form>label{display:grid;gap:8px;font-weight:650}
+.agreement-review .agreement-consent{display:flex!important;align-items:flex-start;gap:10px;font-weight:450!important}
+.agreement-review .agreement-consent input{margin-top:5px;flex:none}
+.agreement-review .agreement-pdf{width:100%;height:70vh;border:1px solid #dce4e1;border-radius:8px}
+@media(max-width:640px){.agreement-review{margin:12px auto;padding:12px}.agreement-review .agreement-review-card{padding:16px}.agreement-profile .agreement-button{width:100%}.agreement-actions{display:grid}}
