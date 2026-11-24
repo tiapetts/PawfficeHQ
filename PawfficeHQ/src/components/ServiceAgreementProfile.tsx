@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import "./ServiceAgreement.css";
 
-type Template = { id: string; title: string; active_version_id: string | null };
+type Template = { id: string; title: string; active_version_id: string | null; validity_days: number };
 type Request = { id: string; template_id: string; version_id: string; status: string; signed_at: string | null; created_at: string };
 type Signature = { request_id: string; signed_at: string; signer_name: string };
 
@@ -36,7 +36,7 @@ export default function ServiceAgreementProfile({ businessId, clientId }: { busi
       setLoading(true);
       setError("");
       const [t, r, s] = await Promise.all([
-        supabase.from("service_agreement_template").select("id,title,active_version_id").eq("business_id",businessId),
+        supabase.from("service_agreement_template").select("id,title,active_version_id,validity_days").eq("business_id",businessId),
         supabase.from("service_agreement_request").select("id,template_id,version_id,status,signed_at,created_at").eq("business_id",businessId).eq("client_id",clientId).order("created_at",{ascending:false}),
         supabase.from("service_agreement_signature").select("request_id,signed_at,signer_name").eq("business_id",businessId).eq("client_id",clientId),
       ]);
@@ -58,13 +58,18 @@ export default function ServiceAgreementProfile({ businessId, clientId }: { busi
       templates.length === 0 ? <p>No service agreement has been published for this business yet.</p> :
       templates.map(template => {
         const latest = requests.find(r => r.template_id === template.id);
-        const signed = requests.find(r => r.template_id === template.id && r.version_id === template.active_version_id && r.status === "signed" && signatures.some(s => s.request_id === r.id));
+        const signedRecord = requests.find(r => r.template_id === template.id && r.version_id === template.active_version_id && r.status === "signed" && signatures.some(s => s.request_id === r.id));
+        const signedAt = signedRecord && (signatures.find(s => s.request_id === signedRecord.id)?.signed_at ?? signedRecord.signed_at);
+        const expiration = signedAt ? new Date(new Date(signedAt).getTime() + template.validity_days * 86400000) : null;
+        const expired = Boolean(expiration && expiration.getTime() <= Date.now());
+        const signed = signedRecord && !expired ? signedRecord : null;
         const prior = requests.some(r => r.template_id === template.id && r.status === "signed");
-        const status = signed ? "Signed" : latest?.status === "sent" || latest?.status === "viewed" ? "Pending signature" : prior ? "Outdated agreement" : "Not signed";
-        const statusType = !template.active_version_id ? "unpublished" : signed ? "signed" : status === "Pending signature" ? "pending" : status === "Outdated agreement" ? "outdated" : "unsigned";
+        const status = signed ? "Signed" : latest?.status === "sent" || latest?.status === "viewed" ? "Pending signature" : expired ? "Expired" : prior ? "Outdated agreement" : "Not signed";
+        const statusType = !template.active_version_id ? "unpublished" : signed ? "signed" : status === "Pending signature" ? "pending" : (status === "Outdated agreement" || status === "Expired") ? "outdated" : "unsigned";
         return <article key={template.id} className="agreement-item">
           <div className="agreement-item-header"><strong className="agreement-title">{template.title}</strong><span className={`agreement-status agreement-status--${statusType}`}>{template.active_version_id ? status : "Not published"}</span></div>
-          {signed && <><p className="agreement-meta">Signed {new Date(signed.signed_at ?? signed.created_at).toLocaleDateString()}</p><div className="agreement-actions"><button type="button" className="agreement-button agreement-button--secondary" onClick={() => void openSignedDocument(signed.id)}>View signed PDF</button></div></>}
+          {signed && <><p className="agreement-meta">Signed {new Date(signedAt ?? signed.created_at).toLocaleDateString()} · Valid until {expiration?.toLocaleDateString()}</p><div className="agreement-actions"><button type="button" className="agreement-button agreement-button--secondary" onClick={() => void openSignedDocument(signed.id)}>View signed PDF</button></div></>}
+          {expired && expiration && <p className="agreement-meta">Expired {expiration.toLocaleDateString()} · A new signature is required.</p>}
           {template.active_version_id && !signed && <button type="button" className="agreement-button agreement-button--primary" disabled={busy} onClick={() => void createInvitation(template.id)}>{busy ? "Creating link…" : "Create signing link"}</button>}
           <p className="agreement-note">Signing links expire after seven days. Share links privately; automatic email and SMS delivery are not available yet.</p>
         </article>;
