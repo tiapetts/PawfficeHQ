@@ -11,12 +11,12 @@ afterEach(cleanup);
 beforeEach(()=>{
  vi.clearAllMocks();
  mocks.from.mockImplementation((table:string)=>{
-  const data=table==='CLIENT'?[client]:table==='client_pet'?[{pet_id:7},{pet_id:8}]:[
+  const data=table==='appointment'?[]:table==='CLIENT'?[client]:table==='client_pet'?[{pet_id:7},{pet_id:8}]:[
    {id:7,PetName:'Milo',species:'Dog',PetBreed:'Poodle',PetDOB:'2020-03-12',PetWeight:20,archived_at:null},
    {id:8,PetName:'Luna',species:'Dog',PetBreed:'Labrador',PetDOB:null,PetWeight:null,archived_at:null},
   ];
-  const query={select:vi.fn(),eq:vi.fn(),order:vi.fn(),in:vi.fn(),then:(resolve:(v:unknown)=>void)=>Promise.resolve({data,error:null}).then(resolve)};
-  query.select.mockReturnValue(query); query.eq.mockReturnValue(query); query.order.mockReturnValue(query);
+  const query={select:vi.fn(),eq:vi.fn(),order:vi.fn(),in:vi.fn(),lt:vi.fn(),gte:vi.fn(),not:vi.fn(),limit:vi.fn(),then:(resolve:(v:unknown)=>void)=>Promise.resolve({data,error:null,count:0}).then(resolve)};
+  query.select.mockReturnValue(query); query.eq.mockReturnValue(query); query.order.mockReturnValue(query); query.lt.mockReturnValue(query); query.gte.mockReturnValue(query); query.not.mockReturnValue(query); query.limit.mockReturnValue(query);
   query.in.mockImplementation((key,ids)=>{mocks.petIds(key,ids);return query;});
   return query;
  });
