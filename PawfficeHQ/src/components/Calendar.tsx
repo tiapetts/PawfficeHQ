@@ -19,6 +19,9 @@ type CalendarProps = {
   readOnly?: boolean;
   onOpenInvoice?: (invoiceId: string) => void;
   initialClientId?: number | null;
+  appointmentModalOnly?: boolean;
+  onAppointmentModalClose?: () => void;
+  onAppointmentSaved?: () => void;
 };
 
 type Client = {
@@ -95,6 +98,9 @@ function Calendar({
   readOnly = false,
   onOpenInvoice,
   initialClientId = null,
+  appointmentModalOnly = false,
+  onAppointmentModalClose,
+  onAppointmentSaved,
 }: CalendarProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
@@ -1042,6 +1048,10 @@ function Calendar({
 
     resetForm();
     setShowForm(false);
+    if (appointmentModalOnly) {
+      onAppointmentSaved?.();
+      return;
+    }
     await loadCalendar();
   }
 
@@ -1084,7 +1094,7 @@ function Calendar({
   }
 
   return (
-    <div>
+    <div style={appointmentModalOnly ? { display: "none" } : undefined}>
       {!readOnly &&
         payingAppointmentId &&
         appointments.find((a) => a.id === payingAppointmentId) && (
@@ -1233,6 +1243,7 @@ function Calendar({
               ) {
                 setShowBlockForm(false);
                 setShowForm(false);
+                if (appointmentModalOnly) onAppointmentModalClose?.();
               }
             }}
             style={{
@@ -1414,7 +1425,7 @@ function Calendar({
                     <button
                       type="button"
                       className="secondary-button"
-                      onClick={() => setShowForm(false)}
+                      onClick={() => { setShowForm(false); if (appointmentModalOnly) onAppointmentModalClose?.(); }}
                       aria-label="Close appointment form"
                       style={{
                         width: 38,
