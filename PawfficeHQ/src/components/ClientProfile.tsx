@@ -10,10 +10,10 @@ type Pet = {
   PetDOB: string | null; PetWeight: number | null; archived_at: string | null;
 };
 type Props = {
-  businessId: string; client: Client; onBack: () => void; onEdit?: () => void;
+  businessId: string; client: Client; onBack: () => void; onEdit?: () => void; onNewAppointment?: () => void;
 };
 
-export default function ClientProfile({ businessId, client, onBack, onEdit }: Props) {
+export default function ClientProfile({ businessId, client, onBack, onEdit, onNewAppointment }: Props) {
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,7 +46,10 @@ export default function ClientProfile({ businessId, client, onBack, onEdit }: Pr
       <div><p className="eyebrow">Client profile</p><h2>{client.FirstName} {client.LastName}</h2>
         {client.archived_at && <p>Archived · {client.archive_reason || "No reason provided"}</p>}
       </div>
-      {onEdit && <button type="button" className="primary-button" onClick={onEdit}>Edit client</button>}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {onNewAppointment && <button type="button" className="primary-button" onClick={onNewAppointment}>+ New appointment</button>}
+        {onEdit && <button type="button" className="secondary-button" onClick={onEdit}>Edit client</button>}
+      </div>
     </header>
     <section className="dashboard-panel client-profile-details" aria-label="Client information">
       <ProfilePhoto businessId={businessId} entity="clients" table="CLIENT" recordId={client.id}
