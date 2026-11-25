@@ -118,6 +118,8 @@ export default function PlatformAdmin({
     "active",
   );
   const [supportRequests, setSupportRequests] = useState<SupportRequest[]>([]);
+  const [pendingSupportEmail, setPendingSupportEmail] = useState<{ request: SupportRequest; status: SupportRequest["status"]; subject: string; body: string } | null>(null);
+  const [sendingSupportEmail, setSendingSupportEmail] = useState(false);
   const [supportAttachments, setSupportAttachments] = useState<
     SupportAttachmentWithUrl[]
   >([]);
@@ -554,6 +556,36 @@ export default function PlatformAdmin({
     setSupportAttachments(
       results.filter((item): item is SupportAttachmentWithUrl => item !== null),
     );
+  }
+
+  function prepareSupportStatus(request: SupportRequest, status: SupportRequest["status"]) {
+    if (request.status === status) return;
+    const firstName = request.requester_name.trim().split(/\s+/)[0] || "there";
+    setPendingSupportEmail({
+      request, status,
+      subject: `PawfficeHQ update: ${request.subject}`,
+      body: `Hi ${firstName},\n\nYour support request "${request.subject}" ${status === "resolved" ? "has been resolved" : "is now being worked on"}.\n\nThank you for helping us improve PawfficeHQ!\n\nThe PawfficeHQ Team`,
+    });
+  }
+
+  async function approveSupportEmail() {
+    if (!pendingSupportEmail || sendingSupportEmail) return;
+    const { request, status, subject, body } = pendingSupportEmail;
+    if (!subject.trim() || !body.trim()) { setMessage("Enter an email subject and message."); return; }
+    setSendingSupportEmail(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-support-status-email", {
+        body: { request_id: request.id, expected_status: request.status, status, subject: subject.trim(), message: body.trim() },
+      });
+      if (error || !data?.success) throw new Error(data?.error || error?.message || "Email could not be sent.");
+      setSupportRequests(current => current.map(item => item.id === request.id ? { ...item, status, updated_at: new Date().toISOString() } : item));
+      setPendingSupportEmail(null);
+      setMessage("Email accepted by provider and request status updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Email failed; request status unchanged.");
+    } finally {
+      setSendingSupportEmail(false);
+    }
   }
 
   async function updateSupportRequest(
@@ -1031,6 +1063,24 @@ export default function PlatformAdmin({
               Resolved
             </button>
           </div>
+          {pendingSupportEmail && (
+            <section role="dialog" aria-label="Review support email" style={{ padding: 20, border: "2px solid #0786c1", borderRadius: 12, marginBottom: 18, background: "#fff" }}>
+              <h4>Review email before sending</h4>
+              <p>To: {pendingSupportEmail.request.requester_email}</p>
+              <p>New status: {pendingSupportEmail.status.replaceAll("_", " ")}</p>
+              <label style={{ display: "block", marginBottom: 10 }}>Subject
+                <input style={{ display: "block", width: "100%" }} value={pendingSupportEmail.subject} onChange={e => setPendingSupportEmail(current => current ? { ...current, subject: e.target.value } : null)} />
+              </label>
+              <label style={{ display: "block", marginBottom: 10 }}>Message
+                <textarea rows={7} style={{ display: "block", width: "100%" }} value={pendingSupportEmail.body} onChange={e => setPendingSupportEmail(current => current ? { ...current, body: e.target.value } : null)} />
+              </label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button className="primary-button" disabled={sendingSupportEmail} onClick={() => void approveSupportEmail()}>{sendingSupportEmail ? "Sending..." : "Approve & send email"}</button>
+                <button className="secondary-button" disabled={sendingSupportEmail} onClick={() => { const { request, status } = pendingSupportEmail; setPendingSupportEmail(null); void updateSupportRequest(request, status); }}>Change status without email</button>
+                <button className="secondary-button" disabled={sendingSupportEmail} onClick={() => setPendingSupportEmail(null)}>Cancel</button>
+              </div>
+            </section>
+          )}
           {supportRequests.filter((item) =>
             supportFilter === "open"
               ? item.status !== "resolved"
@@ -1104,10 +1154,7 @@ export default function PlatformAdmin({
                             <button
                               className="secondary-button"
                               onClick={() =>
-                                void updateSupportRequest(
-                                  request,
-                                  "in_progress",
-                                )
+                                prepareSupportStatus(request, "in_progress")
                               }
                             >
                               Start working
@@ -1117,7 +1164,7 @@ export default function PlatformAdmin({
                           <button
                             className="primary-button"
                             onClick={() =>
-                              void updateSupportRequest(request, "resolved")
+                              prepareSupportStatus(request, "resolved")
                             }
                           >
                             Mark resolved
@@ -1126,7 +1173,7 @@ export default function PlatformAdmin({
                           <button
                             className="secondary-button"
                             onClick={() =>
-                              void updateSupportRequest(request, "in_progress")
+                              prepareSupportStatus(request, "in_progress")
                             }
                           >
                             Reopen
