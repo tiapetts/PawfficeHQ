@@ -9,6 +9,15 @@ type Pet = {
   id: number; PetName: string; species: string | null; PetBreed: string | null;
   PetDOB: string | null; PetWeight: number | null; archived_at: string | null;
 };
+type AppointmentSummary = {
+  last: string | null;
+  next: string | null;
+  cancellations: number;
+  noShows: number;
+};
+const formatAppointmentDate = (value: string | null) =>
+  value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "None recorded";
+
 type Props = {
   businessId: string; client: Client; onBack: () => void; onEdit?: () => void; onNewAppointment?: () => void;
 };
@@ -17,6 +26,8 @@ export default function ClientProfile({ businessId, client, onBack, onEdit, onNe
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [appointmentSummary, setAppointmentSummary] = useState<AppointmentSummary | null>(null);
+  const [appointmentError, setAppointmentError] = useState("");
   useEffect(() => {
     let active = true;
     async function load() {
@@ -34,6 +45,40 @@ export default function ClientProfile({ businessId, client, onBack, onEdit, onNe
       } finally { if (active) setLoading(false); }
     }
     void load();
+    return () => { active = false; };
+  }, [businessId, client.id]);
+  useEffect(() => {
+    let active = true;
+    async function loadAppointmentSummary() {
+      setAppointmentSummary(null);
+      setAppointmentError("");
+      const now = new Date().toISOString();
+      const base = () => supabase.from("appointment").select("start_at")
+        .eq("business_id", businessId).eq("client_id", client.id);
+      const [last, next, cancelled, noShows] = await Promise.all([
+        base().lt("start_at", now).not("status", "in", '("cancelled","void","no_show")')
+          .order("start_at", { ascending: false }).limit(1),
+        base().gte("start_at", now).not("status", "in", '("cancelled","void","no_show")')
+          .order("start_at", { ascending: true }).limit(1),
+        supabase.from("appointment").select("id", { count: "exact", head: true })
+          .eq("business_id", businessId).eq("client_id", client.id).eq("status", "cancelled"),
+        supabase.from("appointment").select("id", { count: "exact", head: true })
+          .eq("business_id", businessId).eq("client_id", client.id).eq("status", "no_show"),
+      ]);
+      if (!active) return;
+      const failure = [last.error, next.error, cancelled.error, noShows.error].find(Boolean);
+      if (failure) {
+        setAppointmentError("Unable to load appointment history.");
+        return;
+      }
+      setAppointmentSummary({
+        last: last.data?.[0]?.start_at ?? null,
+        next: next.data?.[0]?.start_at ?? null,
+        cancellations: cancelled.count ?? 0,
+        noShows: noShows.count ?? 0,
+      });
+    }
+    void loadAppointmentSummary();
     return () => { active = false; };
   }, [businessId, client.id]);
   const address = [
@@ -64,6 +109,17 @@ export default function ClientProfile({ businessId, client, onBack, onEdit, onNe
           ? (client.booking_deposit_type === "percentage" ? client.booking_deposit_value + "%" : "$" + Number(client.booking_deposit_value).toFixed(2))
           : "Not required"}{client.booking_deposit_reason && <p>{client.booking_deposit_reason}</p>}</dd></div>
       </dl>
+    </section>
+    <section className="dashboard-panel" aria-label="Client appointment history">
+      <h3>Appointment history</h3>
+      {appointmentError ? <p role="alert">{appointmentError}</p> :
+        !appointmentSummary ? <p role="status">Loading appointment history…</p> :
+        <div className="client-profile-pets">
+          <article><h4>Last appointment</h4><p>{formatAppointmentDate(appointmentSummary.last)}</p></article>
+          <article><h4>Next appointment</h4><p>{formatAppointmentDate(appointmentSummary.next)}</p></article>
+          <article><h4>Cancellations</h4><p><strong>{appointmentSummary.cancellations}</strong></p></article>
+          <article><h4>No-shows</h4><p><strong>{appointmentSummary.noShows}</strong></p></article>
+        </div>}
     </section>
     <ServiceAgreementProfile businessId={businessId} clientId={client.id} />
     <section className="dashboard-panel" aria-label="Client pets">
