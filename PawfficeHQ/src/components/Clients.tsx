@@ -7,7 +7,7 @@ import ClientProfile from "./ClientProfile";
 import "./ClientEditing.css";
 import "./RecordSearch.css";
 
-type ClientsProps = { businessId: string; readOnly?: boolean };
+type ClientsProps = { businessId: string; readOnly?: boolean; onNewAppointment?: (clientId: number) => void };
 export type Client = {
   id: number;
   FirstName: string;
@@ -54,6 +54,7 @@ const selection =
 export default function Clients({
   businessId,
   readOnly = false,
+  onNewAppointment,
 }: ClientsProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [profileId, setProfileId] = useState<number | null>(null);
@@ -279,6 +280,7 @@ export default function Clients({
   const profileClient = clients.find(client => client.id === profileId);
   if (profileClient) return <ClientProfile key={businessId + ":" + profileClient.id}
     businessId={businessId} client={profileClient} onBack={() => setProfileId(null)}
+    onNewAppointment={!readOnly && !profileClient.archived_at && onNewAppointment ? () => onNewAppointment(profileClient.id) : undefined}
     onEdit={!readOnly && !profileClient.archived_at ? () => {
       setProfileId(null); openEdit(profileClient);
     } : undefined} />;

@@ -149,6 +149,7 @@ function Dashboard({
   const [requestedInvoiceId, setRequestedInvoiceId] = useState<string | null>(
     null,
   );
+  const [appointmentClientId, setAppointmentClientId] = useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [business, setBusiness] = useState<Business | null>(null);
   const [businessLogo, setBusinessLogo] = useState<string | null>(null);
@@ -459,6 +460,7 @@ function Dashboard({
   }
 
   function openPage(page: ActivePage) {
+    setAppointmentClientId(null);
     setActivePage(page);
     setMobileMenuOpen(false);
   }
@@ -793,6 +795,8 @@ function Dashboard({
       <main className="dashboard-main">
         {activePage === "calendar" ? (
           <Calendar
+            key={appointmentClientId === null ? "calendar" : `new-appointment-${appointmentClientId}`}
+            initialClientId={appointmentClientId}
             businessId={businessId}
             readOnly={readOnly}
             onOpenInvoice={(invoiceId) => {
@@ -823,7 +827,10 @@ function Dashboard({
             onInitialInvoiceUsed={() => setRequestedInvoiceId(null)}
           />
         ) : activePage === "clients" ? (
-          <Clients businessId={businessId} />
+          <Clients businessId={businessId} readOnly={readOnly} onNewAppointment={(clientId) => {
+            setAppointmentClientId(clientId);
+            setActivePage("calendar");
+          }} />
         ) : activePage === "pets" ? (
           <Pets businessId={businessId} />
         ) : activePage === "vaccinations" ? (

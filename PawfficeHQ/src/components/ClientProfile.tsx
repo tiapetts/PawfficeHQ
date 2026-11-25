@@ -3,20 +3,34 @@ import { supabase } from "../lib/supabase";
 import type { Client } from "./Clients";
 import ProfilePhoto from "./ProfilePhoto";
 import ServiceAgreementProfile from "./ServiceAgreementProfile";
+import Calendar from "./Calendar";
 import "./ClientProfile.css";
 
 type Pet = {
   id: number; PetName: string; species: string | null; PetBreed: string | null;
   PetDOB: string | null; PetWeight: number | null; archived_at: string | null;
 };
+type AppointmentSummary = {
+  last: string | null;
+  next: string | null;
+  cancellations: number;
+  noShows: number;
+};
+const formatAppointmentDate = (value: string | null) =>
+  value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "None recorded";
+
 type Props = {
-  businessId: string; client: Client; onBack: () => void; onEdit?: () => void;
+  businessId: string; client: Client; onBack: () => void; onEdit?: () => void; onNewAppointment?: () => void;
 };
 
-export default function ClientProfile({ businessId, client, onBack, onEdit }: Props) {
+export default function ClientProfile({ businessId, client, onBack, onEdit, onNewAppointment }: Props) {
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [appointmentSummary, setAppointmentSummary] = useState<AppointmentSummary | null>(null);
+  const [appointmentError, setAppointmentError] = useState("");
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [appointmentRefresh, setAppointmentRefresh] = useState(0);
   useEffect(() => {
     let active = true;
     async function load() {
@@ -36,6 +50,40 @@ export default function ClientProfile({ businessId, client, onBack, onEdit }: Pr
     void load();
     return () => { active = false; };
   }, [businessId, client.id]);
+  useEffect(() => {
+    let active = true;
+    async function loadAppointmentSummary() {
+      setAppointmentSummary(null);
+      setAppointmentError("");
+      const now = new Date().toISOString();
+      const base = () => supabase.from("appointment").select("start_at")
+        .eq("business_id", businessId).eq("client_id", client.id);
+      const [last, next, cancelled, noShows] = await Promise.all([
+        base().lt("start_at", now).not("status", "in", '("cancelled","void","no_show")')
+          .order("start_at", { ascending: false }).limit(1),
+        base().gte("start_at", now).not("status", "in", '("cancelled","void","no_show")')
+          .order("start_at", { ascending: true }).limit(1),
+        supabase.from("appointment").select("id", { count: "exact", head: true })
+          .eq("business_id", businessId).eq("client_id", client.id).eq("status", "cancelled"),
+        supabase.from("appointment").select("id", { count: "exact", head: true })
+          .eq("business_id", businessId).eq("client_id", client.id).eq("status", "no_show"),
+      ]);
+      if (!active) return;
+      const failure = [last.error, next.error, cancelled.error, noShows.error].find(Boolean);
+      if (failure) {
+        setAppointmentError("Unable to load appointment history.");
+        return;
+      }
+      setAppointmentSummary({
+        last: last.data?.[0]?.start_at ?? null,
+        next: next.data?.[0]?.start_at ?? null,
+        cancellations: cancelled.count ?? 0,
+        noShows: noShows.count ?? 0,
+      });
+    }
+    void loadAppointmentSummary();
+    return () => { active = false; };
+  }, [businessId, client.id, appointmentRefresh]);
   const address = [
     client.StreetAddress, client.AptNumber,
     [client.ClientCity, client.ClientState, client.ClientZip].filter(Boolean).join(" "),
@@ -46,7 +94,10 @@ export default function ClientProfile({ businessId, client, onBack, onEdit }: Pr
       <div><p className="eyebrow">Client profile</p><h2>{client.FirstName} {client.LastName}</h2>
         {client.archived_at && <p>Archived · {client.archive_reason || "No reason provided"}</p>}
       </div>
-      {onEdit && <button type="button" className="primary-button" onClick={onEdit}>Edit client</button>}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {onNewAppointment && <button type="button" className="primary-button" onClick={() => setShowAppointmentModal(true)}>+ New appointment</button>}
+        {onEdit && <button type="button" className="secondary-button" onClick={onEdit}>Edit client</button>}
+      </div>
     </header>
     <section className="dashboard-panel client-profile-details" aria-label="Client information">
       <ProfilePhoto businessId={businessId} entity="clients" table="CLIENT" recordId={client.id}
@@ -62,6 +113,20 @@ export default function ClientProfile({ businessId, client, onBack, onEdit }: Pr
           : "Not required"}{client.booking_deposit_reason && <p>{client.booking_deposit_reason}</p>}</dd></div>
       </dl>
     </section>
+    <section className="dashboard-panel" aria-label="Client appointment history">
+      <h3>Appointment history</h3>
+      {appointmentError ? <p role="alert">{appointmentError}</p> :
+        !appointmentSummary ? <p role="status">Loading appointment history…</p> :
+        <div className="client-appointment-stats">
+          <article className="client-appointment-stat"><span>Last appointment</span><strong>{formatAppointmentDate(appointmentSummary.last)}</strong></article>
+          <article className="client-appointment-stat"><span>Next appointment</span><strong>{formatAppointmentDate(appointmentSummary.next)}</strong></article>
+          <article className="client-appointment-stat"><span>Cancellations</span><strong>{appointmentSummary.cancellations}</strong></article>
+          <article className="client-appointment-stat"><span>No-shows</span><strong>{appointmentSummary.noShows}</strong></article>
+        </div>}
+    </section>
+    {showAppointmentModal && <Calendar businessId={businessId} initialClientId={client.id}
+      appointmentModalOnly onAppointmentModalClose={() => setShowAppointmentModal(false)}
+      onAppointmentSaved={() => { setShowAppointmentModal(false); setAppointmentRefresh(value => value + 1); }} />}
     <ServiceAgreementProfile businessId={businessId} clientId={client.id} />
     <section className="dashboard-panel" aria-label="Client pets">
       <h3>Animals in this household</h3>
