@@ -219,8 +219,8 @@ function Calendar({
       staffResult.error,
       appointmentsResult.error,
       settingsResult.error,
-      blocksResult.error,
     ].find(Boolean);
+    const blocksUnavailable = blocksResult.error?.code === "PGRST205" || blocksResult.error?.code === "42P01";
 
     if (firstError) {
       console.error(firstError);
@@ -270,6 +270,12 @@ function Calendar({
     setAppointmentServices(loadedAppointmentServices);
     setAllowDoubleBooking(Boolean(settingsResult.data?.allow_double_booking));
     setTimeBlocks(blocksResult.data ?? []);
+    if (blocksResult.error) {
+      console.error("Personal time blocks could not be loaded", blocksResult.error);
+      setMessage(blocksUnavailable
+        ? "Personal time blocks are unavailable in this environment. Appointment scheduling remains available, but check staff availability before booking."
+        : "Personal time blocks could not be loaded. Check staff availability before booking.");
+    }
     setLoading(false);
   }
 
