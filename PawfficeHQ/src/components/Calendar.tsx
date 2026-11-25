@@ -317,6 +317,18 @@ function Calendar({
   }, [clientSearch, clients]);
 
   const selectedService = services.find((service) => service.id === serviceId);
+  const bookingDay = startTime.slice(0, 10);
+  const dayBookings = appointments.filter(a => {
+    if (!bookingDay || ["cancelled", "void"].includes(a.status)) return false;
+    const d = new Date(a.start_at);
+    return [d.getFullYear(), String(d.getMonth()+1).padStart(2,"0"), String(d.getDate()).padStart(2,"0")].join("-") === bookingDay;
+  }).sort((a,b) => a.start_at.localeCompare(b.start_at));
+  const bookingStart = startTime ? new Date(startTime) : null;
+  const bookingEnd = bookingStart && selectedService ? new Date(bookingStart.getTime() + selectedService.duration_minutes * 60000) : null;
+  const isOverlap = (start: string, end: string) => !!(bookingStart && bookingEnd && new Date(start) < bookingEnd && new Date(end) > bookingStart);
+  const busyForStaff = dayBookings.some(a => isOverlap(a.start_at,a.end_at) && (!staffId || appointmentServices.some(link => link.appointment_id === a.id && link.staff_id === staffId)));
+  const blockedForStaff = timeBlocks.some(b => (!staffId || b.staff_id === staffId) && isOverlap(b.start_at,b.end_at));
+
 
   const weekDays = useMemo(
     () =>
@@ -1562,6 +1574,21 @@ function Calendar({
                       />
                     </label>
 
+                    {appointmentModalOnly && <section className="full-width booking-day-schedule" aria-label="Day schedule">
+                      <div className="booking-day-heading"><strong>Appointments on {bookingDay || "selected date"}</strong><span>{dayBookings.length} booked</span></div>
+                      {!bookingDay ? <p>Select a date to see the schedule.</p> : <>
+                        {dayBookings.length === 0 && <p>No appointments scheduled for this date.</p>}
+                        <div className="booking-day-list">{dayBookings.map(a => <div key={a.id} className={isOverlap(a.start_at,a.end_at) ? "booking-day-item booking-day-overlap" : "booking-day-item"}>
+                          <span>{new Date(a.start_at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})} – {new Date(a.end_at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</span>
+                          <strong>{clientName(a.client_id)}</strong><span>{staffName(a.id)} · {a.status.replaceAll("_"," ")}</span>
+                        </div>)}
+                        {timeBlocks.filter(b => new Date(b.start_at).toLocaleDateString("en-CA") === bookingDay).map(b => <div key={b.id} className={isOverlap(b.start_at,b.end_at) ? "booking-day-item booking-day-overlap" : "booking-day-item"}>
+                          <span>{new Date(b.start_at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})} – {new Date(b.end_at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</span><strong>Blocked time</strong><span>{staff.find(x => x.id === b.staff_id)?.first_name ?? "Staff"}</span>
+                        </div>)}</div>
+                        {(busyForStaff || blockedForStaff) && <p className="booking-conflict-warning" role="alert">This time overlaps an appointment or blocked time. Check employee availability before booking.</p>}
+                      </>}
+                      <p className="booking-day-footnote">Existing appointments are shown for reference; booking validation still applies.</p>
+                    </section>}
                     <label className="full-width">
                       Notes
                       <textarea
