@@ -7,6 +7,7 @@ type Request = { id: string; template_id: string; version_id: string; status: st
 type Signature = { request_id: string; signed_at: string; signer_name: string };
 
 export default function ServiceAgreementProfile({ businessId, clientId }: { businessId: string; clientId: number }) {
+  const [currentTime] = useState(() => Date.now());
   const [templates, setTemplates] = useState<Template[]>([]);
   const [requests, setRequests] = useState<Request[]>([]);
   const [signatures, setSignatures] = useState<Signature[]>([]);
@@ -61,7 +62,7 @@ export default function ServiceAgreementProfile({ businessId, clientId }: { busi
         const signedRecord = requests.find(r => r.template_id === template.id && r.version_id === template.active_version_id && r.status === "signed" && signatures.some(s => s.request_id === r.id));
         const signedAt = signedRecord && (signatures.find(s => s.request_id === signedRecord.id)?.signed_at ?? signedRecord.signed_at);
         const expiration = signedAt ? new Date(new Date(signedAt).getTime() + template.validity_days * 86400000) : null;
-        const expired = Boolean(expiration && expiration.getTime() <= Date.now());
+        const expired = Boolean(expiration && expiration.getTime() <= currentTime);
         const signed = signedRecord && !expired ? signedRecord : null;
         const prior = requests.some(r => r.template_id === template.id && r.status === "signed");
         const status = signed ? "Signed" : latest?.status === "sent" || latest?.status === "viewed" ? "Pending signature" : expired ? "Expired" : prior ? "Outdated agreement" : "Not signed";
