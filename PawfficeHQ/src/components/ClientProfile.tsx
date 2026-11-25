@@ -114,11 +114,11 @@ export default function ClientProfile({ businessId, client, onBack, onEdit, onNe
       <h3>Appointment history</h3>
       {appointmentError ? <p role="alert">{appointmentError}</p> :
         !appointmentSummary ? <p role="status">Loading appointment history…</p> :
-        <div className="client-profile-pets">
-          <article><h4>Last appointment</h4><p>{formatAppointmentDate(appointmentSummary.last)}</p></article>
-          <article><h4>Next appointment</h4><p>{formatAppointmentDate(appointmentSummary.next)}</p></article>
-          <article><h4>Cancellations</h4><p><strong>{appointmentSummary.cancellations}</strong></p></article>
-          <article><h4>No-shows</h4><p><strong>{appointmentSummary.noShows}</strong></p></article>
+        <div className="client-appointment-stats">
+          <article className="client-appointment-stat"><span>Last appointment</span><strong>{formatAppointmentDate(appointmentSummary.last)}</strong></article>
+          <article className="client-appointment-stat"><span>Next appointment</span><strong>{formatAppointmentDate(appointmentSummary.next)}</strong></article>
+          <article className="client-appointment-stat"><span>Cancellations</span><strong>{appointmentSummary.cancellations}</strong></article>
+          <article className="client-appointment-stat"><span>No-shows</span><strong>{appointmentSummary.noShows}</strong></article>
         </div>}
     </section>
     <ServiceAgreementProfile businessId={businessId} clientId={client.id} />
