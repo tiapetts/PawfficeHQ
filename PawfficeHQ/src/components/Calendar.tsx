@@ -18,6 +18,7 @@ type CalendarProps = {
   businessId: string;
   readOnly?: boolean;
   onOpenInvoice?: (invoiceId: string) => void;
+  initialClientId?: number | null;
 };
 
 type Client = {
@@ -93,6 +94,7 @@ function Calendar({
   businessId,
   readOnly = false,
   onOpenInvoice,
+  initialClientId = null,
 }: CalendarProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
@@ -116,9 +118,14 @@ function Calendar({
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [savingBlock, setSavingBlock] = useState(false);
 
-  const [showForm, setShowForm] = useState(false);
-  const [clientId, setClientId] = useState("");
+  const [showForm, setShowForm] = useState(() => initialClientId !== null && !readOnly);
+  const [clientId, setClientId] = useState(() => initialClientId === null ? "" : String(initialClientId));
   const [clientSearch, setClientSearch] = useState("");
+  useEffect(() => {
+    if (initialClientId === null || clients.length === 0) return;
+    const client = clients.find(item => item.id === initialClientId);
+    if (client) setClientSearch(`${client.FirstName} ${client.LastName}`);
+  }, [initialClientId, clients]);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [petId, setPetId] = useState("");
   const [serviceId, setServiceId] = useState("");
