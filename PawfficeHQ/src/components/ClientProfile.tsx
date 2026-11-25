@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import type { Client } from "./Clients";
 import ProfilePhoto from "./ProfilePhoto";
 import ServiceAgreementProfile from "./ServiceAgreementProfile";
+import Calendar from "./Calendar";
 import "./ClientProfile.css";
 
 type Pet = {
@@ -28,6 +29,8 @@ export default function ClientProfile({ businessId, client, onBack, onEdit, onNe
   const [error, setError] = useState("");
   const [appointmentSummary, setAppointmentSummary] = useState<AppointmentSummary | null>(null);
   const [appointmentError, setAppointmentError] = useState("");
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [appointmentRefresh, setAppointmentRefresh] = useState(0);
   useEffect(() => {
     let active = true;
     async function load() {
@@ -80,7 +83,7 @@ export default function ClientProfile({ businessId, client, onBack, onEdit, onNe
     }
     void loadAppointmentSummary();
     return () => { active = false; };
-  }, [businessId, client.id]);
+  }, [businessId, client.id, appointmentRefresh]);
   const address = [
     client.StreetAddress, client.AptNumber,
     [client.ClientCity, client.ClientState, client.ClientZip].filter(Boolean).join(" "),
@@ -92,7 +95,7 @@ export default function ClientProfile({ businessId, client, onBack, onEdit, onNe
         {client.archived_at && <p>Archived · {client.archive_reason || "No reason provided"}</p>}
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {onNewAppointment && <button type="button" className="primary-button" onClick={onNewAppointment}>+ New appointment</button>}
+        {onNewAppointment && <button type="button" className="primary-button" onClick={() => setShowAppointmentModal(true)}>+ New appointment</button>}
         {onEdit && <button type="button" className="secondary-button" onClick={onEdit}>Edit client</button>}
       </div>
     </header>
@@ -121,6 +124,9 @@ export default function ClientProfile({ businessId, client, onBack, onEdit, onNe
           <article className="client-appointment-stat"><span>No-shows</span><strong>{appointmentSummary.noShows}</strong></article>
         </div>}
     </section>
+    {showAppointmentModal && <Calendar businessId={businessId} initialClientId={client.id}
+      appointmentModalOnly onAppointmentModalClose={() => setShowAppointmentModal(false)}
+      onAppointmentSaved={() => { setShowAppointmentModal(false); setAppointmentRefresh(value => value + 1); }} />}
     <ServiceAgreementProfile businessId={businessId} clientId={client.id} />
     <section className="dashboard-panel" aria-label="Client pets">
       <h3>Animals in this household</h3>
