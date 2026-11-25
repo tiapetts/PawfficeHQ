@@ -460,6 +460,7 @@ function Dashboard({
   }
 
   function openPage(page: ActivePage) {
+    setAppointmentClientId(null);
     setActivePage(page);
     setMobileMenuOpen(false);
   }
