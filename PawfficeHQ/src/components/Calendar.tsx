@@ -121,11 +121,6 @@ function Calendar({
   const [showForm, setShowForm] = useState(() => initialClientId !== null && !readOnly);
   const [clientId, setClientId] = useState(() => initialClientId === null ? "" : String(initialClientId));
   const [clientSearch, setClientSearch] = useState("");
-  useEffect(() => {
-    if (initialClientId === null || clients.length === 0) return;
-    const client = clients.find(item => item.id === initialClientId);
-    if (client) setClientSearch(`${client.FirstName} ${client.LastName}`);
-  }, [initialClientId, clients]);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [petId, setPetId] = useState("");
   const [serviceId, setServiceId] = useState("");
@@ -1440,7 +1435,7 @@ function Calendar({
                       Client
                       <input
                         type="search"
-                        value={clientSearch}
+                        value={clientSearch || (clientId ? (() => { const selected = clients.find(item => String(item.id) === clientId); return selected ? `${selected.FirstName} ${selected.LastName}` : ""; })() : "")}
                         autoComplete="off"
                         placeholder="Start typing a client name"
                         onFocus={() => setClientPickerOpen(true)}
