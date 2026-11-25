@@ -10,3 +10,12 @@
 .client-profile-link { border: 0; background: none; color: inherit; font: inherit; font-weight: 700; padding: 0; text-align: left; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .client-profile-link:focus-visible { outline: 2px solid var(--brand-accent, #0077b6); outline-offset: 4px; }
 @media (max-width: 600px) { .client-profile-details { flex-direction: column; } }
+
+/* Appointment summary uses the dashboard's green palette and compact KPI layout. */
+.client-appointment-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.client-appointment-stat { min-width: 0; padding: 18px; border: 1px solid #d6e0dd; border-radius: 12px; background: #f5f8f7; display: flex; flex-direction: column; gap: 10px; }
+.client-appointment-stat span { color: #526b79; font-size: .88rem; font-weight: 600; }
+.client-appointment-stat strong { color: #173a35; font-size: 1.05rem; line-height: 1.4; overflow-wrap: anywhere; }
+.client-appointment-stat:nth-child(n+3) strong { font-size: 1.7rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+@media (max-width: 1050px) { .client-appointment-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .client-appointment-stats { grid-template-columns: 1fr; } }
